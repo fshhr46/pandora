@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 from processors.cls_sentence import SentenceProcessor
-from tools.common import logger
+from tools.common import init_logger, logger
 from tools.sentence_data import Dataset
 
 
@@ -136,4 +136,5 @@ def build_report(predict_path, truth_path, report_dir, datasets=None):
 
 
 if __name__ == "__main__":
+    init_logger()
     main()
