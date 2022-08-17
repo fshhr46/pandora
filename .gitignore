@@ -1,0 +1,6 @@
+*__pycache__*
+*.DS_Store
+pytorch_version/CLUEdatasets*
+pytorch_version/datasets*
+pytorch_version/prev_trained_model*
+pytorch_version/outputs*
