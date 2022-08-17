@@ -36,8 +36,8 @@ MODEL_CLASSES = {
 
 DATASETS_TO_INCLUDE = list(Dataset)
 DATASETS_TO_INCLUDE = [
-    # Dataset.column_data,
-    # Dataset.short_sentence,
+    Dataset.column_data,
+    Dataset.short_sentence,
     Dataset.long_sentence,
 ]
 DATASETS_TO_INCLUDE.sort()
@@ -56,7 +56,7 @@ def setup_running_env():
     datasets_str = ", ".join(DATASETS_TO_INCLUDE)
     print(f"DATASETS_TO_INCLUDE are:\n\t {datasets_str}")
     dataset_names = "_".join(DATASETS_TO_INCLUDE)
-    output_dir = os.path.join(resource_dir, "outputs_tmp",
+    output_dir = os.path.join(resource_dir, "outputs",
                               bert_base_model_name, task_name, dataset_names)
 
     data_dir = os.path.join(resource_dir, "datasets", task_name)
