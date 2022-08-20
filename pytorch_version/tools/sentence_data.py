@@ -11,6 +11,8 @@ supported_partitions = ["train", "dev", "test"]
 
 class Dataset(str, Enum):
     column_data = "column_data"
+    multi_labels_splitted = "multi_labels_splitted"
+    multi_labels_merged = "multi_labels_merged"
     short_sentence = "short_sentence"
     long_sentence = "long_sentence"
 
@@ -28,6 +30,63 @@ def get_data_folders(data_dir):
     for dataset in Dataset:
         folders.append(os.path.join(data_dir, dataset))
     return folders
+
+
+def convert_multi_labels(data_partition, resource_dir, output_folder, merge_labels):
+    assert data_partition in supported_partitions
+    labels = ['address', 'book', 'company', 'game', 'government',
+              'movie', 'name', 'organization', 'position', 'scene']
+
+    dataset_dir = os.path.join(get_data_dir(resource_dir), "Cluener2020")
+    truth_file = os.path.join(dataset_dir, f"{data_partition}.json")
+    columns_data = {}
+    sentence_data = []
+
+    with open(truth_file, 'r') as fr:
+        for id, line in enumerate(fr):
+            obj = json.loads(line)
+            word_labels = obj["label"]
+            sentence = obj["text"]
+            sentence_obj = {"text": sentence,
+                            "label": list(word_labels.keys())}
+            sentence_data.append(sentence_obj)
+            for word_label, _ in word_labels.items():
+                assert word_label in labels, f"word_label {word_label} is not in labels.\n{labels}"
+                if word_label not in columns_data:
+                    columns_data[word_label] = []
+                columns_data[word_label].append(sentence)
+
+    output_dir = os.path.join(
+        get_output_data_folder(resource_dir), output_folder)
+    output_file_all = os.path.join(output_dir, f"{data_partition}_raw.json")
+    output_dir_partition = os.path.join(
+        output_dir, data_partition)
+    os.makedirs(output_dir_partition, exist_ok=True)
+
+    if merge_labels:
+        for label_name, column_data in columns_data.items():
+            output_file = os.path.join(
+                output_dir_partition, f"{data_partition}.{label_name}.json")
+            with open(output_file, 'w') as f:
+                json.dump(column_data, f, ensure_ascii=False)
+
+        with open(output_file_all, 'w') as fr_out:
+            for sentence in sentence_data:
+                json.dump(sentence, fr_out, ensure_ascii=False)
+                fr_out.write("\n")
+    else:
+        with open(output_file_all, 'w') as fr_out:
+            for label_name, column_data in columns_data.items():
+                output_file = os.path.join(
+                    output_dir_partition, f"{data_partition}.{label_name}.json")
+                with open(output_file, 'w') as f:
+                    json.dump(column_data, f, ensure_ascii=False)
+                for word in column_data:
+                    out_line = {"text": word, "label": [label_name]}
+                    json.dump(out_line, fr_out, ensure_ascii=False)
+                    fr_out.write("\n")
+    with open(os.path.join(output_dir, "labels.json"), 'w') as f:
+        json.dump(labels, f, ensure_ascii=False)
 
 
 def convert_column_data(data_partition, resource_dir, output_folder):
@@ -156,6 +215,10 @@ def build_datasets(resource_dir):
     for partition in partitions:
         convert_column_data(
             partition, resource_dir=resource_dir, output_folder=Dataset.column_data)
+        convert_multi_labels(
+            partition, resource_dir=resource_dir, output_folder=Dataset.multi_labels_splitted, merge_labels=False)
+        convert_multi_labels(
+            partition, resource_dir=resource_dir, output_folder=Dataset.multi_labels_merged, merge_labels=True)
         convert_long_sentence(
             partition, resource_dir=resource_dir, output_folder=Dataset.long_sentence)
         convert_short_sentence(
