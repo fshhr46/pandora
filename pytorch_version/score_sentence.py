@@ -24,18 +24,47 @@ def main():
     # truth_path = os.path.join(resource_dir, "CLUEdatasets/cluener/dev.json")
     truth_path = predict_path
 
-    build_report(predict_path=predict_path,
-                 truth_path=truth_path,
+    pre_lines = [json.loads(line.strip())
+                 for line in open(predict_path) if line.strip()]
+    gold_lines = [json.loads(line.strip())
+                  for line in open(truth_path) if line.strip()]
+    # validation
+    assert len(pre_lines) == len(gold_lines)
+
+    build_report(pre_lines=pre_lines,
+                 gold_lines=gold_lines,
                  report_dir=predict_dir,
                  datasets=datasets)
+
+    build_report_sklearn(pre_lines=pre_lines,
+                         gold_lines=gold_lines,
+                         report_dir=None,
+                         datasets=datasets)
+
+
+def build_report_sklearn(pre_lines, gold_lines, report_dir=None, datasets=None):
+
+    processor = SentenceProcessor(datasets_to_include=datasets)
+    label_list = processor.get_labels()
+    id2label = {i: label for i, label in enumerate(label_list)}
+    label2id = {label: i for i, label in enumerate(label_list)}
+    all_preds = [label2id[line["pred"][0]] for line in pre_lines]
+    all_truths = [label2id[line["label"][0]] for line in gold_lines]
+    from sklearn.metrics import f1_score
+    f = f1_score(all_truths, all_preds, average='macro')
+    from sklearn.metrics import classification_report
+    summary = classification_report(all_truths, all_preds, output_dict=True)
+    all_stats = {}
+    for label, id in label2id.items():
+        data = summary.pop(str(id))
+        all_stats[label] = data
+    print_result(all_stats=all_stats, summary=summary, report_dir=report_dir)
 
 
 def get_f1_score_label(pre_lines, gold_lines, label="organization"):
     """
     打分函数
     """
-    # pre_lines = [json.loads(line.strip()) for line in open(pre_file) if line.strip()]
-    # gold_lines = [json.loads(line.strip()) for line in open(gold_file) if line.strip()]
     TP = 0
     FP = 0
     TN = 0
@@ -44,7 +73,9 @@ def get_f1_score_label(pre_lines, gold_lines, label="organization"):
     counts_p = 0
     for pre_line, gold_line in zip(pre_lines, gold_lines):
         preds = pre_line["pred"]
+        preds.sort()
         truths = gold_line["label"]
+        truths.sort()
         if label in truths and label in preds:
             TP += 1
             counts_t += 1
@@ -79,11 +110,8 @@ def get_f1_score_label(pre_lines, gold_lines, label="organization"):
     return stats
 
 
-def build_report(predict_path, truth_path, report_dir, datasets=None):
-    pre_lines = [json.loads(line.strip())
-                 for line in open(predict_path) if line.strip()]
-    gold_lines = [json.loads(line.strip())
-                  for line in open(truth_path) if line.strip()]
+def build_report(pre_lines, gold_lines, report_dir=None, datasets=None):
+    num_preds = len(pre_lines)
     all_stats = {}
     summary = {
         "label": "all",
@@ -95,17 +123,15 @@ def build_report(predict_path, truth_path, report_dir, datasets=None):
         "counts_p": 0,
     }
     processor = SentenceProcessor(datasets_to_include=datasets)
-    labels_to_check = processor.get_labels()
+    label_list = processor.get_labels()
     sum_f1 = 0
-    sum_acc = 0
     sum_p = 0
     sum_r = 0
-    for label in labels_to_check:
+    for label in label_list:
         stats = get_f1_score_label(
             pre_lines, gold_lines, label=label)
         all_stats[label] = stats
         sum_f1 += stats["f1"]
-        sum_acc += stats["acc"]
         sum_p += stats["precision"]
         sum_r += stats["recall"]
 
@@ -115,24 +141,28 @@ def build_report(predict_path, truth_path, report_dir, datasets=None):
         summary["FN"] += stats["FN"]
         summary["counts_t"] += stats["counts_t"]
         summary["counts_p"] += stats["counts_p"]
-    summary["f1"] = sum_f1 / len(labels_to_check)
-    summary["acc"] = sum_acc / len(labels_to_check)
-    summary["precision"] = sum_p / len(labels_to_check)
-    summary["recall"] = sum_r / len(labels_to_check)
+    summary["f1"] = sum_f1 / len(label_list)
+    summary["acc"] = summary["TP"] / num_preds if num_preds > 0 else 0
+    summary["precision"] = sum_p / len(label_list)
+    summary["recall"] = sum_r / len(label_list)
+    print_result(all_stats=all_stats, summary=summary, report_dir=report_dir)
 
+
+def print_result(all_stats, summary, report_dir=None):
     logger.info("========== Summary ==========")
     json_str = json.dumps(all_stats, indent=4, ensure_ascii=False)
     logger.info(f"\n stats: \n{json_str}")
     logger.info(
         f"\nsummary stats: \n{json.dumps(summary, indent=4, ensure_ascii=False)}")
 
-    report_path = os.path.join(report_dir, "report.json")
-    with open(report_path, "w") as report_f:
-        json.dump(all_stats, report_f, indent=4, ensure_ascii=False)
-    report_all_path = os.path.join(report_dir, "report_all.json")
-    with open(report_all_path, "w") as report_f:
-        json.dump(summary, report_f, indent=4, ensure_ascii=False)
-    logger.info(f"report was saved in dir: {report_dir}")
+    if report_dir:
+        report_path = os.path.join(report_dir, "report.json")
+        with open(report_path, "w") as report_f:
+            json.dump(all_stats, report_f, indent=4, ensure_ascii=False)
+        report_all_path = os.path.join(report_dir, "report_all.json")
+        with open(report_all_path, "w") as report_f:
+            json.dump(summary, report_f, indent=4, ensure_ascii=False)
+        logger.info(f"report was saved in dir: {report_dir}")
 
 
 if __name__ == "__main__":
