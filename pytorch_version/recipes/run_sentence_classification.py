@@ -37,8 +37,8 @@ MODEL_CLASSES = {
 DATASETS_TO_INCLUDE = list(Dataset)
 DATASETS_TO_INCLUDE = [
     Dataset.column_data,
-    Dataset.short_sentence,
-    Dataset.long_sentence,
+    # Dataset.short_sentence,
+    # Dataset.long_sentence,
 ]
 DATASETS_TO_INCLUDE.sort()
 
@@ -496,8 +496,11 @@ def predict(args, model, tokenizer, prefix="", data_type="test"):
         json_d['pred'] = y['tags_sentence']
         test_submit.append(json_d)
     json_to_text(output_submit_file, test_submit)
-    score_sentence.build_report(predict_path=output_submit_file,
-                                truth_path=output_submit_file,
+
+    pre_lines = [json.loads(line.strip())
+                 for line in open(output_submit_file) if line.strip()]
+    score_sentence.build_report(predict_path=pre_lines,
+                                truth_path=pre_lines,
                                 report_dir=report_dir,
                                 datasets=DATASETS_TO_INCLUDE)
 
@@ -571,7 +574,7 @@ def load_and_cache_examples(args, task, tokenizer, data_type):
     return dataset
 
 
-def setup(arg_list=None):
+def get_args_parser():
     parser = argparse.ArgumentParser()
     # Required parameters
     parser.add_argument("--task_name", default=None, type=str, required=True,
@@ -663,6 +666,11 @@ def setup(arg_list=None):
                         help="For distant debugging.")
     parser.add_argument("--server_port", type=str,
                         default="", help="For distant debugging.")
+    return parser
+
+
+def setup(arg_list=None):
+    parser = get_args_parser()
     args = parser.parse_args(arg_list)
 
     # create output dirs
