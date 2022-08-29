@@ -1,6 +1,8 @@
 import json
 import os
 import copy
+import random
+from typing import List, Dict
 import torch
 
 from pathlib import Path
@@ -77,7 +79,8 @@ def batch_collate_fn(batch):
     return all_input_ids, all_attention_mask, all_token_type_ids, all_labels, all_lens
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer,
+def convert_examples_to_features(examples,
+                                 label_list, max_seq_length, tokenizer,
                                  cls_token_at_end=False, cls_token="[CLS]", cls_token_segment_id=1,
                                  sep_token="[SEP]", pad_on_left=False, pad_token=0, pad_token_segment_id=0,
                                  sequence_a_segment_id=0, mask_padding_with_zero=True,):
@@ -164,7 +167,7 @@ class SentenceProcessor(DataProcessor):
         self.resource_dir = resource_dir
         self.datasets_to_include = datasets_to_include
 
-    def _get_examples_all_dir(self, data_dir, partition):
+    def _get_examples_all_dir(self, data_dir, partition) -> List[InputExample]:
         all_examples = []
         for dataset in self.datasets_to_include:
             all_examples.extend(
@@ -173,15 +176,15 @@ class SentenceProcessor(DataProcessor):
             )
         return all_examples
 
-    def get_train_examples(self, data_dir):
+    def get_train_examples(self, data_dir) -> List[InputExample]:
         """See base class."""
         return self._get_examples_all_dir(data_dir, "train")
 
-    def get_dev_examples(self, data_dir):
+    def get_dev_examples(self, data_dir) -> List[InputExample]:
         """See base class."""
         return self._get_examples_all_dir(data_dir, "dev")
 
-    def get_test_examples(self, data_dir):
+    def get_test_examples(self, data_dir) -> List[InputExample]:
         """See base class."""
         return self._get_examples_all_dir(data_dir, "test")
 
@@ -194,7 +197,7 @@ class SentenceProcessor(DataProcessor):
             all_labels.extend(json.load(label_file))
         return all_labels
 
-    def _create_examples(self, lines, set_type):
+    def _create_examples(self, lines, set_type) -> List[InputExample]:
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
@@ -228,6 +231,31 @@ class SentenceProcessor(DataProcessor):
     def _create_labels(self, line, words):
         # label is a list of sentence level classes
         return line.get('label', None)
+
+
+class RandomDataSampler(object):
+    """Sampler to select data.
+    """
+
+    def __init__(self, sample_size: int) -> None:
+        self.sample_size = sample_size
+
+    def group_data_by_labels(self,
+                             examples: List[InputExample]) -> Dict[str, InputExample]:
+        examples_by_label = {}
+        for example in examples:
+            for label in example.labels:
+                if label not in examples_by_label:
+                    examples_by_label[label] = []
+                examples_by_label[label].append(example)
+        return examples_by_label
+
+    def sample(self, examples: List[InputExample]) -> List[InputExample]:
+        examples_by_label = self.group_data_by_labels(examples)
+        output_examples = []
+        for _, data in examples_by_label.items():
+            output_examples.extend(random.sample(data, self.sample_size))
+        return output_examples
 
 
 cls_processors = {

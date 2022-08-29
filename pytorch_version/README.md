@@ -15,37 +15,37 @@ python tools/download_clue_data.py --data_dir=./datasets --tasks=cluener
 |  | └── config.json
 |  | └── pytorch_model.bin
 ```
-3. 训练：
+3. 训练/评估/预测
 
-直接执行对应shell脚本，如：
-```shell
-sh scripts/run_ner_crf.sh
+直cd到pytorch_version目录下，接执行runner.py脚本，如：
+```python
+python runner.py
 ```
-4. 预测
+4. 启动Flask服务
 
 当前默认使用最后一个checkpoint模型作为预测模型，你也可以指定--predict_checkpoints参数进行对应的checkpoint进行预测，比如：
 ```python
-CURRENT_DIR=`pwd`
-export BERT_BASE_DIR=$CURRENT_DIR/prev_trained_model/bert-base
-export CLUE_DIR=$CURRENT_DIR/datasets
-export OUTPUR_DIR=$CURRENT_DIR/outputs
-TASK_NAME="cluener"
-
-python run_ner_span.py \
-  --model_type=bert \
-  --model_name_or_path=$BERT_BASE_DIR \
-  --task_name=$TASK_NAME \
-  --do_predict \
-  --predict_checkpoints=100 \
-  --do_lower_case \
-　...
+python app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers
 ```
-### 模型列表
 
-model_type目前支持**bert**和**albert**
+5. 跑e2e测试
+```python
+python e2e_test.py
+```
 
-**注意:** bert ernie bert_wwm bert_wwwm_ext等模型只是权重不一样，而模型本身主体一样，因此参数model_type=bert其余同理。
+6. Flaks服务的API
+    # list all running jobs
+    curl -XGET http://127.0.0.1:38888/list\?running=true
+     # list all jobs
+    curl -XGET http://127.0.0.1:38888/list\?running=false
+    # start a new job
+    curl -XPOST http://127.0.0.1:38888/start\?id=1135
+    # get job status
+    curl -XGET http://127.0.0.1:38888/status\?id=1135
+    # stop a running job
+    curl -XPOST http://127.0.0.1:38888/stop\?id=1135
+    # delete job artifacts
+    curl -XPOST http://127.0.0.1:38888/cleanup\?id=1135
 
-### 结果
-
-在dev上为F1分数为0.8076
+    # get job report
+    curl -XGET http://127.0.0.1:38888/report\?id=1135
