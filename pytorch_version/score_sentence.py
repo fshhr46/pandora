@@ -26,30 +26,30 @@ def main():
 
     pre_lines = [json.loads(line.strip())
                  for line in open(predict_path) if line.strip()]
-    gold_lines = [json.loads(line.strip())
-                  for line in open(truth_path) if line.strip()]
+    truth_lines = [json.loads(line.strip())
+                   for line in open(truth_path) if line.strip()]
     # validation
-    assert len(pre_lines) == len(gold_lines)
+    assert len(pre_lines) == len(truth_lines)
 
     build_report(pre_lines=pre_lines,
-                 gold_lines=gold_lines,
+                 truth_lines=truth_lines,
                  report_dir=predict_dir,
                  datasets=datasets)
 
     build_report_sklearn(pre_lines=pre_lines,
-                         gold_lines=gold_lines,
+                         truth_lines=truth_lines,
                          report_dir=None,
                          datasets=datasets)
 
 
-def build_report_sklearn(pre_lines, gold_lines, report_dir=None, datasets=None):
+def build_report_sklearn(pre_lines, truth_lines, report_dir=None, datasets=None):
 
     processor = SentenceProcessor(datasets_to_include=datasets)
     label_list = processor.get_labels()
     id2label = {i: label for i, label in enumerate(label_list)}
     label2id = {label: i for i, label in enumerate(label_list)}
     all_preds = [label2id[line["pred"][0]] for line in pre_lines]
-    all_truths = [label2id[line["label"][0]] for line in gold_lines]
+    all_truths = [label2id[line["label"][0]] for line in truth_lines]
     from sklearn.metrics import f1_score
     f = f1_score(all_truths, all_preds, average='macro')
     from sklearn.metrics import classification_report
@@ -61,7 +61,7 @@ def build_report_sklearn(pre_lines, gold_lines, report_dir=None, datasets=None):
     print_result(all_stats=all_stats, summary=summary, report_dir=report_dir)
 
 
-def get_f1_score_label(pre_lines, gold_lines, label="organization"):
+def get_f1_score_label(pre_lines, truth_lines, label="organization"):
     """
     打分函数
     """
@@ -71,7 +71,7 @@ def get_f1_score_label(pre_lines, gold_lines, label="organization"):
     FN = 0
     counts_t = 0
     counts_p = 0
-    for pre_line, gold_line in zip(pre_lines, gold_lines):
+    for pre_line, gold_line in zip(pre_lines, truth_lines):
         preds = pre_line["pred"]
         preds.sort()
         truths = gold_line["label"]
@@ -110,7 +110,7 @@ def get_f1_score_label(pre_lines, gold_lines, label="organization"):
     return stats
 
 
-def build_report(pre_lines, gold_lines, report_dir=None, datasets=None):
+def build_report(pre_lines, truth_lines, report_dir=None, datasets=None):
     num_preds = len(pre_lines)
     all_stats = {}
     summary = {
@@ -129,7 +129,7 @@ def build_report(pre_lines, gold_lines, report_dir=None, datasets=None):
     sum_r = 0
     for label in label_list:
         stats = get_f1_score_label(
-            pre_lines, gold_lines, label=label)
+            pre_lines, truth_lines, label=label)
         all_stats[label] = stats
         sum_f1 += stats["f1"]
         sum_p += stats["precision"]
