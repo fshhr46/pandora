@@ -34,14 +34,15 @@ class TrainingJob(object):
                  job_id,
                  data_dir,
                  output_dir,
-                 cache_dir) -> None:
+                 cache_dir,
+                 sample_size: int) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
         self.output_dir = output_dir
         self.cache_dir = cache_dir
 
         # Training parameters
-        self.sample_size = 20
+        self.sample_size = sample_size
 
     def __call__(self, *args, **kwds) -> None:
         arg_list = runner.get_training_args(
@@ -70,7 +71,8 @@ def start_training_job(
         job_id: str,
         data_dir,
         server_dir,
-        cache_dir) -> Tuple[bool, str]:
+        cache_dir,
+        sample_size: int) -> Tuple[bool, str]:
     if not _has_enough_resource():
         message = f"not enough resource to start a new training job."
         logger.info(message)
@@ -88,7 +90,8 @@ def start_training_job(
         job_id=job_id,
         data_dir=data_dir,
         output_dir=output_dir,
-        cache_dir=cache_dir)
+        cache_dir=cache_dir,
+        sample_size=sample_size)
     job_process = multiprocessing.Process(
         name=_get_process_name_by_id(job_id=job_id), target=job)
     job_process.daemon = True
