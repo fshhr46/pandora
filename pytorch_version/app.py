@@ -19,7 +19,13 @@ class Server(object):
         # dirs
         self.output_dir = args.output_dir
         self.data_dir = args.data_dir
-        self.cache_dir = args.cache_dir
+
+        # default service log will be in the output_dir.
+        if args.cache_dir:
+            self.cache_dir = args.cache_dir
+        else:
+            home = str(Path.home())
+            self.cache_dir = os.path.join(home, ".cache/torch/transformers")
 
         # default service log will be in the output_dir.
         if args.log_dir:
@@ -136,7 +142,7 @@ def get_arg_parser():
                         default=logging.INFO, required=False, choices=logging._nameToLevel.keys())
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--data_dir", type=str, required=True)
-    parser.add_argument("--cache_dir", type=str, required=True)
+    parser.add_argument("--cache_dir", type=str, default=None, required=False)
     return parser
 
 
