@@ -22,7 +22,7 @@ def get_data_dir(resource_dir):
 
 
 def get_output_data_folder(resource_dir):
-    return os.path.join(resource_dir, "datasets", "sentence")
+    return os.path.join(resource_dir, "datasets")
 
 
 def get_data_folders(data_dir):
