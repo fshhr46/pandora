@@ -29,8 +29,9 @@ def start_test_server():
         f"--host={HOST}",
         f"--port={PORT}",
         "--log_level=DEBUG",
-        f"--data_dir={home}/workspace/resource/datasets/sentence",
+        f"--log_dir={home}/pandora_outputs",
         f"--output_dir={home}/pandora_outputs",
+        f"--data_dir={home}/workspace/resource/datasets/sentence",
         f"--cache_dir={home}/.cache/torch/transformers",
     ]
     parser = app.get_arg_parser()
