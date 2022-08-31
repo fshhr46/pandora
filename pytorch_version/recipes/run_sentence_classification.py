@@ -23,7 +23,7 @@ from processors.utils_cls import SentenceTokenizer
 from tools.common import init_logger, logger
 from tools.common import seed_everything, json_to_text
 import score_sentence
-from tools.sentence_data import Dataset
+from dataset.sentence_data import Dataset
 
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys())
                  for conf in (BertConfig,)), ())

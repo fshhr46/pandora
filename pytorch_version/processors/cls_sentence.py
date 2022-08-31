@@ -237,7 +237,7 @@ class RandomDataSampler(object):
     """Sampler to select data.
     """
 
-    def __init__(self, sample_size: int) -> None:
+    def __init__(self, seed: int, sample_size: int) -> None:
         self.sample_size = sample_size
 
     def group_data_by_labels(self,

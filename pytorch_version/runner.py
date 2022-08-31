@@ -29,7 +29,7 @@ from processors.utils_cls import SentenceTokenizer
 from tools.common import init_logger, logger
 from tools.common import seed_everything, json_to_text
 import score_sentence
-from tools.sentence_data import Dataset
+from dataset.sentence_data import Dataset
 
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys())
                  for conf in (BertConfig,)), ())
@@ -165,10 +165,6 @@ def main():
     train_eval_test(arg_list)
 
 
-def get_data_processor(task_name):
-    return processors[task_name](datasets_to_include=DATASETS_TO_INCLUDE)
-
-
 def train_eval_test(arg_list):
 
     parser = get_args_parser()
@@ -178,14 +174,12 @@ def train_eval_test(arg_list):
                 '/{}-{}.log'.format(args.model_type, args.task_name))
     config_class, model_class, tokenizer_class = model_classes
 
+    data = prepare_data(args, tokenizer)
+    datasets = data["datasets"]
+    train_dataset, eval_dataset, test_dataset = datasets["train"], datasets["eval"], datasets["test"]
+    examples = data["examples"]
     # Training
-    if args.do_train:
-
-        sampler = None
-        if args.sample_size:
-            sampler = RandomDataSampler(args.sample_size)
-        train_dataset = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type='train', sampler=sampler)
+    if train_dataset:
         global_step, tr_loss = train(
             args, train_dataset, model, tokenizer)
         logger.info(" global_step = %s, average loss = %s",
@@ -211,7 +205,7 @@ def train_eval_test(arg_list):
 
     # Evaluation
     results = {}
-    if args.do_eval and args.local_rank in [-1, 0]:
+    if eval_dataset and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(
             args.output_dir, do_lower_case=args.do_lower_case)
         checkpoints = [args.output_dir]
@@ -229,7 +223,7 @@ def train_eval_test(arg_list):
                 '/')[-1] if checkpoint.find('checkpoint') != -1 else ""
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
-            result = evaluate(args, model, tokenizer, prefix=prefix)
+            result = evaluate(args, model, eval_dataset, prefix=prefix)
             if global_step:
                 result = {"{}_{}".format(
                     global_step, k): v for k, v in result.items()}
@@ -239,7 +233,8 @@ def train_eval_test(arg_list):
             for key in sorted(results.keys()):
                 writer.write("{} = {}\n".format(key, str(results[key])))
 
-    if args.do_predict and args.local_rank in [-1, 0]:
+    # Predict
+    if test_dataset and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(
             args.output_dir, do_lower_case=args.do_lower_case)
         checkpoints = [args.output_dir]
@@ -257,8 +252,13 @@ def train_eval_test(arg_list):
             prefix = os.path.join("predict", prefix)
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
-            os.makedirs(os.path.join(args.output_dir, prefix), exist_ok=True)
-            predict(args, model, tokenizer, prefix=prefix)
+
+            report_dir = os.path.join(args.output_dir, prefix)
+            if not os.path.exists(report_dir) and args.local_rank in [-1, 0]:
+                os.makedirs(report_dir)
+            predictions = predict(args, model, test_dataset, prefix=prefix)
+            test_examples = examples["test"]
+            build_report(test_examples, predictions, report_dir)
 
 
 def train(args, train_dataset, model, tokenizer):
@@ -426,12 +426,10 @@ def train(args, train_dataset, model, tokenizer):
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, model, tokenizer, prefix=""):
+def evaluate(args, model, eval_dataset, prefix=""):
     eval_output_dir = args.output_dir
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
-    eval_dataset = load_and_cache_examples(
-        args, args.task_name, tokenizer, data_type='dev')
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     # Note that DistributedSampler samples randomly
     eval_sampler = SequentialSampler(
@@ -439,7 +437,7 @@ def evaluate(args, model, tokenizer, prefix=""):
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size,
                                  collate_fn=batch_collate_fn)
     # Eval!
-    logger.info("***** Running evaluation %s *****", prefix)
+    logger.info(f"***** Running evaluation %s ***** prefix: {prefix}")
     logger.info("  Num examples = %d", len(eval_dataset))
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
@@ -473,34 +471,28 @@ def evaluate(args, model, tokenizer, prefix=""):
     eval_loss = eval_loss / nb_eval_steps
     results = {}
     results['loss'] = eval_loss
-    logger.info("***** Eval results %s *****", prefix)
+    logger.info(f"***** Eval results %s ***** prefix: {prefix}")
     info = "-".join([f' {key}: {value:.4f} ' for key,
                     value in results.items()])
     logger.info(info)
-    logger.info("***** Entity results %s *****", prefix)
+    logger.info(f"***** Entity results %s ***** prefix: {prefix}")
     return results
 
 
-def predict(args, model, tokenizer, prefix="", data_type="test"):
-    pred_output_dir = args.output_dir
-    if not os.path.exists(pred_output_dir) and args.local_rank in [-1, 0]:
-        os.makedirs(pred_output_dir)
-
+def predict(args, model, test_dataset, prefix=""):
     batch_size = 1
-    test_dataset = load_and_cache_examples(
-        args, args.task_name, tokenizer, data_type=data_type)
     # Note that DistributedSampler samples randomly
     test_sampler = SequentialSampler(
         test_dataset) if args.local_rank == -1 else DistributedSampler(test_dataset)
     test_dataloader = DataLoader(
         test_dataset, sampler=test_sampler, batch_size=batch_size, collate_fn=batch_collate_fn)
     # Predict!
-    logger.info("***** Running prediction %s *****", prefix)
+    logger.info(f"***** Running prediction %s ***** prefix: {prefix}")
     logger.info("  Num examples = %d", len(test_dataset))
     logger.info("  Batch size = %d", batch_size)
     assert batch_size == 1
 
-    results = []
+    predictions = []
     pbar = ProgressBar(n_total=len(test_dataloader), desc="Predicting")
     for step, batch in enumerate(test_dataloader):
         model.eval()
@@ -524,20 +516,21 @@ def predict(args, model, tokenizer, prefix="", data_type="test"):
         tags = [args.id2label[x] for x in preds]
         json_d = {}
         json_d['tags_sentence'] = tags
-        results.append(json_d)
+        predictions.append(json_d)
         pbar(step)
+    return predictions
+
+
+def build_report(examples, predictions, report_dir):
     logger.info(" ")
-    report_dir = os.path.join(pred_output_dir, prefix)
     output_predic_file = os.path.join(report_dir, "test_prediction.json")
     output_submit_file = os.path.join(report_dir, "test_submit.json")
     with open(output_predic_file, "w") as writer:
-        for record in results:
+        for record in predictions:
             writer.write(json.dumps(record) + '\n')
 
     test_submit = []
-    examples = load_examples(
-        args.data_dir, get_data_processor(args.task_name), data_type)
-    for x, y in zip(examples, results):
+    for x, y in zip(examples, predictions):
         json_d = {}
         json_d['guid'] = x.guid
         json_d['text'] = x.sentence
@@ -555,13 +548,50 @@ def predict(args, model, tokenizer, prefix="", data_type="test"):
                                 datasets=DATASETS_TO_INCLUDE)
 
 
+def get_data_processor(task_name):
+    return processors[task_name](datasets_to_include=DATASETS_TO_INCLUDE)
+
+
+def prepare_data(args, tokenizer):
+    train_dataset = eval_dataset = test_dataset = None
+    if args.do_train:
+        sampler = None
+        if args.sample_size:
+            sampler = RandomDataSampler(
+                seed=args.seed,
+                sample_size=args.sample_size)
+        train_dataset, train_examples = load_and_cache_examples(
+            args, args.task_name, tokenizer, data_type='train', sampler=sampler)
+    if args.do_eval:
+        eval_dataset, eval_examples = load_and_cache_examples(
+            args, args.task_name, tokenizer, data_type='dev')
+
+    if args.do_predict:
+        test_dataset, test_examples = load_and_cache_examples(
+            args, args.task_name, tokenizer, data_type="test")
+    return {
+        "datasets": {
+            "train": train_dataset,
+            "eval": eval_dataset,
+            "test": test_dataset,
+        },
+        "examples": {
+            "train": train_examples,
+            "eval": eval_examples,
+            "test": test_examples,
+        },
+    }
+
+
 def load_examples(data_dir, processor, data_type):
     if data_type == 'train':
         examples = processor.get_train_examples(data_dir)
     elif data_type == 'dev':
         examples = processor.get_dev_examples(data_dir)
-    else:
+    elif data_type == 'test':
         examples = processor.get_test_examples(data_dir)
+    else:
+        raise ValueError(f"invalid data_type {data_type}")
     return examples
 
 
@@ -576,6 +606,7 @@ def load_and_cache_examples(args, task, tokenizer, data_type, sampler=None):
         filter(None, args.model_name_or_path.split('/'))).pop()
     cached_features_file = os.path.join(
         args.output_dir, f'cached_softmax-{data_type}_{base_model_name}_{feature_dim}_{task}')
+    examples = load_examples(args.data_dir, processor, data_type)
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s",
                     cached_features_file)
@@ -583,7 +614,6 @@ def load_and_cache_examples(args, task, tokenizer, data_type, sampler=None):
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
         label_list = processor.get_labels()
-        examples = load_examples(args.data_dir, processor, data_type)
         if sampler:
             examples = sampler.sample(examples=examples)
         features = convert_examples_to_features(examples=examples,
@@ -622,7 +652,7 @@ def load_and_cache_examples(args, task, tokenizer, data_type, sampler=None):
     all_lens = torch.tensor([f.input_len for f in features], dtype=torch.long)
     dataset = TensorDataset(
         all_input_ids, all_input_mask, all_segment_ids, all_lens, all_label_ids)
-    return dataset
+    return dataset, examples
 
 
 def get_args_parser():
