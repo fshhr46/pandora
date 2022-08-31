@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from processors.cls_sentence import SentenceProcessor
 from tools.common import init_logger, logger
-from tools.sentence_data import Dataset
+from dataset.sentence_data import Dataset
 
 
 def main():

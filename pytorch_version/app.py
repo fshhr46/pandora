@@ -159,5 +159,5 @@ if __name__ == '__main__':
     parser = get_arg_parser()
     args = parser.parse_args()
 
-    # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers
+    # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets --cache_dir=$HOME/.cache/torch/transformers
     server.run(args)
