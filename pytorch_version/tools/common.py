@@ -1,5 +1,6 @@
 import os
 import random
+import shutil
 import torch
 import numpy as np
 import json
@@ -224,6 +225,11 @@ def json_to_text(file_path, data):
         for line in data:
             line = json.dumps(line, ensure_ascii=False)
             fw.write(line + '\n')
+
+
+def copy_file(src: str, dst: str, file_name: str):
+    shutil.copyfile(os.path.join(src, file_name),
+                    os.path.join(dst, file_name))
 
 
 def save_model(model, model_path):

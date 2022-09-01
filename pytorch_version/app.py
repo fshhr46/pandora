@@ -142,6 +142,22 @@ def list_training_jobs():
     return jsonify([job_name for job_name in jobs.keys()])
 
 
+@flaskApp.route('/package', methods=['POST'])
+def start_packaging():
+    job_id = request.args.get('id')
+    logging.info(f"job id is {job_id}")
+    success, package_dir, message = training_job.build_model_package(
+        job_id=job_id,
+        server_dir=server.output_dir,
+    )
+    output = {
+        "success": success,
+        "message": message,
+        "package_dir": package_dir,
+    }
+    return jsonify(output)
+
+
 def get_arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, required=True)
@@ -158,6 +174,4 @@ def get_arg_parser():
 if __name__ == '__main__':
     parser = get_arg_parser()
     args = parser.parse_args()
-
-    # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets --cache_dir=$HOME/.cache/torch/transformers
     server.run(args)
