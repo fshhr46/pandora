@@ -25,7 +25,6 @@ def kill_proc_tree(pid):
         child.kill()
 
 
-
 def start_test_server(host, port, temp_dir):
     # home = str(Path.home())
     output_dir = os.path.join(temp_dir, "pandora_outputs")
