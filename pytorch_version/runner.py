@@ -10,7 +10,7 @@ from typing import Dict, List
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
 from callback.lr_scheduler import get_linear_schedule_with_warmup
@@ -20,15 +20,12 @@ from models.bert_for_sentence import BertForSentence
 from models.transformers import WEIGHTS_NAME, BertConfig
 from processors.cls_sentence import (
     batch_collate_fn,
-    convert_examples_to_features,
-    RandomDataSampler,
 )
-from processors.cls_sentence import convert_examples_to_features
 from processors.cls_sentence import cls_processors as processors
 from processors.utils_cls import SentenceTokenizer
 from tools.common import init_logger, logger
-from tools.common import seed_everything, json_to_text
-import score_sentence
+import tools.common as common_utils
+import tools.runner_utils as runner_utils
 from dataset.sentence_data import Dataset
 
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys())
@@ -39,7 +36,7 @@ MODEL_CLASSES = {
     'bert': (BertConfig, BertForSentence, SentenceTokenizer),
 }
 
-
+# TODO: DATASETS_TO_INCLUDE should be input parameter
 DATASETS_TO_INCLUDE = list(Dataset)
 DATASETS_TO_INCLUDE = [
     Dataset.column_data,
@@ -112,9 +109,9 @@ def get_default_dirs(
     logger.info(f"DATASETS_TO_INCLUDE are:\n\t {datasets_str}")
     dataset_names = "_".join(DATASETS_TO_INCLUDE)
     output_dir = os.path.join(resource_dir, "outputs",
-                              bert_base_model_name, task_name, dataset_names)
+                              bert_base_model_name, dataset_names)
 
-    data_dir = os.path.join(resource_dir, "datasets", task_name)
+    data_dir = os.path.join(resource_dir, "datasets")
     os.makedirs(os.path.join(
         resource_dir, "prev_trained_model"), exist_ok=True)
     pre_trained_model_dir = os.path.join(resource_dir, "prev_trained_model")
@@ -166,7 +163,6 @@ def main():
 
 
 def train_eval_test(arg_list):
-
     parser = get_args_parser()
     args = parser.parse_args(arg_list)
     args, config, tokenizer, model, model_classes = setup(args=args)
@@ -174,7 +170,8 @@ def train_eval_test(arg_list):
                 '/{}-{}.log'.format(args.model_type, args.task_name))
     config_class, model_class, tokenizer_class = model_classes
 
-    data = prepare_data(args, tokenizer)
+    data = runner_utils.prepare_data(
+        args, tokenizer, datasets_to_include=DATASETS_TO_INCLUDE)
     datasets = data["datasets"]
     train_dataset, eval_dataset, test_dataset = datasets["train"], datasets["eval"], datasets["test"]
     examples = data["examples"]
@@ -201,7 +198,11 @@ def train_eval_test(arg_list):
         model_to_save.save_pretrained(args.output_dir)
         tokenizer.save_vocabulary(args.output_dir)
         # Good practice: save your training arguments together with the trained model
+        # save as binary
         torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
+        # save as json
+        with open(os.path.join(args.output_dir, "index_to_name.json"), "w") as id2label_f:
+            json.dump(args.id2label, id2label_f, indent=4, ensure_ascii=False)
 
     # Evaluation
     results = {}
@@ -258,7 +259,8 @@ def train_eval_test(arg_list):
                 os.makedirs(report_dir)
             predictions = predict(args, model, test_dataset, prefix=prefix)
             test_examples = examples["test"]
-            build_report(test_examples, predictions, report_dir)
+            runner_utils.build_report(test_examples, predictions, report_dir,
+                                      datasets_to_include=DATASETS_TO_INCLUDE)
 
 
 def train(args, train_dataset, model, tokenizer):
@@ -348,7 +350,7 @@ def train(args, train_dataset, model, tokenizer):
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
     # Added here for reproductibility (even between python 2 and 3)
-    seed_everything(args.seed)
+    common_utils.seed_everything(args.seed)
     for _ in range(int(args.num_train_epochs)):
         pbar = ProgressBar(n_total=len(train_dataloader), desc='Training')
         for step, batch in enumerate(train_dataloader):
@@ -521,140 +523,6 @@ def predict(args, model, test_dataset, prefix=""):
     return predictions
 
 
-def build_report(examples, predictions, report_dir):
-    logger.info(" ")
-    output_predic_file = os.path.join(report_dir, "test_prediction.json")
-    output_submit_file = os.path.join(report_dir, "test_submit.json")
-    with open(output_predic_file, "w") as writer:
-        for record in predictions:
-            writer.write(json.dumps(record) + '\n')
-
-    test_submit = []
-    for x, y in zip(examples, predictions):
-        json_d = {}
-        json_d['guid'] = x.guid
-        json_d['text'] = x.sentence
-        json_d['words'] = x.words
-        json_d['label'] = x.labels
-        json_d['pred'] = y['tags_sentence']
-        test_submit.append(json_d)
-    json_to_text(output_submit_file, test_submit)
-
-    pre_lines = [json.loads(line.strip())
-                 for line in open(output_submit_file) if line.strip()]
-    score_sentence.build_report(pre_lines=pre_lines,
-                                truth_lines=pre_lines,
-                                report_dir=report_dir,
-                                datasets=DATASETS_TO_INCLUDE)
-
-
-def get_data_processor(task_name):
-    return processors[task_name](datasets_to_include=DATASETS_TO_INCLUDE)
-
-
-def prepare_data(args, tokenizer):
-    train_dataset = eval_dataset = test_dataset = None
-    if args.do_train:
-        sampler = None
-        if args.sample_size:
-            sampler = RandomDataSampler(
-                seed=args.seed,
-                sample_size=args.sample_size)
-        train_dataset, train_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type='train', sampler=sampler)
-    if args.do_eval:
-        eval_dataset, eval_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type='dev')
-
-    if args.do_predict:
-        test_dataset, test_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type="test")
-    return {
-        "datasets": {
-            "train": train_dataset,
-            "eval": eval_dataset,
-            "test": test_dataset,
-        },
-        "examples": {
-            "train": train_examples,
-            "eval": eval_examples,
-            "test": test_examples,
-        },
-    }
-
-
-def load_examples(data_dir, processor, data_type):
-    if data_type == 'train':
-        examples = processor.get_train_examples(data_dir)
-    elif data_type == 'dev':
-        examples = processor.get_dev_examples(data_dir)
-    elif data_type == 'test':
-        examples = processor.get_test_examples(data_dir)
-    else:
-        raise ValueError(f"invalid data_type {data_type}")
-    return examples
-
-
-def load_and_cache_examples(args, task, tokenizer, data_type, sampler=None):
-    if args.local_rank not in [-1, 0] and not evaluate:
-        # Make sure only the first process in distributed training process the dataset, and the others will use the cache
-        torch.distributed.barrier()
-    processor = get_data_processor(task_name=task)
-    # Load data features from cache or dataset file
-    feature_dim = args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length
-    base_model_name = list(
-        filter(None, args.model_name_or_path.split('/'))).pop()
-    cached_features_file = os.path.join(
-        args.output_dir, f'cached_softmax-{data_type}_{base_model_name}_{feature_dim}_{task}')
-    examples = load_examples(args.data_dir, processor, data_type)
-    if os.path.exists(cached_features_file) and not args.overwrite_cache:
-        logger.info("Loading features from cached file %s",
-                    cached_features_file)
-        features = torch.load(cached_features_file)
-    else:
-        logger.info("Creating features from dataset file at %s", args.data_dir)
-        label_list = processor.get_labels()
-        if sampler:
-            examples = sampler.sample(examples=examples)
-        features = convert_examples_to_features(examples=examples,
-                                                tokenizer=tokenizer,
-                                                label_list=label_list,
-                                                max_seq_length=args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length,
-                                                cls_token_at_end=False,
-                                                pad_on_left=False,
-                                                cls_token=tokenizer.cls_token,
-                                                cls_token_segment_id=2 if args.model_type in [
-                                                    "xlnet"] else 0,
-                                                sep_token=tokenizer.sep_token,
-                                                # pad on the left for xlnet
-                                                pad_token=tokenizer.convert_tokens_to_ids(
-                                                    [tokenizer.pad_token])[0],
-                                                pad_token_segment_id=0,
-                                                )
-        if args.local_rank in [-1, 0]:
-            logger.info("Saving features into cached file %s",
-                        cached_features_file)
-            torch.save(features, cached_features_file)
-    if args.local_rank == 0 and not evaluate:
-        # Make sure only the first process in distributed training process the dataset, and the others will use the cache
-        torch.distributed.barrier()
-    # Convert to Tensors and build dataset
-    all_input_ids = torch.tensor(
-        [f.input_ids for f in features], dtype=torch.long)
-    all_input_mask = torch.tensor(
-        [f.input_mask for f in features], dtype=torch.long)
-    all_segment_ids = torch.tensor(
-        [f.segment_ids for f in features], dtype=torch.long)
-    # Only support single label now.
-    all_label_ids = torch.tensor(
-        [f.sentence_labels[0] for f in features], dtype=torch.long)
-
-    all_lens = torch.tensor([f.input_len for f in features], dtype=torch.long)
-    dataset = TensorDataset(
-        all_input_ids, all_input_mask, all_segment_ids, all_lens, all_label_ids)
-    return dataset, examples
-
-
 def get_args_parser():
     parser = argparse.ArgumentParser()
     # Required parameters
@@ -753,16 +621,15 @@ def get_args_parser():
 
 
 def setup(args):
-    # create output dirs
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-    if not os.path.exists(args.output_dir):
-        os.mkdir(args.output_dir)
+    # check if output dir already exists and override is not set
     if os.path.exists(args.output_dir) and os.listdir(
             args.output_dir) and args.do_train and not args.overwrite_output_dir:
         raise ValueError(
             "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
                 args.output_dir))
+    # create output dirs
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
 
     # Setup distant debugging if needed
     if args.server_ip and args.server_port:
@@ -797,13 +664,14 @@ def setup(args):
         args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16, )
 
     # Set seed
-    seed_everything(args.seed)
+    common_utils.seed_everything(args.seed)
 
     # Prepare NER task
     args.task_name = args.task_name.lower()
     if args.task_name not in processors:
         raise ValueError("Task not found: %s" % (args.task_name))
-    processor = get_data_processor(task_name=args.task_name)
+    processor = runner_utils.get_data_processor(
+        task_name=args.task_name, datasets_to_include=DATASETS_TO_INCLUDE)
     logger.info(f"task_name is {args.task_name}")
     label_list = processor.get_labels()
     args.id2label = {i: label for i, label in enumerate(label_list)}
