@@ -11,6 +11,7 @@ import glob
 from typing import Dict, Tuple
 import runner
 from tools.common import logger
+import packaging.packager as packager
 
 MAX_RUNNING_JOBS = 1
 JOB_PREFIX = "PANDORA_TRAINING"
@@ -22,6 +23,7 @@ class JobStatus(str, Enum):
     running = "running"
     terminated = "terminated"
     completed = "completed"
+    packaged = "packaged"
 
 
 class TrainingJob(object):
@@ -163,7 +165,11 @@ def get_training_status(server_dir: str, job_id: str) -> str:
         output_dir = _get_job_output_dir(server_dir, job_id=job_id)
         if os.path.exists(output_dir):
             report_dir = _get_report_output_dir(server_dir, job_id)
+            # report generation marks training is at least completed
             if os.path.isdir(report_dir):
+                # check if packing is done
+                if packager.done_packaging(output_dir):
+                    return JobStatus.packaged
                 return JobStatus.completed
             else:
                 return JobStatus.terminated
@@ -185,6 +191,25 @@ def list_all_jobs(server_dir: str) -> Dict[str, str]:
     jobs_full_path = glob.glob(os.path.join(server_dir, f"{JOB_PREFIX}*"))
     output_dic = {os.path.basename(path): path for path in jobs_full_path}
     return output_dic
+
+
+def build_model_package(
+        job_id: str,
+        server_dir: str) -> Tuple[bool, str]:
+    status = get_training_status(server_dir=server_dir, job_id=job_id)
+    output_dir = _get_job_output_dir(server_dir, job_id)
+    if status != JobStatus.packaged:
+        if status != JobStatus.completed:
+            return False, f"Job must be completed to create model package. Current status: {status}"
+        pkger = packager.ModelPackager(
+            model_dir=output_dir,
+        )
+        package_dir = pkger.build_model_package()
+    else:
+        package_dir = packager.get_package_dir(output_dir)
+    return True, package_dir, f"Your model package is created at {package_dir}.\
+                   You can copy the model package torchserve and create *.mar file by running\
+                   \"sh package.sh model_name model_version\""
 
 
 def _has_enough_resource() -> bool:

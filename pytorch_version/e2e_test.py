@@ -168,6 +168,12 @@ def test_training_success():
     assert len(paths) == 2
     assert len(data) == 2
 
+    # run packaging
+    assert make_request(
+        f"{get_url()}/package?id={job_id}", post=True)["success"]
+    assert make_request(
+        f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.packaged
+
     # delete artifacts
     assert make_request(
         f"{get_url()}/cleanup?id={job_id}", post=True)["success"]
