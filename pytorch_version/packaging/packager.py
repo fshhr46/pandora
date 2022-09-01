@@ -18,8 +18,9 @@ MODEL_FILES_TO_COPY = [MODEL_FILE_NAME, MODEL_CONFIG_FILE_NAME,
 # torchserve related names
 SERUP_CONF_FILE_NAME = "setup_config.json"
 HANDLER_NAME = "handler.py"
+REGISTER_SCRIPT_NAME = "register.sh"
 PACKAGE_SCRIPT_NAME = "package.sh"
-DONE_FILE = "done"
+PACKAGING_DONE_FILE = "package.done"
 
 
 def get_package_dir(model_dir: str):
@@ -27,7 +28,7 @@ def get_package_dir(model_dir: str):
 
 
 def done_packaging(model_dir: str):
-    done_file = os.path.join(get_package_dir(model_dir), DONE_FILE)
+    done_file = os.path.join(get_package_dir(model_dir), PACKAGING_DONE_FILE)
     return os.path.isfile(done_file)
 
 
@@ -68,20 +69,23 @@ class ModelPackager(object):
         # create package file
         self.create_package_script(package_dir)
 
-        # copy handler.py file
         curr_dir = str(pathlib.Path(os.path.dirname(__file__)).absolute())
+        # copy register.sh file
+        common.copy_file(curr_dir, package_dir, REGISTER_SCRIPT_NAME)
+
+        # copy handler.py file
         common.copy_file(curr_dir, package_dir, HANDLER_NAME)
 
         for file_name in MODEL_FILES_TO_COPY:
             common.copy_file(self.model_dir, package_dir, file_name)
 
         # mark done
-        open(os.path.join(package_dir, DONE_FILE), "w")
+        open(os.path.join(package_dir, PACKAGING_DONE_FILE), "w")
         return package_dir
 
     def get_command(self):
         return f"torch-model-archiver \
-            --model-name $model_name.mar \
+            --model-name $model_name \
             --version $model_version \
             --serialized-file {MODEL_FILE_NAME} \
             --handler {HANDLER_NAME} \

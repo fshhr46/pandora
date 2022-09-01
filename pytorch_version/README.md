@@ -32,21 +32,21 @@ python e2e_test.py
 ```
 
 6. Flaks服务的API
-    # list all running jobs
+    ### list all running jobs
     curl -XGET http://127.0.0.1:18888/list\?running=true
-     # list all jobs
+    ### list all jobs
     curl -XGET http://127.0.0.1:18888/list\?running=false
-    # start a new job
+    ### start a new job
     curl -XPOST http://127.0.0.1:18888/start\?id=1135
-    # get job status
+    ### get job status
     curl -XGET http://127.0.0.1:18888/status\?id=1135
-    # stop a running job
+    ### stop a running job
     curl -XPOST http://127.0.0.1:18888/stop\?id=1135
-    # create model package
+    ### create model package
     curl -XPOST http://127.0.0.1:18888/package\?id=1135
-    # delete job artifacts (including model package)
+    ### delete job artifacts (including model package)
     curl -XPOST http://127.0.0.1:18888/cleanup\?id=1135
-    # get job report
+    ### get job report
     curl -XGET http://127.0.0.1:18888/report\?id=1135
 
 7. 模型输出文件夹结构
@@ -60,6 +60,7 @@ python e2e_test.py
 |  | └── handler.py
 |  | └── index_to_name.json
 |  | └── package.sh
+|  | └── register.sh
 |  | └── done
 |  └── predict # 模型报告
 |  | └── report.json
