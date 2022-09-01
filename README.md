@@ -1,9 +1,4 @@
   # CLUENER 细粒度命名实体识别 
-  
-  **更多细节请参考我们的 <a href='https://github.com/CLUEbenchmark/CLUENER2020/blob/master/CLUENER2020_paper.pdf'>技术报告</a>： https://arxiv.org/abs/2001.04351**
-  ![./pics/header.png](https://github.com/CLUEbenchmark/CLUENER2020/blob/master/cluener.png)
-
-体验Demo：<a href="https://www.modelfun.cn" target="_" style="color:red">数据集自动标注工具--释放AI潜力！</a>
 
   ## 数据类别：
     数据分为10个标签类别，分别为: 地址（address），书名（book），公司（company），游戏（game），政府（government），电影（movie），姓名（name），组织机构（organization），职位（position），景点（scene）
@@ -90,28 +85,3 @@
 | Book          | 67.20 | 73.68 | **74.60** | 71.70 |
 | Movie         | 78.97 | 85.82 | **87.46** | 63.21 |
 | Overall@Macro |   70.00 | 78.82  | **80.42** | 63.41  |
-
-## 基线模型（一键运行）
-
-  1.tf版本bert系列：<a href='https://github.com/CLUEbenchmark/CLUENER2020/tree/master/tf_version'>tf_version</a>
-  (test, f1 80.42) 
-  
-  2.pytorch版本baseline：<a href='https://github.com/CLUEbenchmark/CLUENER2020/tree/master/pytorch_version'>pytorch_version</a>(79.63) 
- 
-  3.bilistm+crf的baseline: <a href="https://github.com/CLUEbenchmark/CLUENER2020/tree/master/bilstm_crf_pytorch">bilstm+crf</a>
-  (test, f1 70.0) 
-
-#### 技术交流与问题讨论QQ群: 836811304 Join us on QQ group
-
-
-#### 引用我们 Cite Us
-
-如果本目录中的内容对你的研究工作有所帮助，请在文献中引用下述报告：https://arxiv.org/abs/2001.04351
-```
-@article{xu2020cluener2020,
-  title={CLUENER2020: Fine-grained Name Entity Recognition for Chinese},
-  author={Xu, Liang and Dong, Qianqian and Yu, Cong and Tian, Yin and Liu, Weitang and Li, Lu and Zhang, Xuanwei},
-  journal={arXiv preprint arXiv:2001.04351},
-  year={2020}
- }
-```
