@@ -6,7 +6,7 @@ from typing import List, Dict
 import torch
 
 from pathlib import Path
-from .utils_ner import DataProcessor
+from .data_processor import DataProcessor
 from tools import sentence_data
 import logging
 
