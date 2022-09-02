@@ -17,7 +17,7 @@ python tools/download_clue_data.py --data_dir=./datasets --tasks=cluener
 ```
 3. 训练/评估/预测
 
-直cd到pytorch_version目录下，接执行runner.py脚本，如：
+直cd到git workspace目录下，接执行runner.py脚本，如：
 ```python
 python runner.py
 ```

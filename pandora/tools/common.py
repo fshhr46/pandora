@@ -9,6 +9,7 @@ import torch.nn as nn
 from collections import OrderedDict
 from pathlib import Path
 import logging
+import zipfile
 
 logger = logging.getLogger()
 
@@ -230,6 +231,16 @@ def json_to_text(file_path, data):
 def copy_file(src: str, dst: str, file_name: str):
     shutil.copyfile(os.path.join(src, file_name),
                     os.path.join(dst, file_name))
+
+
+def zipdir(dir_to_zip: str, output_path: str):
+    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # ziph is zipfile handle
+        for root, dirs, files in os.walk(dir_to_zip):
+            for file in files:
+                zipf.write(os.path.join(root, file),
+                           os.path.relpath(os.path.join(root, file),
+                                           os.path.join(dir_to_zip, '..')))
 
 
 def save_model(model, model_path):

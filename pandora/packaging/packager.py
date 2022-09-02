@@ -2,6 +2,9 @@ import os
 import json
 import pandora.tools.common as common
 import pathlib
+import shutil
+
+import pandora
 
 PACKAGE_DIR_NAME = "torchserve_package"
 
@@ -15,6 +18,7 @@ MODEL_FILES_TO_COPY = [MODEL_FILE_NAME, MODEL_CONFIG_FILE_NAME,
                        VOCAB_FILE_NAME, INDEX2NAME_FILE_NAME]
 
 # torchserve related names
+PANDORA_DEPENDENCY = "pandora.zip"
 SERUP_CONF_FILE_NAME = "setup_config.json"
 HANDLER_NAME = "handler.py"
 REGISTER_SCRIPT_NAME = "register.sh"
@@ -76,6 +80,11 @@ class ModelPackager(object):
         # copy handler.py file
         common.copy_file(curr_dir, package_dir, HANDLER_NAME)
 
+        # copy pandora as dependency
+        pandora_dir = os.path.dirname(pandora.__file__)
+        pandora_zip_path = os.path.join(package_dir, PANDORA_DEPENDENCY)
+        common.zipdir(dir_to_zip=pandora_dir, output_path=pandora_zip_path)
+
         for file_name in MODEL_FILES_TO_COPY:
             common.copy_file(self.model_dir, package_dir, file_name)
 
@@ -90,7 +99,7 @@ class ModelPackager(object):
             --serialized-file {MODEL_FILE_NAME} \
             --handler {HANDLER_NAME} \
             --extra-files \
-            \"{MODEL_CONFIG_FILE_NAME},{SERUP_CONF_FILE_NAME},{INDEX2NAME_FILE_NAME},{VOCAB_FILE_NAME}\""
+            \"{MODEL_CONFIG_FILE_NAME},{SERUP_CONF_FILE_NAME},{INDEX2NAME_FILE_NAME},{VOCAB_FILE_NAME},{PANDORA_DEPENDENCY}\""
 
     def create_package_script(self, package_dir):
         # copy sample file to package dir

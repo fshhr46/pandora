@@ -1,6 +1,6 @@
 import torch.nn as nn
 # from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertModel
-from models.transformers.modeling_bert import BertPreTrainedModel, BertModel
+from pandora.models.transformers.modeling_bert import BertPreTrainedModel, BertModel
 from torch.nn import CrossEntropyLoss
 
 import logging
