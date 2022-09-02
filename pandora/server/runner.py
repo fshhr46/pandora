@@ -16,17 +16,21 @@ from torch.utils.data.distributed import DistributedSampler
 from callback.lr_scheduler import get_linear_schedule_with_warmup
 from callback.optimizater.adamw import AdamW
 from callback.progressbar import ProgressBar
-from models.bert_for_sentence import BertForSentence
 from models.transformers import WEIGHTS_NAME, BertConfig
-from processors.cls_sentence import (
+from pandora.processors.feature import (
     batch_collate_fn,
 )
-from processors.cls_sentence import cls_processors as processors
-from processors.utils_cls import SentenceTokenizer
-from tools.common import init_logger, logger
-import tools.common as common_utils
-import tools.runner_utils as runner_utils
-from dataset.sentence_data import Dataset
+
+
+from pandora.packaging.model import BertForSentence
+from pandora.processors.feature import cls_processors as processors
+from pandora.packaging.tokenizer import SentenceTokenizer
+from pandora.tools.common import init_logger, logger
+import pandora.tools.common as common_utils
+import pandora.tools.runner_utils as runner_utils
+from pandora.dataset.sentence_data import Dataset
+import pandora.tools.mps_utils as mps_utils
+
 
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys())
                  for conf in (BertConfig,)), ())
@@ -102,7 +106,7 @@ def get_default_dirs(
     task_name,
     bert_base_model_name,
 ) -> List[str]:
-    if torch.has_mps:
+    if mps_utils.has_mps:
         assert os.getenv("PYTORCH_ENABLE_MPS_FALLBACK") == "1"
 
     datasets_str = ", ".join(DATASETS_TO_INCLUDE)
@@ -129,37 +133,6 @@ def get_default_dirs(
             f"--output_dir={output_dir}/",
             f"--cache_dir={cache_dir}", ]
     return args
-
-
-def main():
-
-    home = str(Path.home())
-    resource_dir = os.path.join(home, "workspace", "resource")
-    cache_dir = os.path.join(home, ".cache/torch/transformers")
-
-    task_name = "sentence"
-    mode_type = "bert"
-    bert_base_model_name = "bert-base-chinese"
-    arg_list = get_training_args(
-        task_name=task_name,
-        mode_type=mode_type,
-        bert_base_model_name=bert_base_model_name,
-    )
-
-    arg_list.extend(
-        get_default_dirs(
-            resource_dir,
-            cache_dir,
-            task_name=task_name,
-            bert_base_model_name=bert_base_model_name,
-        ))
-    arg_list.extend(
-        set_actions(
-            do_train=True,
-            do_eval=True,
-            do_predict=True,
-        ))
-    train_eval_test(arg_list)
 
 
 def train_eval_test(arg_list):
@@ -445,6 +418,7 @@ def evaluate(args, model, eval_dataset, prefix=""):
     eval_loss = 0.0
     nb_eval_steps = 0
     pbar = ProgressBar(n_total=len(eval_dataloader), desc="Evaluating")
+
     for step, batch in enumerate(eval_dataloader):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
@@ -645,7 +619,7 @@ def setup(args):
         # TODO: Setup M1 chip
         if torch.cuda.is_available() and not args.no_cuda:
             device_name = "cuda"
-        elif torch.has_mps:
+        elif mps_utils.has_mps:
             device_name = "mps"
         else:
             device_name = "cpu"
@@ -707,7 +681,3 @@ def setup(args):
     logger.info(
         f"\n========\nTraining/evaluation parameters {args}\n========\n")
     return args, config, tokenizer, model, MODEL_CLASSES[args.model_type]
-
-
-if __name__ == "__main__":
-    main()

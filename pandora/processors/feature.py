@@ -6,8 +6,8 @@ from typing import List, Dict
 import torch
 
 from pathlib import Path
-from .data_processor import DataProcessor
-from tools import sentence_data
+from pandora.processors.data_processor import DataProcessor
+from pandora.tools import sentence_data
 import logging
 
 logger = logging.getLogger(__name__)

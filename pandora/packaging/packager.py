@@ -1,8 +1,7 @@
 import os
 import json
-import tools.common as common
+import pandora.tools.common as common
 import pathlib
-import stat
 
 PACKAGE_DIR_NAME = "torchserve_package"
 
@@ -40,6 +39,7 @@ class ModelPackager(object):
     def create_setup_config_file(self, package_dir):
         setup_conf = {
             "model_name": "bert-base-chinese",
+            # "mode": "sequence_classification",
             "mode": "sequence_classification",
             "do_lower_case": True,
             "num_labels": "10",

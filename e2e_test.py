@@ -12,7 +12,7 @@ import os
 import argparse
 import tempfile
 
-from server.training_job import JobStatus
+from pandora.server.training_job import JobStatus
 
 TEST_HOST = "127.0.0.1"
 TEST_PORT = "36666"

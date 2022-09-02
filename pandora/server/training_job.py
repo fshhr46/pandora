@@ -9,9 +9,9 @@ import traceback
 import glob
 
 from typing import Dict, Tuple
-import runner
-from tools.common import logger
-import packaging.packager as packager
+import pandora.server.runner as runner
+from pandora.tools.common import logger
+import pandora.packaging.packager as packager
 
 MAX_RUNNING_JOBS = 1
 JOB_PREFIX = "PANDORA_TRAINING"

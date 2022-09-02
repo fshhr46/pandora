@@ -4,9 +4,9 @@
 import json
 import os
 from pathlib import Path
-from processors.cls_sentence import SentenceProcessor
-from tools.common import init_logger, logger
-from dataset.sentence_data import Dataset
+from pandora.processors.feature import SentenceProcessor
+from pandora.tools.common import init_logger, logger
+from pandora.dataset.sentence_data import Dataset
 
 
 def main():
