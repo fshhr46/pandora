@@ -1,5 +1,4 @@
-import csv
-import json
+# from transformers import BertTokenizer
 from models.transformers import BertTokenizer
 
 

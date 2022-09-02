@@ -1,12 +1,12 @@
 import os
 import json
-import score_sentence
-from tools.common import json_to_text
+import pandora.tools.score_sentence as score_sentence
+from pandora.tools.common import json_to_text
 
 
-from processors.cls_sentence import cls_processors as processors
-from processors.cls_sentence import convert_examples_to_features
-from processors.cls_sentence import (
+from pandora.processors.feature import cls_processors as processors
+from pandora.processors.feature import convert_examples_to_features
+from pandora.processors.feature import (
     convert_examples_to_features,
     RandomDataSampler,
 )
@@ -14,7 +14,7 @@ from processors.cls_sentence import (
 import torch
 from torch.utils.data import TensorDataset
 
-from tools.common import logger
+from pandora.tools.common import logger
 
 
 def build_report(examples, predictions, report_dir, datasets_to_include):

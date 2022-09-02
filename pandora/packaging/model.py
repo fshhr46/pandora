@@ -1,15 +1,7 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from .layers.crf import CRF
-from .transformers.modeling_bert import BertPreTrainedModel
-from .transformers.modeling_bert import BertModel
-from .layers.linears import PoolerEndLogits, PoolerStartLogits
+# from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertModel
+from models.transformers.modeling_bert import BertPreTrainedModel, BertModel
 from torch.nn import CrossEntropyLoss
-from losses.focal_loss import FocalLoss
-from losses.label_smoothing import LabelSmoothingCrossEntropy
-
-import tools.mps_utils
 
 import logging
 logger = logging.getLogger(__name__)
@@ -32,13 +24,17 @@ class BertForSentence(BertPreTrainedModel):
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
         logits_p = self.classifier(pooled_output)
-        assert self.loss_type in ['lsr', 'focal', 'ce']
-        if self.loss_type == 'lsr':
-            loss_fct = LabelSmoothingCrossEntropy()
-        elif self.loss_type == 'focal':
-            loss_fct = FocalLoss()
-        else:
-            loss_fct = CrossEntropyLoss()
+        # TODO: only support cs for now
+        # assert self.loss_type in ['lsr', 'focal', 'ce']
+        # if self.loss_type == 'lsr':
+        #     loss_fct = LabelSmoothingCrossEntropy()
+        # elif self.loss_type == 'focal':
+        #     loss_fct = FocalLoss()
+        # else:
+        #     loss_fct = CrossEntropyLoss()
+        assert self.loss_type in ['ce']
+        loss_fct = CrossEntropyLoss()
+
         outputs = (logits_p,) + outputs[2:]
 
         if labels is not None:

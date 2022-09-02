@@ -3,8 +3,8 @@ import os
 import argparse
 from pathlib import Path
 
-from tools.common import init_logger, logger
-import server.training_job as training_job
+from pandora.tools.common import init_logger, logger
+import pandora.server.training_job as training_job
 
 from flask import Flask, jsonify, request
 
