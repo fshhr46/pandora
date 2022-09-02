@@ -1,5 +1,5 @@
 # from transformers import BertTokenizer
-from models.transformers import BertTokenizer
+from pandora.models.transformers import BertTokenizer
 
 
 class SentenceTokenizer(BertTokenizer):

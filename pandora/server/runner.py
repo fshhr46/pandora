@@ -13,10 +13,10 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
-from callback.lr_scheduler import get_linear_schedule_with_warmup
-from callback.optimizater.adamw import AdamW
-from callback.progressbar import ProgressBar
-from models.transformers import WEIGHTS_NAME, BertConfig
+from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
+from pandora.callback.optimizater.adamw import AdamW
+from pandora.callback.progressbar import ProgressBar
+from pandora.models.transformers import WEIGHTS_NAME, BertConfig
 from pandora.processors.feature import (
     batch_collate_fn,
 )

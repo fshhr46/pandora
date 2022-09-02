@@ -200,7 +200,7 @@ def build_model_package(
     output_dir = _get_job_output_dir(server_dir, job_id)
     if status != JobStatus.packaged:
         if status != JobStatus.completed:
-            return False, f"Job must be completed to create model package. Current status: {status}"
+            return False, "", f"Job must be completed to create model package. Current status: {status}"
         pkger = packager.ModelPackager(
             model_dir=output_dir,
         )

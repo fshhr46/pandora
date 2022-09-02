@@ -1,21 +1,25 @@
+from captum.attr import LayerIntegratedGradients
+from ts.torch_handler.base_handler import BaseHandler
+from transformers import GPT2TokenizerFast
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    AutoModelForTokenClassification,
+)
+import transformers
+import torch
 from abc import ABC
 import json
 import logging
 import os
 import ast
 from typing import Dict
-import torch
-import transformers
-from transformers import (
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    AutoModelForTokenClassification,
-)
-from transformers import GPT2TokenizerFast
 
-from ts.torch_handler.base_handler import BaseHandler
-from captum.attr import LayerIntegratedGradients
-
+# import sys
+# import pathlib
+# curr_dir = str(pathlib.Path(os.path.dirname(__file__)).absolute())
+# sys.path.append(os.path.join(curr_dir, "pandora.zip"))
+# from pandora.packaging.tokenizer import SentenceTokenizer
 
 logger = logging.getLogger(__name__)
 logger.info("Transformers version %s", transformers.__version__)
@@ -112,6 +116,9 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 do_lower_case=self.setup_config["do_lower_case"],
             )
 
+        # self.tokenizer = SentenceTokenizer.from_pretrained(
+        #     model_dir, do_lower_case=self.setup_config["do_lower_case"])
+
         self.model.eval()
         logger.info(
             "Transformer model from path %s loaded successfully", model_dir)
@@ -125,6 +132,45 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             logger.warning("Missing the index_to_name.json file.")
         self.initialized = True
 
+    def add_input_text_to_batch(
+            self,
+            input_ids_batch,
+            attention_mask_batch,
+            input_text):
+        if isinstance(input_text, (bytes, bytearray)):
+            input_text = input_text.decode("utf-8")
+        if self.setup_config["captum_explanation"]:
+            input_text_target = ast.literal_eval(input_text)
+            input_text = input_text_target["text"]
+        logger.info(f"input_text is {input_text}")
+
+        max_length = self.setup_config["max_length"]
+        logger.info("Received text: '%s'", input_text)
+        # preprocessing text for sequence_classification, token_classification or text_generation
+
+        inputs = self.tokenizer.encode_plus(
+            input_text,
+            max_length=int(max_length),
+            pad_to_max_length=True,
+            add_special_tokens=True,
+            return_tensors="pt",
+        )
+        input_ids = inputs["input_ids"].to(self.device)
+        attention_mask = inputs["attention_mask"].to(self.device)
+        # making a batch out of the recieved requests
+        # attention masks are passed for cases where input tokens are padded.
+        if input_ids.shape is not None:
+            if input_ids_batch is None:
+                input_ids_batch = input_ids
+                attention_mask_batch = attention_mask
+            else:
+                input_ids_batch = torch.cat(
+                    (input_ids_batch, input_ids), 0)
+                attention_mask_batch = torch.cat(
+                    (attention_mask_batch, attention_mask), 0
+                )
+        return (input_ids_batch, attention_mask_batch)
+
     def preprocess(self, requests):
         """Basic text preprocessing, based on the user's chocie of application mode.
         Args:
@@ -135,45 +181,43 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         """
         input_ids_batch = None
         attention_mask_batch = None
+        indexes = []
+        num_texts = 0
         for idx, data in enumerate(requests):
-            input_text = data.get("data")
-            if input_text is None:
-                input_text = data.get("body")
-            if isinstance(input_text, (bytes, bytearray)):
-                input_text = input_text.decode("utf-8")
-            if self.setup_config["captum_explanation"]:
-                input_text_target = ast.literal_eval(input_text)
-                input_text = input_text_target["text"]
-            max_length = self.setup_config["max_length"]
-            logger.info("Received text: '%s'", input_text)
-            # preprocessing text for sequence_classification, token_classification or text_generation
-
-            inputs = self.tokenizer.encode_plus(
-                input_text,
-                max_length=int(max_length),
-                pad_to_max_length=True,
-                add_special_tokens=True,
-                return_tensors="pt",
-            )
-            input_ids = inputs["input_ids"].to(self.device)
-            attention_mask = inputs["attention_mask"].to(self.device)
-            # making a batch out of the recieved requests
-            # attention masks are passed for cases where input tokens are padded.
-            if input_ids.shape is not None:
-                if input_ids_batch is None:
-                    input_ids_batch = input_ids
-                    attention_mask_batch = attention_mask
-                else:
-                    input_ids_batch = torch.cat(
-                        (input_ids_batch, input_ids), 0)
-                    attention_mask_batch = torch.cat(
-                        (attention_mask_batch, attention_mask), 0
-                    )
-        return (input_ids_batch, attention_mask_batch)
+            if "data" in data and "body" in data:
+                raise ValueError(
+                    "Expect one of field in [data, body] to be set, but got both")
+            elif "data" in data:
+                # Get request expects every reqeusts has one input string
+                input_text = data.get("data")
+                input_ids_batch, attention_mask_batch = self.add_input_text_to_batch(
+                    input_ids_batch,
+                    attention_mask_batch,
+                    input_text)
+                num_texts += 1
+                indexes.append(num_texts)
+            elif "body" in data:
+                # Post request expects a list of text from the same column and predict the most likely class for the batch.
+                # [
+                #   {"text": "sentence 1"},
+                #   {"text": "sentence 2"},
+                # ]
+                json_objs = data.get("body")
+                for json_obj in json_objs:
+                    input_ids_batch, attention_mask_batch = self.add_input_text_to_batch(
+                        input_ids_batch,
+                        attention_mask_batch,
+                        json_obj["text"])
+                    num_texts += 1
+                indexes.append(num_texts)
+            else:
+                # empty request, continue
+                continue
+        return (input_ids_batch, attention_mask_batch, indexes)
 
     def inference(self, input_batch):
         return run_inference(
-            self.mode, self.model, self.id2label, input_batch, self.tokenizer)
+            self.setup_config["mode"], self.model, self.id2label, input_batch, self.tokenizer)
 
     def postprocess(self, inference_output):
         """Post Process Function converts the predicted response into Torchserve readable format.
@@ -257,7 +301,6 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             response["importances_answer_end"] = attributions_sum_end.tolist()
             response["delta_start"] = delta_start[0].tolist()
             response["delta_end"] = delta_end[0].tolist()
-
         return [response]
 
 
@@ -269,55 +312,58 @@ def run_inference(mode: str, model, id2label: Dict[str, str], input_batch, token
     Returns:
         list : It returns a list of the predicted value for the input text
     """
-    input_ids_batch, attention_mask_batch = input_batch
+    input_ids_batch, attention_mask_batch, indexes = input_batch
     inferences = []
     # Handling inference for sequence_classification.
     if mode == "sequence_classification":
         predictions = model(input_ids_batch, attention_mask_batch)
-        print(
-            "This the output size from the Seq classification model",
-            predictions[0].size(),
-        )
-        print("This the output from the Seq classification model", predictions)
+        logger.info(
+            f"This the output size from the Seq classification model {predictions[0].size()}")
+        logger.info(
+            f"This the output from the Seq classification model {predictions}")
 
         num_rows, num_cols = predictions[0].shape
         for i in range(num_rows):
             out = predictions[0][i].unsqueeze(0)
             y_hat = out.argmax(1).item()
+            y_softmax = torch.softmax(out, 1)[0]
             predicted_idx = str(y_hat)
-            inferences.append(id2label[predicted_idx])
+            named_softmax = {}
+            for idx, prob in enumerate(y_softmax.tolist()):
+                name = id2label[str(idx)]
+                named_softmax[name] = prob
+            inferences.append({
+                "class": id2label[predicted_idx],
+                "probability": named_softmax[id2label[predicted_idx]],
+                "softmax": named_softmax,
+            })
     # Handling inference for token_classification.
     elif mode == "token_classification":
-        outputs = model(input_ids_batch, attention_mask_batch)[0]
-        print(
-            "This the output size from the token classification model",
-            outputs.size(),
-        )
-        print("This the output from the token classification model", outputs)
-        num_rows = outputs.shape[0]
-        for i in range(num_rows):
-            output = outputs[i].unsqueeze(0)
-            predictions = torch.argmax(output, dim=2)
-            tokens = tokenizer.tokenize(
-                tokenizer.decode(input_ids_batch[i])
-            )
-            # if id2label:
-            #     label_list = id2label.values()
-            # label_list = label_list.strip("][").split(", ")
-            # prediction = [
-            #     (token, label_list[prediction])
-            #     for token, prediction in zip(tokens, predictions[0].tolist())
-            # ]
+        raise NotImplementedError
 
-            prediction = [
-                (token, id2label[prediction])
-                for token, prediction in zip(tokens, predictions[0].tolist())
-            ]
-            inferences.append(prediction)
-        logger.info("Model predicted: '%s'", prediction)
+    # merge inferences output for column level prediction requests.
+    start = 0
+    merged_inferences = []
+    for index in indexes:
+        sub_inferences = inferences[start:index+1]
+        if len(sub_inferences) == 1:
+            merged_inferences.append(sub_inferences[0])
+        else:
+            names = [inf["class"] for inf in sub_inferences]
+            merged_output = merge_inferences(names)
+            merged_inferences.append(merged_output)
+        start = index
+    return merged_inferences
 
-    print("Generated text", inferences)
-    return inferences
+
+def merge_inferences(inferences):
+    # TODO: replace naive implementation, simply take the max count.
+    max_count_name = max(set(inferences), key=inferences.count)
+    return {
+        "class": max_count_name,
+        "probability": 1.0 * inferences.count(max_count_name) / len(inferences),
+        "softmax": [],
+    }
 
 
 def construct_input_ref(text, tokenizer, device, mode):
