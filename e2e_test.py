@@ -55,7 +55,7 @@ def get_url():
     return f"http://{TEST_HOST}:{TEST_PORT}"
 
 
-def test_training_failed(output_dir: str):
+def test_training_failed():
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
@@ -65,12 +65,7 @@ def test_training_failed(output_dir: str):
         f"{get_url()}/start?id={job_id}", post=True)["success"]
 
     # prepare datadir
-    job_output_dir = get_job_output_dir(output_dir, job_id)
-    os.mkdir(job_output_dir)
-    dataset_file_name = "dataset.json"
-    shutil.copyfile(
-        os.path.join("test_data", dataset_file_name),
-        os.path.join(job_output_dir, dataset_file_name))
+    prepare_job_data(job_id=job_id)
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
@@ -137,19 +132,14 @@ def test_training_failed(output_dir: str):
         f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
 
 
-def test_training_success(output_dir: str):
+def test_training_success():
     sample_size = 10
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
 
     # prepare datadir
-    job_output_dir = get_job_output_dir(output_dir, job_id)
-    os.mkdir(job_output_dir)
-    dataset_file_name = "dataset.json"
-    shutil.copyfile(
-        os.path.join("test_data", dataset_file_name),
-        os.path.join(job_output_dir, dataset_file_name))
+    prepare_job_data(job_id=job_id)
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
@@ -192,6 +182,11 @@ def test_training_success(output_dir: str):
         f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
 
 
+def prepare_job_data(job_id):
+    assert make_request(
+        f"{get_url()}/testdata?id={job_id}", post=False)["success"]
+
+
 # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -216,11 +211,8 @@ if __name__ == '__main__':
                 server_process.start()
                 print("waiting for server to be ready")
                 time.sleep(3)
-            else:
-                output_dir = make_request(
-                    f"{get_url()}/output", post=False)["path"]
-            test_training_failed(output_dir=output_dir)
-            test_training_success(output_dir=output_dir)
+            test_training_failed()
+            test_training_success()
         finally:
             print("start killing processes")
             kill_proc_tree(os.getpid())

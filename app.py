@@ -1,5 +1,7 @@
 import logging
 import argparse
+import os
+import shutil
 
 from pandora.tools.common import logger
 import pandora.service.training_job as training_job
@@ -172,9 +174,27 @@ def start_packaging():
     return jsonify(output)
 
 
-@flaskApp.route('/output', methods=['GET'])
+@flaskApp.route('/testdata', methods=['GET'])
 def get_output_path():
-    return jsonify({"path": server.output_dir})
+    job_id = request.args.get('id')
+    logging.info(f"job id is {job_id}")
+    try:
+        job_output_dir = training_job.get_job_output_dir(
+            server.output_dir, job_id)
+        os.mkdir(job_output_dir)
+        dataset_file_name = "dataset.json"
+        shutil.copyfile(
+            os.path.join("test_data", dataset_file_name),
+            os.path.join(job_output_dir, dataset_file_name))
+    except Exception as e:
+        return {
+            "success": False,
+            "message": e
+        }
+    return {
+        "success": True,
+        "message": ""
+    }
 
 
 def get_arg_parser():
