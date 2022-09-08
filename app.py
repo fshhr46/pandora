@@ -21,6 +21,13 @@ def start_training():
     logging.info(f"job id is {job_id}")
     sample_size = request.args.get("sample_size", default=0, type=int)
     logging.info(f"sample_size is {sample_size}")
+    active_training_jobs = training_job.list_training_jobs()
+    has_resource, msg = server.has_enough_resource(len(active_training_jobs))
+    if not has_resource:
+        return {
+            "success": False,
+            "message": msg
+        }
     success, message = training_job.start_training_job(
         job_id=job_id,
         server_dir=server.output_dir,
@@ -169,6 +176,7 @@ def get_arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, required=True)
     parser.add_argument("--port", type=str, required=True)
+    parser.add_argument("--max_jobs", type=int, default=1, required=False)
     parser.add_argument("--log_dir", type=str, default=None, required=False)
     parser.add_argument("--log_level", type=str,
                         default=logging.INFO, required=False, choices=logging._nameToLevel.keys())

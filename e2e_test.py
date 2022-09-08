@@ -57,13 +57,17 @@ def get_url():
     return f"http://{TEST_HOST}:{TEST_PORT}"
 
 
-def test_training_failed(tmpdirname: str):
+def test_training_failed(output_dir: str):
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
 
+    # start job witout data
+    assert not make_request(
+        f"{get_url()}/start?id={job_id}", post=True)["success"]
+
     # prepare datadir
-    job_output_dir = get_job_output_dir(tmpdirname, job_id)
+    job_output_dir = get_job_output_dir(output_dir, job_id)
     os.mkdir(job_output_dir)
     dataset_file_name = "dataset.json"
     shutil.copyfile(
@@ -135,14 +139,14 @@ def test_training_failed(tmpdirname: str):
         f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
 
 
-def test_training_success(tmpdirname: str):
+def test_training_success(output_dir: str):
     sample_size = 10
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
 
     # prepare datadir
-    job_output_dir = get_job_output_dir(tmpdirname, job_id)
+    job_output_dir = get_job_output_dir(output_dir, job_id)
     os.mkdir(job_output_dir)
     dataset_file_name = "dataset.json"
     shutil.copyfile(
@@ -213,8 +217,8 @@ if __name__ == '__main__':
                 server_process.start()
                 print("waiting for server to be ready")
                 time.sleep(3)
-            test_training_failed(tmpdirname)
-            test_training_success(tmpdirname)
+            test_training_failed(output_dir=tmpdirname)
+            test_training_success(output_dir=tmpdirname)
         finally:
             print("start killing processes")
             kill_proc_tree(os.getpid())

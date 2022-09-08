@@ -18,7 +18,6 @@ from pandora.dataset import sentence_data
 import pandora.dataset.dataset_utils as dataset_utils
 import pandora.tools.runner_utils as runner_utils
 
-MAX_RUNNING_JOBS = 1
 JOB_PREFIX = "PANDORA_TRAINING"
 REPORT_DIR_NAME = "predict"
 DATASET_FILE_NAME = "dataset.json"
@@ -91,17 +90,12 @@ def start_training_job(
         server_dir,
         cache_dir,
         sample_size: int) -> Tuple[bool, str]:
-    if not _has_enough_resource():
-        message = f"not enough resource to start a new training job."
-        logger.info(message)
-        return False, message
-    else:
-        logger.info("got enough resource to start a new training job.")
-
     # partitioned data locates in job/datasets/{train|dev|test}.json
     output_dir = get_job_output_dir(server_dir, job_id)
     partition_dir = dataset_utils.get_partitioned_data_folder(
         resource_dir=output_dir)
+    if not os.path.isdir(partition_dir):
+        return False, f"no dataset found in {partition_dir}"
 
     status = get_training_status(server_dir=server_dir, job_id=job_id)
     if status != JobStatus.not_started:
@@ -258,11 +252,6 @@ def build_model_package(
 def get_job_output_dir(output_dir: str, job_id: str) -> str:
     folder_name = _get_job_folder_name_by_id(job_id)
     return os.path.join(output_dir, folder_name)
-
-
-def _has_enough_resource() -> bool:
-    active_training_jobs = list_training_jobs()
-    return len(active_training_jobs) < MAX_RUNNING_JOBS
 
 
 def _get_job_folder_name_by_id(job_id: str) -> str:

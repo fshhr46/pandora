@@ -1,17 +1,34 @@
 from pathlib import Path
 import os
 import logging
+from typing import Tuple
 
-from pandora.tools.common import init_logger
+from pandora.tools.common import init_logger, logger
+
+MAX_RUNNING_JOBS = 1
 
 
 class Server(object):
     def __init__(self, flaskApp) -> None:
         self.flaskApp = flaskApp
 
+    def has_enough_resource(self, num_running_jobs: int) -> Tuple[bool, str]:
+        if num_running_jobs < self.max_jobs:
+            logger.info("got enough resource to start a new training job.")
+            return True, ""
+        else:
+            message = f"not enough resource to start a new training job."
+            logger.info(message)
+            return False, message
+
     def run(self, args) -> None:
         # dirs
         self.output_dir = args.output_dir
+
+        if args.max_jobs:
+            self.max_jobs = args.max_jobs
+        else:
+            self.max_jobs = MAX_RUNNING_JOBS
 
         # default data dir log will be in $HOME/workspace/resource/datasets.
         if args.data_dir:
