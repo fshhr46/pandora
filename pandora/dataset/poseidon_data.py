@@ -1,0 +1,224 @@
+import pandora.dataset.dataset_utils as dataset_utils
+from cProfile import label
+from cgitb import text
+from enum import Enum
+import json
+from dataclasses import dataclass
+from mimetypes import init
+from typing import Dict, List, Tuple
+import os
+from pathlib import Path
+
+import json
+
+
+class DatasetJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, TagValidationResultType):
+            return o.__dict__
+        if isinstance(o, PartitionDistribution):
+            return o.__dict__
+        if isinstance(o, PartitionResult):
+            return o.__dict__
+        return DatasetJSONEncoder(self, o)
+
+
+class TagValidationResultType(str, Enum):
+    tag_not_found = "tag_not_found"
+    not_enough_data = "not_enough_data"
+    valid = "valid"
+
+
+@dataclass
+class PartitionDistribution(object):
+    # distribution
+    all: int
+    train: int
+    dev: int
+    test: int
+
+    # percentiles
+    train_p: float
+    dev_p: float
+    test_p: float
+
+
+@dataclass
+class PartitionResult(object):
+    tag_id: str
+    tag_name: str
+    result: TagValidationResultType
+    partition_distribution: PartitionDistribution
+
+    def __init__(self,
+                 tag_id: str,
+                 tag_name: str,
+                 result: TagValidationResultType,
+                 partition_distribution: Dict = None) -> None:
+        self.tag_id = tag_id
+        self.tag_name = tag_name
+        self.result = result
+        self.partition_distribution = partition_distribution
+
+
+def partition_poseidon_dataset(
+        dataset_path: str, output_dir: str,
+        min_samples: int, data_ratios: Dict, seed: int):
+
+    with open(dataset_path, "r", encoding='utf-8') as dataset_f:
+        dataset = json.load(dataset_f)
+    config = dataset["dataset_config"]
+
+    # check tag_ids in dataset definition
+    tag_ids = config["tag_ids"]
+    if len(set(tag_ids)) != len(tag_ids):
+        raise ValueError(
+            f"tag_ids in dataset config have duplicated ids. ids: {tag_ids}")
+
+    # outputs
+    valid_tags = []
+    invalid_tags = []
+
+    # JSON limitation: convert tag_id to from string to int
+    tags_by_id = {int(tag_id_str): tag
+                  for tag_id_str, tag in dataset["tags"].items()}
+    valid_tag_ids = []
+    for config_tag_id in tag_ids:
+        # ensure that tag_id found in dataset_config.tag_ids are also found in dataset.tags
+        if config_tag_id in tags_by_id:
+            valid_tag_ids.append(config_tag_id)
+        else:
+            invalid_tags.append(
+                PartitionResult(config_tag_id, "", TagValidationResultType.tag_not_found))
+
+    # group data by tag_ids and column_ids
+    col_data = dataset["column_data"]
+    data_by_tag_ids = {}
+    for col_id, column_data in col_data.items():
+        col_tag_ids = column_data["tag_ids"]
+
+        for col_tag_id in col_tag_ids:
+            # check if tag_id is valid
+            if col_tag_id not in valid_tag_ids:
+                continue
+
+            # add tag data if not presented
+            if col_tag_id not in data_by_tag_ids:
+                data_by_tag_ids[col_tag_id] = {}
+            tag_data = data_by_tag_ids[col_tag_id]
+
+            # add column data if not presented
+            if col_id not in tag_data:
+                tag_data[col_id] = []
+            col_text = tag_data[col_id]
+
+            # Add data entry
+            for data_entry in column_data["recognition_data"]:
+                tag_name = tags_by_id[col_tag_id]["name"]
+                col_text.append(
+                    dataset_utils.DataEntry(
+                        text=data_entry["content"],
+                        label=[_create_unique_label_name(
+                            tag_name=tag_name, tag_id=col_tag_id)]
+                    ))
+
+    # added up partitions for all tags and columns
+    partitions_train = []
+    partitions_dev = []
+    partitions_test = []
+
+    # check tags
+    final_labels = []
+    for valid_tag_id in valid_tag_ids:
+        tag_name = tags_by_id[valid_tag_id]["name"]
+        # Chec if dataset has any column ID belongs to the current tag.
+        if valid_tag_id not in data_by_tag_ids:
+            invalid_tags.append(
+                PartitionResult(
+                    valid_tag_id, tag_name, TagValidationResultType.not_enough_data))
+        else:
+            # get column data, validate and write data by tag
+            tag_data = data_by_tag_ids[valid_tag_id]
+            valid, data_partitions, distribution = _validate_and_partition_tag_data(
+                tag_data, min_samples, data_ratios=data_ratios, seed=seed)
+            tag_dir = os.path.join(output_dir, str(valid_tag_id))
+            os.makedirs(tag_dir, exist_ok=True)
+            dataset_utils.write_partitions(data_partitions, tag_dir)
+
+            # create result objects.
+            if valid:
+                # build overall partition
+                partitions_train.extend(data_partitions["train"])
+                partitions_dev.extend(data_partitions["dev"])
+                partitions_test.extend(data_partitions["test"])
+
+                # create valid result
+                result = PartitionResult(
+                    valid_tag_id,
+                    tag_name,
+                    TagValidationResultType.valid,
+                    distribution)
+                valid_tags.append(result)
+
+                # add label
+                final_labels.append(
+                    _create_unique_label_name(tag_name=tag_name, tag_id=valid_tag_id))
+            else:
+                result = PartitionResult(
+                    valid_tag_id,
+                    tag_name,
+                    TagValidationResultType.not_enough_data,
+                    distribution)
+                invalid_tags.append(result)
+
+        # write merged partitions
+        data_partitions_all = {
+            "train": partitions_train,
+            "dev": partitions_dev,
+            "test": partitions_test,
+        }
+        dataset_utils.write_partitions(
+            data_partitions_all, output_dir=output_dir)
+        distribution = get_partition_distribution(
+            data_partitions=data_partitions_all)
+        # dump labels
+        dataset_utils.write_labels(output_dir=output_dir, labels=final_labels)
+    summary = {
+        # TODO: Use dataclass
+        "distribution": distribution,
+        "valid_tags": valid_tags,
+        "invalid_tags": invalid_tags,
+    }
+    return summary
+
+
+def _create_unique_label_name(tag_name, tag_id):
+    return f"{tag_name}_{tag_id}"
+
+
+def _validate_and_partition_tag_data(tag_data, min_samples, data_ratios: List, seed: int) -> Tuple[bool, Dict, PartitionDistribution]:
+    # TODO: provide multiple partition/selection functions
+    all_samples = []
+    for col_id, col_data in tag_data.items():
+        all_samples.extend(col_data)
+    valid = len(all_samples) >= min_samples
+    data_partitions = dataset_utils.split_dataset(
+        all_samples=all_samples, data_ratios=data_ratios, seed=seed)
+    return valid, data_partitions, get_partition_distribution(data_partitions=data_partitions)
+
+
+def get_partition_distribution(data_partitions):
+    num_entries = sum([len(partition)
+                      for partition in data_partitions.values()])
+    num_train = len(data_partitions["train"])
+    num_dev = len(data_partitions["dev"])
+    num_test = len(data_partitions["test"])
+    return PartitionDistribution(
+        all=num_entries,
+        train=len(data_partitions["train"]),
+        dev=len(data_partitions["dev"]),
+        test=len(data_partitions["test"]),
+        train_p=1.0 * num_train / num_entries if num_train > 0 else 0,
+        dev_p=1.0 * num_dev / num_entries if num_dev > 0 else 0,
+        test_p=1.0 * num_test / num_entries if num_test > 0 else 0,
+    )

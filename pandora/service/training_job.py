@@ -4,17 +4,24 @@ import logging
 import multiprocessing
 import os
 import json
+import pathlib
 import shutil
 import traceback
 import glob
 
-from typing import Dict, Tuple
-import pandora.server.runner as runner
+from typing import Dict, Tuple, List
+from pandora.dataset import poseidon_data
+import pandora.service.runner as runner
 from pandora.tools.common import logger
 import pandora.packaging.packager as packager
+from pandora.dataset import sentence_data
+import pandora.dataset.dataset_utils as dataset_utils
+import pandora.tools.runner_utils as runner_utils
 
 MAX_RUNNING_JOBS = 1
 JOB_PREFIX = "PANDORA_TRAINING"
+REPORT_DIR_NAME = "predict"
+DATASET_FILE_NAME = "dataset.json"
 logger = logging.getLogger(__name__)
 
 
@@ -66,12 +73,21 @@ class TrainingJob(object):
                 do_eval=True,
                 do_predict=True,
             ))
-        runner.train_eval_test(arg_list)
+
+        resource_dir = dataset_utils.get_partitioned_data_folder(
+            self.output_dir)
+        # TODO: this is hacky as we relies on os.path.join("1", "", "2")
+        # returns "1/2"
+        #
+        # and os.path.join("1", "dataset", "2")
+        # returns "1/dataset/2"
+        datasets = [""]
+        runner.train_eval_test(
+            arg_list, resource_dir=resource_dir, datasets=datasets)
 
 
 def start_training_job(
         job_id: str,
-        data_dir,
         server_dir,
         cache_dir,
         sample_size: int) -> Tuple[bool, str]:
@@ -82,20 +98,25 @@ def start_training_job(
     else:
         logger.info("got enough resource to start a new training job.")
 
-    output_dir = _get_job_output_dir(server_dir, job_id)
-    if os.path.isdir(output_dir):
-        message = f"output folder {output_dir} is not empty. failed to start a new training job."
+    # partitioned data locates in job/datasets/{train|dev|test}.json
+    output_dir = get_job_output_dir(server_dir, job_id)
+    partition_dir = dataset_utils.get_partitioned_data_folder(
+        resource_dir=output_dir)
+
+    status = get_training_status(server_dir=server_dir, job_id=job_id)
+    if status != JobStatus.not_started:
+        message = f"You can only start a job with {JobStatus.not_started} status. current status {status}."
         logger.info(message)
         return False, message
 
     job = TrainingJob(
         job_id=job_id,
-        data_dir=data_dir,
+        data_dir=partition_dir,
         output_dir=output_dir,
         cache_dir=cache_dir,
         sample_size=sample_size)
     job_process = multiprocessing.Process(
-        name=_get_process_name_by_id(job_id=job_id), target=job)
+        name=_get_job_folder_name_by_id(job_id=job_id), target=job)
     job_process.daemon = True
     job_process.start()
     message = f'Started training job with ID {job_id}'
@@ -105,13 +126,34 @@ def start_training_job(
 
 def stop_training_job(job_id: str) -> Tuple[bool, str]:
     active_training_jobs = list_training_jobs()
-    job_name = _get_process_name_by_id(job_id=job_id)
+    job_name = _get_job_folder_name_by_id(job_id=job_id)
     for name, job in active_training_jobs.items():
         if job_name == name:
             logger.info(f"Found active training job with ID {job_id}")
             job.terminate()
             return True, f"Successfully stopped training job with ID  {job_id}"
     return False, f"Failed to find active training job with ID {job_id}"
+
+
+def partition_dataset(
+        server_dir: str, job_id: str,
+        min_samples: int, data_ratios: List, seed: int = 42) -> Tuple[bool, Dict, str]:
+    dataset_path = _get_dataset_file_path(server_dir, job_id)
+    if not os.path.isfile(dataset_path):
+        return False, {}, f"dataset file {dataset_path} not exists"
+    try:
+        resource_dir = get_job_output_dir(server_dir, job_id)
+        partition_dir = dataset_utils.get_partitioned_data_folder(resource_dir)
+        if not os.path.exists(partition_dir):
+            os.mkdir(partition_dir)
+
+        result = poseidon_data.partition_poseidon_dataset(
+            dataset_path=dataset_path, output_dir=partition_dir,
+            min_samples=min_samples,
+            data_ratios=data_ratios, seed=seed)
+    except ValueError as e:
+        return False, {}, e
+    return True, result, ""
 
 
 def get_report(server_dir: str, job_id: str, include_data: bool = True) -> str:
@@ -145,7 +187,7 @@ def get_report(server_dir: str, job_id: str, include_data: bool = True) -> str:
 def cleanup_artifacts(server_dir: str, job_id: str) -> Tuple[bool, str]:
     if is_job_running(job_id=job_id):
         return False, f"can no delete a running job_id {job_id}."
-    output_dir = _get_job_output_dir(server_dir, job_id)
+    output_dir = get_job_output_dir(server_dir, job_id)
     try:
         shutil.rmtree(output_dir)
         return True, ""
@@ -154,18 +196,19 @@ def cleanup_artifacts(server_dir: str, job_id: str) -> Tuple[bool, str]:
 
 
 def is_job_running(job_id: str) -> bool:
-    job_name = _get_process_name_by_id(job_id=job_id)
+    job_name = _get_job_folder_name_by_id(job_id=job_id)
     return job_name in list_training_jobs().keys()
 
 
-def get_training_status(server_dir: str, job_id: str) -> str:
+def get_training_status(server_dir: str, job_id: str) -> JobStatus:
     if is_job_running(job_id=job_id):
         return JobStatus.running
     else:
-        output_dir = _get_job_output_dir(server_dir, job_id=job_id)
-        if os.path.exists(output_dir):
-            report_dir = _get_report_output_dir(server_dir, job_id)
+        output_dir = get_job_output_dir(server_dir, job_id=job_id)
+        log_path = runner_utils.get_training_log_path(output_dir)
+        if os.path.exists(output_dir) and os.path.isfile(log_path):
             # report generation marks training is at least completed
+            report_dir = _get_report_output_dir(server_dir, job_id)
             if os.path.isdir(report_dir):
                 # check if packing is done
                 if packager.done_packaging(output_dir):
@@ -197,7 +240,7 @@ def build_model_package(
         job_id: str,
         server_dir: str) -> Tuple[bool, str]:
     status = get_training_status(server_dir=server_dir, job_id=job_id)
-    output_dir = _get_job_output_dir(server_dir, job_id)
+    output_dir = get_job_output_dir(server_dir, job_id)
     if status != JobStatus.packaged:
         if status != JobStatus.completed:
             return False, "", f"Job must be completed to create model package. Current status: {status}"
@@ -212,20 +255,25 @@ def build_model_package(
                    \"sh package.sh model_name model_version\""
 
 
+def get_job_output_dir(output_dir: str, job_id: str) -> str:
+    folder_name = _get_job_folder_name_by_id(job_id)
+    return os.path.join(output_dir, folder_name)
+
+
 def _has_enough_resource() -> bool:
     active_training_jobs = list_training_jobs()
     return len(active_training_jobs) < MAX_RUNNING_JOBS
 
 
-def _get_process_name_by_id(job_id: str) -> str:
+def _get_job_folder_name_by_id(job_id: str) -> str:
     return f"{JOB_PREFIX}_{job_id}"
 
 
-def _get_job_output_dir(output_dir: str, job_id: str) -> str:
-    folder_name = _get_process_name_by_id(job_id)
-    return os.path.join(output_dir, folder_name)
-
-
 def _get_report_output_dir(server_dir: str, job_id: str) -> str:
-    output_dir = _get_job_output_dir(server_dir, job_id)
-    return os.path.join(output_dir, "predict")
+    output_dir = get_job_output_dir(server_dir, job_id)
+    return os.path.join(output_dir, REPORT_DIR_NAME)
+
+
+def _get_dataset_file_path(server_dir: str, job_id: str) -> str:
+    output_dir = get_job_output_dir(server_dir, job_id)
+    return os.path.join(output_dir, DATASET_FILE_NAME)

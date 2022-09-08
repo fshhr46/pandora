@@ -5,9 +5,9 @@ import random
 from typing import List, Dict
 import torch
 
-from pathlib import Path
 from pandora.processors.data_processor import DataProcessor
-from pandora.tools import sentence_data
+import pandora.dataset.dataset_utils as dataset_utils
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -154,22 +154,14 @@ def convert_examples_to_features(examples,
 class SentenceProcessor(DataProcessor):
     """Processor for the chinese ner data set."""
 
-    def __init__(self, resource_dir=None, datasets_to_include=None) -> None:
+    def __init__(self, resource_dir, datasets: List[str]) -> None:
         super().__init__()
-        if not datasets_to_include:
-            datasets_to_include = [
-                sentence_data.Dataset.column_data,
-                sentence_data.Dataset.long_sentence,
-                sentence_data.Dataset.short_sentence,
-            ]
-        if not resource_dir:
-            resource_dir = os.path.join(Path.home(), "workspace", "resource")
         self.resource_dir = resource_dir
-        self.datasets_to_include = datasets_to_include
+        self.datasets = datasets
 
     def _get_examples_all_dir(self, data_dir, partition) -> List[InputExample]:
         all_examples = []
-        for dataset in self.datasets_to_include:
+        for dataset in self.datasets:
             all_examples.extend(
                 self._create_examples(self._read_json(
                     os.path.join(data_dir, dataset, f"{partition}.json")), partition)
@@ -191,9 +183,15 @@ class SentenceProcessor(DataProcessor):
     def get_labels(self):
         """See base class."""
         all_labels = []
-        data_dir = sentence_data.get_output_data_folder(self.resource_dir)
-        for dataset in self.datasets_to_include:
-            label_file = open(os.path.join(data_dir, dataset, "labels.json"))
+        for dataset in self.datasets:
+            if dataset:
+                data_dir = dataset_utils.get_partitioned_data_folder(
+                    self.resource_dir)
+            # TODO: This is hacky relying on "dataset" variable being a empty string
+            else:
+                data_dir = self.resource_dir
+            label_file = open(os.path.join(
+                data_dir, dataset, "labels.json"))
             all_labels.extend(json.load(label_file))
         return all_labels
 
@@ -258,6 +256,7 @@ class RandomDataSampler(object):
         return output_examples
 
 
+# TODO: Delete this
 cls_processors = {
     "sentence": SentenceProcessor,
 }

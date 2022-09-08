@@ -23,13 +23,14 @@ from pandora.processors.feature import (
 
 
 from pandora.packaging.model import BertForSentence
-from pandora.processors.feature import cls_processors as processors
+from pandora.processors.feature import cls_processors
+from pandora.dataset import sentence_data
 from pandora.packaging.tokenizer import SentenceTokenizer
 from pandora.tools.common import init_logger, logger
 import pandora.tools.common as common_utils
 import pandora.tools.runner_utils as runner_utils
-from pandora.dataset.sentence_data import Dataset
 import pandora.tools.mps_utils as mps_utils
+import pandora.dataset.dataset_utils as dataset_utils
 
 
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys())
@@ -39,15 +40,6 @@ ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys())
 MODEL_CLASSES = {
     'bert': (BertConfig, BertForSentence, SentenceTokenizer),
 }
-
-# TODO: DATASETS_TO_INCLUDE should be input parameter
-DATASETS_TO_INCLUDE = list(Dataset)
-DATASETS_TO_INCLUDE = [
-    Dataset.column_data,
-    # Dataset.short_sentence,
-    # Dataset.long_sentence,
-]
-DATASETS_TO_INCLUDE.sort()
 
 
 def get_training_args(
@@ -103,19 +95,20 @@ def set_actions(
 def get_default_dirs(
     resource_dir,
     cache_dir,
-    task_name,
     bert_base_model_name,
+    datasets,
 ) -> List[str]:
     if mps_utils.has_mps:
         assert os.getenv("PYTORCH_ENABLE_MPS_FALLBACK") == "1"
 
-    datasets_str = ", ".join(DATASETS_TO_INCLUDE)
-    logger.info(f"DATASETS_TO_INCLUDE are:\n\t {datasets_str}")
-    dataset_names = "_".join(DATASETS_TO_INCLUDE)
+    datasets_str = ", ".join(datasets)
+    logger.info(f"datasets are:\n\t {datasets_str}")
+    dataset_names = "_".join(datasets)
     output_dir = os.path.join(resource_dir, "outputs",
                               bert_base_model_name, dataset_names)
+    os.makedirs(output_dir, exist_ok=True)
 
-    data_dir = os.path.join(resource_dir, "datasets")
+    data_dir = dataset_utils.get_partitioned_data_folder(resource_dir)
     os.makedirs(os.path.join(
         resource_dir, "prev_trained_model"), exist_ok=True)
     pre_trained_model_dir = os.path.join(resource_dir, "prev_trained_model")
@@ -135,18 +128,21 @@ def get_default_dirs(
     return args
 
 
-def train_eval_test(arg_list):
+def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     parser = get_args_parser()
     args = parser.parse_args(arg_list)
-    args, config, tokenizer, model, model_classes = setup(args=args)
-    init_logger(log_file=args.output_dir +
-                '/{}-{}.log'.format(args.model_type, args.task_name))
+
+    processor = runner_utils.get_data_processor(
+        resource_dir=resource_dir, datasets=datasets)
+
+    args, config, tokenizer, model, model_classes = setup(
+        args=args, processor=processor)
     config_class, model_class, tokenizer_class = model_classes
 
-    data = runner_utils.prepare_data(
-        args, tokenizer, datasets_to_include=DATASETS_TO_INCLUDE)
-    datasets = data["datasets"]
-    train_dataset, eval_dataset, test_dataset = datasets["train"], datasets["eval"], datasets["test"]
+    data = runner_utils.prepare_data(args, tokenizer, processor=processor)
+    dataset_partitions = data["datasets"]
+    train_dataset, eval_dataset, test_dataset = \
+        dataset_partitions["train"], dataset_partitions["eval"], dataset_partitions["test"]
     examples = data["examples"]
     # Training
     if train_dataset:
@@ -232,8 +228,9 @@ def train_eval_test(arg_list):
                 os.makedirs(report_dir)
             predictions = predict(args, model, test_dataset, prefix=prefix)
             test_examples = examples["test"]
-            runner_utils.build_report(test_examples, predictions, report_dir,
-                                      datasets_to_include=DATASETS_TO_INCLUDE)
+            runner_utils.build_train_report(
+                test_examples, predictions, report_dir,
+                processor=processor)
 
 
 def train(args, train_dataset, model, tokenizer):
@@ -501,7 +498,7 @@ def get_args_parser():
     parser = argparse.ArgumentParser()
     # Required parameters
     parser.add_argument("--task_name", default=None, type=str, required=True,
-                        help="The name of the task to train selected in the list: " + ", ".join(processors.keys()))
+                        help="The name of the task to train selected in the list: " + ", ".join(cls_processors.keys()))
     parser.add_argument("--data_dir", default=None, type=str, required=True,
                         help="The input data dir. Should contain the training files for the CoNLL-2003 NER task.", )
     parser.add_argument("--model_type", default=None, type=str, required=True,
@@ -594,13 +591,15 @@ def get_args_parser():
     return parser
 
 
-def setup(args):
+def setup(args, processor):
     # check if output dir already exists and override is not set
-    if os.path.exists(args.output_dir) and os.listdir(
-            args.output_dir) and args.do_train and not args.overwrite_output_dir:
+    log_path = runner_utils.get_training_log_path(args.output_dir)
+    if os.path.exists(log_path) and args.do_train and not args.overwrite_output_dir:
         raise ValueError(
             "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
                 args.output_dir))
+
+    init_logger(log_file=runner_utils.get_training_log_path(args.output_dir))
     # create output dirs
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
@@ -642,10 +641,9 @@ def setup(args):
 
     # Prepare NER task
     args.task_name = args.task_name.lower()
-    if args.task_name not in processors:
+    if args.task_name not in cls_processors:
         raise ValueError("Task not found: %s" % (args.task_name))
-    processor = runner_utils.get_data_processor(
-        task_name=args.task_name, datasets_to_include=DATASETS_TO_INCLUDE)
+
     logger.info(f"task_name is {args.task_name}")
     label_list = processor.get_labels()
     args.id2label = {i: label for i, label in enumerate(label_list)}

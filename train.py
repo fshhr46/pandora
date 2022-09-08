@@ -1,6 +1,18 @@
-import pandora.server.runner as runner
+import pandora.service.runner as runner
 from pathlib import Path
 import os
+
+from pandora.dataset.sentence_data import Dataset
+
+
+# TODO: TEST_DATASETS should be input parameter
+TEST_DATASETS = list(Dataset)
+TEST_DATASETS = [
+    Dataset.column_data,
+    # Dataset.short_sentence,
+    # Dataset.long_sentence,
+]
+TEST_DATASETS.sort()
 
 
 def main():
@@ -22,8 +34,8 @@ def main():
         runner.get_default_dirs(
             resource_dir,
             cache_dir,
-            task_name=task_name,
             bert_base_model_name=bert_base_model_name,
+            datasets=TEST_DATASETS,
         ))
     arg_list.extend(
         runner.set_actions(
@@ -31,7 +43,9 @@ def main():
             do_eval=True,
             do_predict=True,
         ))
-    runner.train_eval_test(arg_list)
+    resource_dir = os.path.join(Path.home(), "workspace", "resource")
+    runner.train_eval_test(arg_list, resource_dir=resource_dir,
+                           datasets=TEST_DATASETS)
 
 
 if __name__ == "__main__":

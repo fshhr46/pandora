@@ -3,49 +3,10 @@
 
 import json
 import os
-from pathlib import Path
-from pandora.processors.feature import SentenceProcessor
-from pandora.tools.common import init_logger, logger
-from pandora.dataset.sentence_data import Dataset
+from pandora.tools.common import logger
 
 
-def main():
-    resource_dir = os.path.join(Path.home(), "workspace", "resource")
-    datasets = [
-        Dataset.column_data,
-        Dataset.short_sentence,
-        Dataset.long_sentence,
-    ]
-    datasets.sort()
-    dataset_names = "_".join(datasets)
-    predict_dir = os.path.join(resource_dir,
-                               f"outputs/bert-base-chinese/sentence/{dataset_names}/bert/predict/softmax/")
-    predict_path = os.path.join(predict_dir, "test_submit.json")
-    # truth_path = os.path.join(resource_dir, "CLUEdatasets/cluener/dev.json")
-    truth_path = predict_path
-
-    pre_lines = [json.loads(line.strip())
-                 for line in open(predict_path) if line.strip()]
-    truth_lines = [json.loads(line.strip())
-                   for line in open(truth_path) if line.strip()]
-    # validation
-    assert len(pre_lines) == len(truth_lines)
-
-    build_report(pre_lines=pre_lines,
-                 truth_lines=truth_lines,
-                 report_dir=predict_dir,
-                 datasets=datasets)
-
-    build_report_sklearn(pre_lines=pre_lines,
-                         truth_lines=truth_lines,
-                         report_dir=None,
-                         datasets=datasets)
-
-
-def build_report_sklearn(pre_lines, truth_lines, report_dir=None, datasets=None):
-
-    processor = SentenceProcessor(datasets_to_include=datasets)
-    label_list = processor.get_labels()
+def build_report_sklearn(pre_lines, truth_lines, label_list, report_dir=None):
     id2label = {i: label for i, label in enumerate(label_list)}
     label2id = {label: i for i, label in enumerate(label_list)}
     all_preds = [label2id[line["pred"][0]] for line in pre_lines]
@@ -110,7 +71,7 @@ def get_f1_score_label(pre_lines, truth_lines, label="organization"):
     return stats
 
 
-def build_report(pre_lines, truth_lines, report_dir=None, datasets=None):
+def build_report(pre_lines, truth_lines, label_list, report_dir=None):
     num_preds = len(pre_lines)
     all_stats = {}
     summary = {
@@ -122,8 +83,6 @@ def build_report(pre_lines, truth_lines, report_dir=None, datasets=None):
         "counts_t": 0,
         "counts_p": 0,
     }
-    processor = SentenceProcessor(datasets_to_include=datasets)
-    label_list = processor.get_labels()
     sum_f1 = 0
     sum_p = 0
     sum_r = 0
@@ -163,8 +122,3 @@ def print_result(all_stats, summary, report_dir=None):
         with open(report_all_path, "w") as report_f:
             json.dump(summary, report_f, indent=4, ensure_ascii=False)
         logger.info(f"report was saved in dir: {report_dir}")
-
-
-if __name__ == "__main__":
-    init_logger()
-    main()

@@ -1,55 +1,18 @@
 import logging
-import os
 import argparse
-from pathlib import Path
 
-from pandora.tools.common import init_logger, logger
-import pandora.server.training_job as training_job
+from pandora.tools.common import logger
+import pandora.service.training_job as training_job
+import pandora.service.server as server
+import pandora.dataset.dataset_utils as dataset_utils
+
 
 from flask import Flask, jsonify, request
 
-logger = logging.getLogger(__name__)
-
-
-class Server(object):
-    def __init__(self, flaskApp) -> None:
-        self.flaskApp = flaskApp
-
-    def run(self, args) -> None:
-        # dirs
-        self.output_dir = args.output_dir
-
-        # default data dir log will be in $HOME/workspace/resource/datasets.
-        if args.data_dir:
-            self.data_dir = args.data_dir
-        else:
-            home = str(Path.home())
-            self.data_dir = os.path.join(home, "workspace/resource/datasets")
-
-        # default service log will be in the output_dir.
-        if args.cache_dir:
-            self.cache_dir = args.cache_dir
-        else:
-            home = str(Path.home())
-            self.cache_dir = os.path.join(home, ".cache/torch/transformers")
-
-        # default service log will be in the output_dir.
-        if args.log_dir:
-            self.log_path = os.path.join(args.log_dir, "service_log.txt")
-        else:
-            self.log_path = os.path.join(self.output_dir, "service_log.txt")
-
-        # logs
-        if args.log_level:
-            log_level = logging.getLevelName(args.log_level)
-        init_logger(log_file=self.log_path, log_file_level=log_level)
-
-        # run
-        self.flaskApp.run(host=args.host, port=args.port)
-
 
 flaskApp = Flask("Pandora")
-server = Server(flaskApp)
+flaskApp.config['JSON_AS_ASCII'] = False
+server = server.Server(flaskApp)
 
 
 @flaskApp.route('/start', methods=['POST'])
@@ -61,7 +24,6 @@ def start_training():
     success, message = training_job.start_training_job(
         job_id=job_id,
         server_dir=server.output_dir,
-        data_dir=server.data_dir,
         cache_dir=server.cache_dir,
         sample_size=sample_size)
     output = {
@@ -108,6 +70,51 @@ def get_training_status():
     )
     output = {
         "status": status
+    }
+    return jsonify(output)
+
+
+@flaskApp.route('/partition', methods=['POST'])
+def partition_dataset():
+    job_id = request.args.get('id')
+    if request.data:
+        json_data = request.get_json()
+    else:
+        json_data = {}
+    logging.info(f"json input is {json_data}")
+    min_samples = json_data.get("min_samples", 200)
+    data_ratios = json_data.get(
+        "data_ratios", {"train": 0.6, "dev": 0.2, "test": 0.2})
+    logging.info(f"min_samples is {min_samples}")
+    logging.info(f"data_ratios is {data_ratios}")
+    logging.info(f"job id is {job_id}")
+
+    # Validations
+    error_msg = dataset_utils.validate_ratios(data_ratios)
+    if error_msg:
+        return {
+            "success": False,
+            "result": {},
+            "message": error_msg,
+        }
+
+    if type(min_samples) != int or min_samples <= 0:
+        return {
+            "success": False,
+            "result": {},
+            "message": f"min_samples must be positive integers. got: {min_samples}",
+        }
+
+    success, result, message = training_job.partition_dataset(
+        server_dir=server.output_dir,
+        job_id=job_id,
+        min_samples=min_samples,
+        data_ratios=data_ratios,
+    )
+    output = {
+        "success": success,
+        "result": result,
+        "message": message,
     }
     return jsonify(output)
 
@@ -166,8 +173,10 @@ def get_arg_parser():
     parser.add_argument("--log_level", type=str,
                         default=logging.INFO, required=False, choices=logging._nameToLevel.keys())
     parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--data_dir", type=str, default=None, required=False)
-    parser.add_argument("--cache_dir", type=str, default=None, required=False)
+    parser.add_argument("--data_dir", type=str,
+                        default=None, required=False)
+    parser.add_argument("--cache_dir", type=str,
+                        default=None, required=False)
     return parser
 
 

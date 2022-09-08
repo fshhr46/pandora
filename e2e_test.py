@@ -1,8 +1,6 @@
 import multiprocessing
 import os
-from pathlib import Path
 import time
-import unittest
 import requests
 
 import app
@@ -11,8 +9,9 @@ import psutil
 import os
 import argparse
 import tempfile
+import shutil
 
-from pandora.server.training_job import JobStatus
+from pandora.service.training_job import JobStatus, get_job_output_dir
 
 TEST_HOST = "127.0.0.1"
 TEST_PORT = "36666"
@@ -58,22 +57,28 @@ def get_url():
     return f"http://{TEST_HOST}:{TEST_PORT}"
 
 
-def test_training_failed():
+def test_training_failed(tmpdirname: str):
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
 
-    # list jobs, make sure it is empty
+    # prepare datadir
+    job_output_dir = get_job_output_dir(tmpdirname, job_id)
+    os.mkdir(job_output_dir)
+    dataset_file_name = "dataset.json"
+    shutil.copyfile(
+        os.path.join("test_data", dataset_file_name),
+        os.path.join(job_output_dir, dataset_file_name))
     assert make_request(
-        f"{get_url()}/list?running=true") == []
+        f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
-    # start training job
+    # start job
     assert make_request(
         f"{get_url()}/start?id={job_id}", post=True)["success"]
 
     # ensure training job is running
-    assert make_request(
-        f"{get_url()}/list?running=true") == [f"PANDORA_TRAINING_{job_id}"]
+    assert f"PANDORA_TRAINING_{job_id}" in make_request(
+        f"{get_url()}/list?running=true")
 
     # delete artifacts will fail when job is running
     assert not make_request(
@@ -107,10 +112,6 @@ def test_training_failed():
     assert not make_request(
         f"{get_url()}/stop?id={job_id}", post=True)["success"]
 
-    # list jobs, make sure it is empty
-    assert make_request(
-        f"{get_url()}/list?running=true") == []
-
     # list jobs, make sure the job is in the list
     assert f"PANDORA_TRAINING_{job_id}" in make_request(
         f"{get_url()}/list?running=false")
@@ -134,15 +135,21 @@ def test_training_failed():
         f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
 
 
-def test_training_success():
+def test_training_success(tmpdirname: str):
     sample_size = 10
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
 
-    # list jobs, make sure it is empty
+    # prepare datadir
+    job_output_dir = get_job_output_dir(tmpdirname, job_id)
+    os.mkdir(job_output_dir)
+    dataset_file_name = "dataset.json"
+    shutil.copyfile(
+        os.path.join("test_data", dataset_file_name),
+        os.path.join(job_output_dir, dataset_file_name))
     assert make_request(
-        f"{get_url()}/list?running=true") == []
+        f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
     # start job
     assert make_request(
@@ -206,8 +213,8 @@ if __name__ == '__main__':
                 server_process.start()
                 print("waiting for server to be ready")
                 time.sleep(3)
-            test_training_failed()
-            test_training_success()
+            test_training_failed(tmpdirname)
+            test_training_success(tmpdirname)
         finally:
             print("start killing processes")
             kill_proc_tree(os.getpid())
