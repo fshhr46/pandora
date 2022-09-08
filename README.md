@@ -9,6 +9,12 @@ python3 app.py --host=0.0.0.0 --port=18888 --log_level=DEBUG --log_dir=$HOME/wor
 ### 创建一个torchserve container
 docker run -d -it --mount type=bind,source=$HOME/workspace,target=/app/workspace --name torchserve_demo pytorch/torchserve:0.5.3-gpu
 
+### 生成测试数据
+curl -XPOST http://127.0.0.1:18888/testdata\?id=demo_1
+
+### 进行数据分区
+curl -XPOST http://127.0.0.1:18888/partition\?id=demo_1
+
 ### 调用服务训练模型
 curl -XPOST http://127.0.0.1:18888/start\?id=demo_1
 

@@ -184,7 +184,7 @@ def test_training_success():
 
 def prepare_job_data(job_id):
     assert make_request(
-        f"{get_url()}/testdata?id={job_id}", post=False)["success"]
+        f"{get_url()}/testdata?id={job_id}", post=True)["success"]
 
 
 # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers

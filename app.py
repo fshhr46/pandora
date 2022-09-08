@@ -174,7 +174,7 @@ def start_packaging():
     return jsonify(output)
 
 
-@flaskApp.route('/testdata', methods=['GET'])
+@flaskApp.route('/testdata', methods=['POST'])
 def get_output_path():
     job_id = request.args.get('id')
     logging.info(f"job id is {job_id}")
