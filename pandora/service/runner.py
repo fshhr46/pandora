@@ -23,23 +23,14 @@ from pandora.processors.feature import (
 
 
 from pandora.packaging.model import BertForSentence
-<<<<<<< HEAD:pandora/server/runner.py
-from pandora.processors.feature import cls_processors as processors
-=======
 from pandora.processors.feature import cls_processors
 from pandora.dataset import sentence_data
->>>>>>> dev:pandora/service/runner.py
 from pandora.packaging.tokenizer import SentenceTokenizer
 from pandora.tools.common import init_logger, logger
 import pandora.tools.common as common_utils
 import pandora.tools.runner_utils as runner_utils
-<<<<<<< HEAD:pandora/server/runner.py
-from pandora.dataset.sentence_data import Dataset
-import pandora.tools.mps_utils as mps_utils
-=======
 import pandora.tools.mps_utils as mps_utils
 import pandora.dataset.dataset_utils as dataset_utils
->>>>>>> dev:pandora/service/runner.py
 
 
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys())
@@ -137,11 +128,7 @@ def get_default_dirs(
     return args
 
 
-<<<<<<< HEAD:pandora/server/runner.py
-def train_eval_test(arg_list):
-=======
 def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
->>>>>>> dev:pandora/service/runner.py
     parser = get_args_parser()
     args = parser.parse_args(arg_list)
 
