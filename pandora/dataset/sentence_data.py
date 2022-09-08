@@ -1,10 +1,9 @@
-from cProfile import label
 import os
-from pathlib import Path
 import json
-from enum import Enum
-from subprocess import getoutput
 import random
+from enum import Enum
+import pandora.dataset.dataset_utils as dataset_utils
+from pandora.tools.common import logger
 
 supported_partitions = ["train", "dev", "test"]
 
@@ -18,12 +17,8 @@ class Dataset(str, Enum):
     long_sentence = "long_sentence"
 
 
-def get_data_dir(resource_dir):
+def _get_raw_data_dir(resource_dir):
     return os.path.join(resource_dir, "data")
-
-
-def get_output_data_folder(resource_dir):
-    return os.path.join(resource_dir, "datasets")
 
 
 def get_data_folders(data_dir):
@@ -38,7 +33,7 @@ def convert_multi_labels(data_partition, resource_dir, output_folder, merge_labe
     labels = ['address', 'book', 'company', 'game', 'government',
               'movie', 'name', 'organization', 'position', 'scene']
 
-    dataset_dir = os.path.join(get_data_dir(resource_dir), "Cluener2020")
+    dataset_dir = os.path.join(_get_raw_data_dir(resource_dir), "Cluener2020")
     truth_file = os.path.join(dataset_dir, f"{data_partition}.json")
     columns_data = {}
     sentence_data = []
@@ -58,7 +53,7 @@ def convert_multi_labels(data_partition, resource_dir, output_folder, merge_labe
                 columns_data[word_label].append(sentence)
 
     output_dir = os.path.join(
-        get_output_data_folder(resource_dir), output_folder)
+        dataset_utils.get_partitioned_data_folder(resource_dir), output_folder)
     output_file_all = os.path.join(output_dir, f"{data_partition}_raw.json")
     output_dir_partition = os.path.join(
         output_dir, data_partition)
@@ -86,8 +81,7 @@ def convert_multi_labels(data_partition, resource_dir, output_folder, merge_labe
                     out_line = {"text": word, "label": [label_name]}
                     json.dump(out_line, fr_out, ensure_ascii=False)
                     fr_out.write("\n")
-    with open(os.path.join(output_dir, "labels.json"), 'w') as f:
-        json.dump(labels, f, ensure_ascii=False)
+    dataset_utils.write_labels(output_dir=output_dir, labels=labels)
 
 
 def convert_column_data(data_partition, resource_dir, output_folder, seed, limit=0):
@@ -95,7 +89,7 @@ def convert_column_data(data_partition, resource_dir, output_folder, seed, limit
     labels = ['address', 'book', 'company', 'game', 'government',
               'movie', 'name', 'organization', 'position', 'scene']
 
-    dataset_dir = os.path.join(get_data_dir(resource_dir), "Cluener2020")
+    dataset_dir = os.path.join(_get_raw_data_dir(resource_dir), "Cluener2020")
     truth_file = os.path.join(dataset_dir, f"{data_partition}.json")
     columns_data = {}
 
@@ -110,7 +104,7 @@ def convert_column_data(data_partition, resource_dir, output_folder, seed, limit
                 columns_data[word_label].extend(list(postions.keys()))
 
     output_dir = os.path.join(
-        get_output_data_folder(resource_dir), output_folder)
+        dataset_utils.get_partitioned_data_folder(resource_dir), output_folder)
     output_file_all = os.path.join(output_dir, f"{data_partition}_raw.json")
     output_dir_partition = os.path.join(
         output_dir, data_partition)
@@ -131,14 +125,14 @@ def convert_column_data(data_partition, resource_dir, output_folder, seed, limit
         if limit:
             out_lines = out_lines[:limit]
         fr_out.writelines(out_lines)
-    with open(os.path.join(output_dir, "labels.json"), 'w') as f:
-        json.dump(labels, f, ensure_ascii=False)
+    dataset_utils.write_labels(output_dir=output_dir, labels=labels)
 
 
 def convert_long_sentence(data_partition, resource_dir, output_folder):
     assert data_partition in supported_partitions
 
-    dataset_dir = os.path.join(get_data_dir(resource_dir), "iflytek_public")
+    dataset_dir = os.path.join(
+        _get_raw_data_dir(resource_dir), "iflytek_public")
     labels_file = os.path.join(dataset_dir, f"labels.json")
     labels = []
     with open(labels_file, 'r') as fr:
@@ -149,7 +143,7 @@ def convert_long_sentence(data_partition, resource_dir, output_folder):
 
     columns_data = {}
     output_dir = os.path.join(
-        get_output_data_folder(resource_dir), output_folder)
+        dataset_utils.get_partitioned_data_folder(resource_dir), output_folder)
     output_file_all = os.path.join(output_dir, f"{data_partition}_raw.json")
     output_dir_partition = os.path.join(
         output_dir, data_partition)
@@ -172,14 +166,13 @@ def convert_long_sentence(data_partition, resource_dir, output_folder):
             output_dir_partition, f"{data_partition}.{column_name}.json")
         with open(output_file, 'w') as f:
             json.dump(column_data, f, ensure_ascii=False)
-    with open(os.path.join(output_dir, "labels.json"), 'w') as f:
-        json.dump(labels, f, ensure_ascii=False)
+    dataset_utils.write_labels(output_dir=output_dir, labels=labels)
 
 
 def convert_short_sentence(data_partition, resource_dir, output_folder):
     assert data_partition in supported_partitions
 
-    dataset_dir = os.path.join(get_data_dir(resource_dir), "tnews_public")
+    dataset_dir = os.path.join(_get_raw_data_dir(resource_dir), "tnews_public")
     labels_file = os.path.join(dataset_dir, f"labels.json")
     labels = []
     with open(labels_file, 'r') as fr:
@@ -190,7 +183,7 @@ def convert_short_sentence(data_partition, resource_dir, output_folder):
 
     columns_data = {}
     output_dir = os.path.join(
-        get_output_data_folder(resource_dir), output_folder)
+        dataset_utils.get_partitioned_data_folder(resource_dir), output_folder)
     output_file_all = os.path.join(output_dir, f"{data_partition}_raw.json")
     output_dir_partition = os.path.join(
         output_dir, data_partition)
@@ -212,8 +205,7 @@ def convert_short_sentence(data_partition, resource_dir, output_folder):
             output_dir_partition, f"{data_partition}.{column_name}.json")
         with open(output_file, 'w') as f:
             json.dump(column_data, f, ensure_ascii=False)
-    with open(os.path.join(output_dir, "labels.json"), 'w') as f:
-        json.dump(labels, f, ensure_ascii=False)
+    dataset_utils.write_labels(output_dir=output_dir, labels=labels)
 
 
 def build_datasets(resource_dir, seed):
@@ -234,49 +226,23 @@ def build_datasets(resource_dir, seed):
 
 
 def split_test_set_from_train(resource_dir, data_ratios, seed):
-    assert sum(data_ratios) == 1
     for dataset in Dataset:
         all_samples = []
         for partition in ["train", "dev"]:
             input_file = os.path.join(
-                get_output_data_folder(resource_dir), dataset, f"{partition}_raw.json")
+                dataset_utils.get_partitioned_data_folder(resource_dir), dataset, f"{partition}_raw.json")
             with open(input_file, 'r') as fr:
                 for _, line in enumerate(fr):
-                    obj = json.loads(line)
-                    all_samples.append(obj)
-        random.Random(seed).shuffle(all_samples)
-
-        print(f"\n\n====== splitting dataset: {dataset}\n")
-        train_percentage, dev_percentage, test_percentage = data_ratios
-        num_samples = len(all_samples)
-        num_train_samples = int(num_samples * train_percentage)
-        num_dev_samples = int(num_samples * dev_percentage)
-
-        # splitting
-        train_dev_data = all_samples[:num_train_samples + num_dev_samples]
-        data_partitions = {
-            "train": train_dev_data[:num_train_samples],
-            "dev": train_dev_data[num_train_samples:],
-            "test": all_samples[num_train_samples + num_dev_samples:]
-        }
-
-        print(f"total samples: {len(all_samples)}")
+                    data_entry = dataset_utils.DataEntry(**json.loads(line))
+                    all_samples.append(data_entry)
+        logger.info(f"\n\n====== splitting dataset: {dataset}\n")
+        logger.info(f"total samples: {len(all_samples)}")
+        output_dir = os.path.join(
+            dataset_utils.get_partitioned_data_folder(resource_dir), dataset)
+        data_partitions = dataset_utils.split_dataset(
+            all_samples, data_ratios, seed)
+        dataset_utils.write_partitions(data_partitions, output_dir)
 
         for partition, data in data_partitions.items():
-            print(f"\npartition: {partition}, num_samples: {len(data)}")
-            print(
-                data_partitions[partition][0])
-            output_path = os.path.join(
-                get_output_data_folder(resource_dir), dataset, f"{partition}.json")
-            print(f"writing to {output_path}")
-            with open(output_path, "w") as fr:
-                for obj in data:
-                    json.dump(obj, fr, ensure_ascii=False)
-                    fr.write("\n")
-
-
-if __name__ == "__main__":
-    resource_dir = os.path.join(Path.home(), "workspace", "resource")
-    build_datasets(resource_dir, seed=42)
-    split_test_set_from_train(
-        resource_dir, data_ratios=[0.6, 0.2, 0.2], seed=42)
+            logger.info(f"\npartition: {partition}, num_samples: {len(data)}")
+            logger.info(data_partitions[partition][0])

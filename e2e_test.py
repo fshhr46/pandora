@@ -1,8 +1,6 @@
 import multiprocessing
 import os
-from pathlib import Path
 import time
-import unittest
 import requests
 
 import app
@@ -11,8 +9,9 @@ import psutil
 import os
 import argparse
 import tempfile
+import shutil
 
-from pandora.server.training_job import JobStatus
+from pandora.service.training_job import JobStatus, get_job_output_dir
 
 TEST_HOST = "127.0.0.1"
 TEST_PORT = "36666"
@@ -25,16 +24,14 @@ def kill_proc_tree(pid):
         child.kill()
 
 
-def start_test_server(host, port, temp_dir):
+def start_test_server(host, port, output_dir):
     # home = str(Path.home())
-    output_dir = os.path.join(temp_dir, "pandora_outputs")
-    os.mkdir(output_dir)
     arg_list = [
         f"--host={host}",
         f"--port={port}",
         "--log_level=DEBUG",
-        f"--log_dir={temp_dir}",
-        f"--output_dir={temp_dir}",
+        f"--log_dir={output_dir}",
+        f"--output_dir={output_dir}",
         # f"--data_dir={home}/workspace/resource/datasets/sentence",
         # f"--cache_dir={home}/.cache/torch/transformers",
     ]
@@ -63,17 +60,22 @@ def test_training_failed():
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
 
-    # list jobs, make sure it is empty
-    assert make_request(
-        f"{get_url()}/list?running=true") == []
+    # start job witout data
+    assert not make_request(
+        f"{get_url()}/start?id={job_id}", post=True)["success"]
 
-    # start training job
+    # prepare datadir
+    prepare_job_data(job_id=job_id)
+    assert make_request(
+        f"{get_url()}/partition?id={job_id}", post=True)["success"]
+
+    # start job
     assert make_request(
         f"{get_url()}/start?id={job_id}", post=True)["success"]
 
     # ensure training job is running
-    assert make_request(
-        f"{get_url()}/list?running=true") == [f"PANDORA_TRAINING_{job_id}"]
+    assert f"PANDORA_TRAINING_{job_id}" in make_request(
+        f"{get_url()}/list?running=true")
 
     # delete artifacts will fail when job is running
     assert not make_request(
@@ -107,10 +109,6 @@ def test_training_failed():
     assert not make_request(
         f"{get_url()}/stop?id={job_id}", post=True)["success"]
 
-    # list jobs, make sure it is empty
-    assert make_request(
-        f"{get_url()}/list?running=true") == []
-
     # list jobs, make sure the job is in the list
     assert f"PANDORA_TRAINING_{job_id}" in make_request(
         f"{get_url()}/list?running=false")
@@ -140,9 +138,10 @@ def test_training_success():
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
 
-    # list jobs, make sure it is empty
+    # prepare datadir
+    prepare_job_data(job_id=job_id)
     assert make_request(
-        f"{get_url()}/list?running=true") == []
+        f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
     # start job
     assert make_request(
@@ -183,6 +182,11 @@ def test_training_success():
         f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
 
 
+def prepare_job_data(job_id):
+    assert make_request(
+        f"{get_url()}/testdata?id={job_id}", post=True)["success"]
+
+
 # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -200,9 +204,10 @@ if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as tmpdirname:
         try:
             if args.local_server:
+                output_dir = tmpdirname
                 # start server
                 server_process = multiprocessing.Process(
-                    target=start_test_server, args=(TEST_HOST, TEST_PORT, tmpdirname))
+                    target=start_test_server, args=(TEST_HOST, TEST_PORT, output_dir))
                 server_process.start()
                 print("waiting for server to be ready")
                 time.sleep(3)

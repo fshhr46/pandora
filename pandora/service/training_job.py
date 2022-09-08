@@ -9,6 +9,12 @@ import shutil
 import traceback
 import glob
 
+<<<<<<< HEAD:pandora/server/training_job.py
+from typing import Dict, Tuple
+import pandora.server.runner as runner
+from pandora.tools.common import logger
+import pandora.packaging.packager as packager
+=======
 from typing import Dict, Tuple, List
 from pandora.dataset import poseidon_data
 import pandora.service.runner as runner
@@ -17,6 +23,7 @@ import pandora.packaging.packager as packager
 from pandora.dataset import sentence_data
 import pandora.dataset.dataset_utils as dataset_utils
 import pandora.tools.runner_utils as runner_utils
+>>>>>>> dev:pandora/service/training_job.py
 
 JOB_PREFIX = "PANDORA_TRAINING"
 REPORT_DIR_NAME = "predict"

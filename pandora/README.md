@@ -32,6 +32,9 @@ python e2e_test.py
 ```
 
 6. Flaks服务的API
+    ### partition dataset (dataset.json must be created in job folder first)
+    curl -XPOST http://127.0.0.1:38888/partition\?id=test_partition_1
+    curl -XPOST -H "Content-Type: application/json" http://127.0.0.1:38888/partition\?id=test_partition_1 -d '{"data_ratios":{"train":0.6,"dev":0.3,"test":0.1},"min_samples":203}'
     ### list all running jobs
     curl -XGET http://127.0.0.1:18888/list\?running=true
     ### list all jobs

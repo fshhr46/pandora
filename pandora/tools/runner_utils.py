@@ -1,10 +1,10 @@
 import os
 import json
-import pandora.tools.score_sentence as score_sentence
+import pandora.tools.report as report
 from pandora.tools.common import json_to_text
 
 
-from pandora.processors.feature import cls_processors as processors
+from pandora.processors.feature import SentenceProcessor
 from pandora.processors.feature import convert_examples_to_features
 from pandora.processors.feature import (
     convert_examples_to_features,
@@ -17,7 +17,7 @@ from torch.utils.data import TensorDataset
 from pandora.tools.common import logger
 
 
-def build_report(examples, predictions, report_dir, datasets_to_include):
+def build_train_report(examples, predictions, report_dir, processor):
     logger.info(" ")
     output_predic_file = os.path.join(report_dir, "test_prediction.json")
     output_submit_file = os.path.join(report_dir, "test_submit.json")
@@ -38,17 +38,18 @@ def build_report(examples, predictions, report_dir, datasets_to_include):
 
     pre_lines = [json.loads(line.strip())
                  for line in open(output_submit_file) if line.strip()]
-    score_sentence.build_report(pre_lines=pre_lines,
-                                truth_lines=pre_lines,
-                                report_dir=report_dir,
-                                datasets=datasets_to_include)
+    label_list = processor.get_labels()
+    report.build_report(pre_lines=pre_lines,
+                        truth_lines=pre_lines,
+                        label_list=label_list,
+                        report_dir=report_dir)
 
 
-def get_data_processor(task_name, datasets_to_include):
-    return processors[task_name](datasets_to_include=datasets_to_include)
+def get_data_processor(datasets, resource_dir: str):
+    return SentenceProcessor(resource_dir=resource_dir, datasets=datasets)
 
 
-def prepare_data(args, tokenizer, datasets_to_include):
+def prepare_data(args, tokenizer, processor):
     train_dataset = eval_dataset = test_dataset = None
     if args.do_train:
         sampler = None
@@ -57,14 +58,14 @@ def prepare_data(args, tokenizer, datasets_to_include):
                 seed=args.seed,
                 sample_size=args.sample_size)
         train_dataset, train_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type='train', datasets_to_include=datasets_to_include, sampler=sampler)
+            args, args.task_name, tokenizer, data_type='train',  evaluate=False, processor=processor, sampler=sampler)
     if args.do_eval:
         eval_dataset, eval_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type='dev', datasets_to_include=datasets_to_include)
+            args, args.task_name, tokenizer, data_type='dev', evaluate=True, processor=processor)
 
     if args.do_predict:
         test_dataset, test_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type="test", datasets_to_include=datasets_to_include)
+            args, args.task_name, tokenizer, data_type="test", evaluate=False, processor=processor)
     return {
         "datasets": {
             "train": train_dataset,
@@ -91,12 +92,10 @@ def load_examples(data_dir, processor, data_type):
     return examples
 
 
-def load_and_cache_examples(args, task, tokenizer, data_type, datasets_to_include, sampler=None):
+def load_and_cache_examples(args, task, tokenizer, data_type, evaluate: bool, processor, sampler=None):
     if args.local_rank not in [-1, 0] and not evaluate:
         # Make sure only the first process in distributed training process the dataset, and the others will use the cache
         torch.distributed.barrier()
-    processor = get_data_processor(
-        task_name=task, datasets_to_include=datasets_to_include)
     # Load data features from cache or dataset file
     feature_dim = args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length
     base_model_name = list(
@@ -150,3 +149,7 @@ def load_and_cache_examples(args, task, tokenizer, data_type, datasets_to_includ
     dataset = TensorDataset(
         all_input_ids, all_input_mask, all_segment_ids, all_lens, all_label_ids)
     return dataset, examples
+
+
+def get_training_log_path(output_dir):
+    return os.path.join(output_dir, 'training_job.log')
