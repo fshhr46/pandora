@@ -172,6 +172,11 @@ def start_packaging():
     return jsonify(output)
 
 
+@flaskApp.route('/output', methods=['GET'])
+def get_output_path():
+    return jsonify({"path": server.output_dir})
+
+
 def get_arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, required=True)

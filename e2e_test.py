@@ -24,16 +24,14 @@ def kill_proc_tree(pid):
         child.kill()
 
 
-def start_test_server(host, port, temp_dir):
+def start_test_server(host, port, output_dir):
     # home = str(Path.home())
-    output_dir = os.path.join(temp_dir, "pandora_outputs")
-    os.mkdir(output_dir)
     arg_list = [
         f"--host={host}",
         f"--port={port}",
         "--log_level=DEBUG",
-        f"--log_dir={temp_dir}",
-        f"--output_dir={temp_dir}",
+        f"--log_dir={output_dir}",
+        f"--output_dir={output_dir}",
         # f"--data_dir={home}/workspace/resource/datasets/sentence",
         # f"--cache_dir={home}/.cache/torch/transformers",
     ]
@@ -211,14 +209,18 @@ if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as tmpdirname:
         try:
             if args.local_server:
+                output_dir = tmpdirname
                 # start server
                 server_process = multiprocessing.Process(
-                    target=start_test_server, args=(TEST_HOST, TEST_PORT, tmpdirname))
+                    target=start_test_server, args=(TEST_HOST, TEST_PORT, output_dir))
                 server_process.start()
                 print("waiting for server to be ready")
                 time.sleep(3)
-            test_training_failed(output_dir=tmpdirname)
-            test_training_success(output_dir=tmpdirname)
+            else:
+                output_dir = make_request(
+                    f"{get_url()}/output", post=False)["path"]
+            test_training_failed(output_dir=output_dir)
+            test_training_success(output_dir=output_dir)
         finally:
             print("start killing processes")
             kill_proc_tree(os.getpid())
