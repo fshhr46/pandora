@@ -17,9 +17,9 @@ python tools/download_clue_data.py --data_dir=./datasets --tasks=cluener
 ```
 3. 训练/评估/预测
 
-直cd到git workspace目录下，接执行runner.py脚本，如：
+直cd到git workspace目录下，接执行train.py脚本，如：
 ```python
-python runner.py
+python train.py
 ```
 4. 启动Flask服务
 ```python

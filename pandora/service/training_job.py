@@ -11,7 +11,7 @@ import glob
 
 from typing import Dict, Tuple, List
 from pandora.dataset import poseidon_data
-import pandora.service.runner as runner
+import pandora.service.job_runner as job_runner
 from pandora.tools.common import logger
 import pandora.packaging.packager as packager
 from pandora.dataset import sentence_data
@@ -53,7 +53,7 @@ class TrainingJob(object):
         self.sample_size = sample_size
 
     def __call__(self, *args, **kwds) -> None:
-        arg_list = runner.get_training_args(
+        arg_list = job_runner.get_training_args(
             task_name=self.task_name,
             mode_type=self.mode_type,
             bert_base_model_name=self.bert_base_model_name,
@@ -67,7 +67,7 @@ class TrainingJob(object):
 
         # set actions
         arg_list.extend(
-            runner.set_actions(
+            job_runner.set_actions(
                 do_train=True,
                 do_eval=True,
                 do_predict=True,
@@ -81,7 +81,7 @@ class TrainingJob(object):
         # and os.path.join("1", "dataset", "2")
         # returns "1/dataset/2"
         datasets = [""]
-        runner.train_eval_test(
+        job_runner.train_eval_test(
             arg_list, resource_dir=resource_dir, datasets=datasets)
 
 

@@ -19,8 +19,7 @@ server = server.Server(flaskApp)
 
 @flaskApp.route('/start', methods=['POST'])
 def start_training():
-    job_id = request.args.get('id')
-    logging.info(f"job id is {job_id}")
+    job_id = _get_job_id(request=request.args)
     sample_size = request.args.get("sample_size", default=0, type=int)
     logging.info(f"sample_size is {sample_size}")
     active_training_jobs = training_job.list_training_jobs()
@@ -42,10 +41,17 @@ def start_training():
     return jsonify(output)
 
 
+def _get_job_id(args) -> str:
+    job_id = args.get('id')
+    if job_id:
+        logger.info(f"job id is {job_id}")
+        return job_id
+    raise ValueError(f"invalid Job ID: {job_id}")
+
+
 @flaskApp.route('/stop', methods=['POST'])
 def stop_training():
-    job_id = request.args.get('id')
-    logging.info(f"job id is {job_id}")
+    job_id = _get_job_id(request=request.args)
     success, message = training_job.stop_training_job(job_id=job_id)
     output = {
         "success": success,
@@ -56,8 +62,7 @@ def stop_training():
 
 @flaskApp.route('/cleanup', methods=['POST'])
 def cleanup_artifacts():
-    job_id = request.args.get('id')
-    logging.info(f"job id is {job_id}")
+    job_id = _get_job_id(request=request.args)
     success, message = training_job.cleanup_artifacts(
         server_dir=server.output_dir,
         job_id=job_id,
@@ -71,8 +76,7 @@ def cleanup_artifacts():
 
 @flaskApp.route('/status', methods=['GET'])
 def get_training_status():
-    job_id = request.args.get('id')
-    logging.info(f"job id is {job_id}")
+    job_id = _get_job_id(request=request.args)
     status = training_job.get_training_status(
         server_dir=server.output_dir,
         job_id=job_id,
@@ -85,7 +89,7 @@ def get_training_status():
 
 @flaskApp.route('/partition', methods=['POST'])
 def partition_dataset():
-    job_id = request.args.get('id')
+    job_id = _get_job_id(request=request.args)
     if request.data:
         json_data = request.get_json()
     else:
@@ -96,7 +100,6 @@ def partition_dataset():
         "data_ratios", {"train": 0.6, "dev": 0.2, "test": 0.2})
     logging.info(f"min_samples is {min_samples}")
     logging.info(f"data_ratios is {data_ratios}")
-    logging.info(f"job id is {job_id}")
 
     # Validations
     error_msg = dataset_utils.validate_ratios(data_ratios)
@@ -130,8 +133,7 @@ def partition_dataset():
 
 @flaskApp.route('/report', methods=['GET'])
 def get_model_report():
-    job_id = request.args.get('id')
-    logging.info(f"job id is {job_id}")
+    job_id = _get_job_id(request=request.args)
     include_data = request.args.get("data", default="", type=str)
     if include_data:
         if include_data.lower() == "true":
@@ -160,8 +162,7 @@ def list_training_jobs():
 
 @flaskApp.route('/package', methods=['POST'])
 def start_packaging():
-    job_id = request.args.get('id')
-    logging.info(f"job id is {job_id}")
+    job_id = _get_job_id(request=request.args)
     success, package_dir, message = training_job.build_model_package(
         job_id=job_id,
         server_dir=server.output_dir,
@@ -176,8 +177,7 @@ def start_packaging():
 
 @flaskApp.route('/testdata', methods=['POST'])
 def get_output_path():
-    job_id = request.args.get('id')
-    logging.info(f"job id is {job_id}")
+    job_id = _get_job_id(request=request.args)
     try:
         job_output_dir = training_job.get_job_output_dir(
             server.output_dir, job_id)
