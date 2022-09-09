@@ -1,4 +1,4 @@
-import pandora.service.runner as runner
+import pandora.service.job_runner as job_runner
 from pathlib import Path
 import os
 
@@ -24,28 +24,28 @@ def main():
     task_name = "sentence"
     mode_type = "bert"
     bert_base_model_name = "bert-base-chinese"
-    arg_list = runner.get_training_args(
+    arg_list = job_runner.get_training_args(
         task_name=task_name,
         mode_type=mode_type,
         bert_base_model_name=bert_base_model_name,
     )
 
     arg_list.extend(
-        runner.get_default_dirs(
+        job_runner.get_default_dirs(
             resource_dir,
             cache_dir,
             bert_base_model_name=bert_base_model_name,
             datasets=TEST_DATASETS,
         ))
     arg_list.extend(
-        runner.set_actions(
+        job_runner.set_actions(
             do_train=True,
             do_eval=True,
             do_predict=True,
         ))
     resource_dir = os.path.join(Path.home(), "workspace", "resource")
-    runner.train_eval_test(arg_list, resource_dir=resource_dir,
-                           datasets=TEST_DATASETS)
+    job_runner.train_eval_test(arg_list, resource_dir=resource_dir,
+                               datasets=TEST_DATASETS)
 
 
 if __name__ == "__main__":
