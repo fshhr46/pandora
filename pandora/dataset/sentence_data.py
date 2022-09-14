@@ -9,6 +9,7 @@ supported_partitions = ["train", "dev", "test"]
 
 
 class Dataset(str, Enum):
+    synthetic_data = "synthetic_data"
     column_data = "column_data"
     column_data_all = "column_data_all"
     multi_labels_splitted = "multi_labels_splitted"

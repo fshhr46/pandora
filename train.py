@@ -3,12 +3,14 @@ from pathlib import Path
 import os
 
 from pandora.dataset.sentence_data import Dataset
+import pandora.packaging.packager as packager
 
 
 # TODO: TEST_DATASETS should be input parameter
 TEST_DATASETS = list(Dataset)
 TEST_DATASETS = [
-    Dataset.column_data,
+    Dataset.synthetic_data,
+    # Dataset.column_data,
     # Dataset.short_sentence,
     # Dataset.long_sentence,
 ]
@@ -46,6 +48,14 @@ def main():
     resource_dir = os.path.join(Path.home(), "workspace", "resource")
     job_runner.train_eval_test(arg_list, resource_dir=resource_dir,
                                datasets=TEST_DATASETS)
+
+    # packaging
+    dataset_names = "_".join(TEST_DATASETS)
+    output_dir = os.path.join(resource_dir, "outputs",
+                              bert_base_model_name, dataset_names)
+    pkger = packager.ModelPackager(model_dir=output_dir)
+    package_dir = pkger.build_model_package()
+    print(f"package_dir is {package_dir}")
 
 
 if __name__ == "__main__":
