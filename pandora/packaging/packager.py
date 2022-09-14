@@ -40,15 +40,16 @@ class ModelPackager(object):
                  model_dir: str,) -> None:
         self.model_dir = model_dir
 
-    def create_setup_config_file(self, package_dir):
+    def create_setup_config_file(self, package_dir, num_labels: str):
         setup_conf = {
             "model_name": "bert-base-chinese",
             # "mode": "sequence_classification",
             "mode": "sequence_classification",
             "do_lower_case": True,
-            "num_labels": "10",
+            "num_labels": num_labels,
             "save_mode": "pretrained",
-            "max_length": "150",
+            # TODO: This needs to be aligned with traning/eval? current set to eval's "eval_max_seq_length".
+            "max_length": "128",
             "captum_explanation": False,  # TODO: make this True
             "embedding_name": "bert",
             "FasterTransformer": False,  # TODO: make this True
@@ -67,8 +68,11 @@ class ModelPackager(object):
         if not os.path.exists(package_dir):
             os.mkdir(package_dir)
 
+        model_config = json.load(open(os.path.join(
+            self.model_dir, MODEL_CONFIG_FILE_NAME)))
+
         # create torchserve config file
-        self.create_setup_config_file(package_dir)
+        self.create_setup_config_file(package_dir, model_config["num_labels"])
 
         # create package file
         self.create_package_script(package_dir)
