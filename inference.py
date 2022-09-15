@@ -24,6 +24,16 @@ def inference(text: str, pp):
     pp.pprint(result)
 
 
+def test(data, parallel=False):
+    pp = pprint.PrettyPrinter(indent=4)
+    for text in data:
+        t = threading.Thread(target=inference, args=(text, pp))
+        if parallel:
+            t.start()
+        else:
+            t.run()
+
+
 if __name__ == '__main__':
     data = [
         "137-02557628",
@@ -31,7 +41,4 @@ if __name__ == '__main__':
         "440602199110191812",
         "张帅",
     ]
-    pp = pprint.PrettyPrinter(indent=4)
-    for text in data:
-        t = threading.Thread(target=inference, args=(text, pp))
-        t.start()
+    test(data)

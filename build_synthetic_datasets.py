@@ -71,10 +71,13 @@ def partition_data(output_dir, data_file, data_ratios, seed):
 
 
 if __name__ == '__main__':
+    # output_dir = os.path.join(
+    #     pathlib.Path.home(), "workspace", "resource", "outputs", "bert-base-chinese", "synthetic_data", "datasets", "synthetic_data")
     output_dir = os.path.join(
-        pathlib.Path.home(), "workspace", "resource", "outputs", "bert-base-chinese", "synthetic_data", "datasets", "synthetic_data")
+        pathlib.Path.home(), "workspace", "resource", "datasets", "synthetic_data")
+
     os.makedirs(output_dir, exist_ok=True)
-    num_data_entry = 30
+    num_data_entry = 1000
     data_file = generate_data(num_data_entry=num_data_entry, output_dir=output_dir,
                               generators=DATA_GENERATORS, labels=CLASSIFICATION_LABELS)
     data_ratios = {"train": 0.6, "dev": 0.2, "test": 0.2}
