@@ -98,6 +98,7 @@ class ModelPackager(object):
 
     def get_command(self):
         return f"torch-model-archiver \
+            --force \
             --model-name $model_name \
             --version $model_version \
             --serialized-file {MODEL_FILE_NAME} \
