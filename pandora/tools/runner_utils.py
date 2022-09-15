@@ -51,6 +51,7 @@ def get_data_processor(datasets, resource_dir: str):
 
 def prepare_data(args, tokenizer, processor):
     train_dataset = eval_dataset = test_dataset = None
+    train_examples = eval_examples = test_examples = None
     if args.do_train:
         sampler = None
         if args.sample_size:

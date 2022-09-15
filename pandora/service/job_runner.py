@@ -1,12 +1,10 @@
-from ast import arg
 import errno
-from pathlib import Path
 import argparse
 import glob
 import json
 import logging
 import os
-from typing import Dict, List
+from typing import List
 
 import numpy as np
 import torch
@@ -17,6 +15,7 @@ from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
 from pandora.callback.optimizater.adamw import AdamW
 from pandora.callback.progressbar import ProgressBar
 from pandora.models.transformers import WEIGHTS_NAME, BertConfig
+from pandora.service.job_utils import get_all_checkpoints
 from pandora.processors.feature import (
     batch_collate_fn,
 )
@@ -66,8 +65,9 @@ def get_training_args(
                 f"--save_steps={checkpoint_steps}",
                 "--seed=42",
                 "--eval_all_checkpoints",
-                "--overwrite_cache",
-                # "--overwrite_output_dir",
+                "--predict_all_checkpoints",
+                # "--overwrite_cache",
+                "--overwrite_output_dir",
                 ]
 
     if sample_size:
@@ -147,7 +147,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     # Training
     if train_dataset:
         global_step, tr_loss = train(
-            args, train_dataset, model, tokenizer)
+            args, train_dataset, eval_dataset, model, tokenizer)
         logger.info(" global_step = %s, average loss = %s",
                     global_step, tr_loss)
 
@@ -180,10 +180,8 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
             args.output_dir, do_lower_case=args.do_lower_case)
         checkpoints = [args.output_dir]
         if args.eval_all_checkpoints:
-            checkpoints = list(
-                os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
-            )
-            logging.getLogger("pytorch_transformers.modeling_utils").setLevel(
+            checkpoints = get_all_checkpoints(args.output_dir)
+            logging.getLogger("transformers.modeling_utils").setLevel(
                 logging.WARN)  # Reduce logging
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
         for checkpoint in checkpoints:
@@ -208,13 +206,16 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
         tokenizer = tokenizer_class.from_pretrained(
             args.output_dir, do_lower_case=args.do_lower_case)
         checkpoints = [args.output_dir]
-        if args.predict_checkpoints > 0:
-            checkpoints = list(
-                os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + '/**/' + WEIGHTS_NAME, recursive=True)))
+        if args.predict_all_checkpoints or args.predict_checkpoints > 0:
+            checkpoints = get_all_checkpoints(args.output_dir)
             logging.getLogger("transformers.modeling_utils").setLevel(
                 logging.WARN)  # Reduce logging
-            checkpoints = [x for x in checkpoints if x.split(
-                '-')[-1] == str(args.predict_checkpoints)]
+
+            # filter checkpoints
+            if not args.predict_all_checkpoints:
+                checkpoints = [x for x in checkpoints if x.split(
+                    '-')[-1] == str(args.predict_checkpoints)]
+
         logger.info("Predict the following checkpoints: %s", checkpoints)
         for checkpoint in checkpoints:
             prefix = checkpoint.split(
@@ -233,7 +234,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
                 processor=processor)
 
 
-def train(args, train_dataset, model, tokenizer):
+def train(args, train_dataset, eval_dataset, model, tokenizer):
     """ Train the model """
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(
@@ -365,17 +366,21 @@ def train(args, train_dataset, model, tokenizer):
                 optimizer.step()
                 model.zero_grad()
                 global_step += 1
+
+                # Printing logging steps
+                checkpoint_name = "checkpoint-{}".format(global_step)
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     logger.info(" ")
                     if args.local_rank == -1:
                         # Only evaluate when single GPU otherwise metrics may not average well
-                        evaluate(args, model, tokenizer)
+                        evaluate(args, model, eval_dataset,
+                                 prefix=checkpoint_name)
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     # Save model checkpoint
                     output_dir = os.path.join(
-                        args.output_dir, "checkpoint-{}".format(global_step))
+                        args.output_dir, checkpoint_name)
                     if not os.path.exists(output_dir):
                         os.makedirs(output_dir)
                     # Take care of distributed/parallel training
@@ -399,7 +404,7 @@ def train(args, train_dataset, model, tokenizer):
 
 
 def evaluate(args, model, eval_dataset, prefix=""):
-    eval_output_dir = args.output_dir
+    eval_output_dir = os.path.join(args.output_dir, prefix)
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
@@ -409,7 +414,7 @@ def evaluate(args, model, eval_dataset, prefix=""):
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size,
                                  collate_fn=batch_collate_fn)
     # Eval!
-    logger.info(f"***** Running evaluation %s ***** prefix: {prefix}")
+    logger.info(f"***** Running evaluation ***** prefix: {prefix}")
     logger.info("  Num examples = %d", len(eval_dataset))
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
@@ -444,11 +449,11 @@ def evaluate(args, model, eval_dataset, prefix=""):
     eval_loss = eval_loss / nb_eval_steps
     results = {}
     results['loss'] = eval_loss
-    logger.info(f"***** Eval results %s ***** prefix: {prefix}")
+    logger.info(f"***** Eval results ***** prefix: {prefix}")
     info = "-".join([f' {key}: {value:.4f} ' for key,
                     value in results.items()])
     logger.info(info)
-    logger.info(f"***** Entity results %s ***** prefix: {prefix}")
+    logger.info(f"***** Entity results ***** prefix: {prefix}")
     return results
 
 
@@ -460,7 +465,7 @@ def predict(args, model, test_dataset, prefix=""):
     test_dataloader = DataLoader(
         test_dataset, sampler=test_sampler, batch_size=batch_size, collate_fn=batch_collate_fn)
     # Predict!
-    logger.info(f"***** Running prediction %s ***** prefix: {prefix}")
+    logger.info(f"***** Running prediction ***** prefix: {prefix}")
     logger.info("  Num examples = %d", len(test_dataset))
     logger.info("  Batch size = %d", batch_size)
     assert batch_size == 1
@@ -565,6 +570,8 @@ def get_args_parser():
                         help="Save checkpoint every X updates steps.")
     parser.add_argument("--eval_all_checkpoints", action="store_true",
                         help="Evaluate all checkpoints starting with the same prefix as model_name ending and ending with step number", )
+    parser.add_argument("--predict_all_checkpoints", action="store_true",
+                        help="Predict all checkpoints starting with the same prefix as model_name ending and ending with step number", )
     parser.add_argument("--predict_checkpoints", type=int, default=0,
                         help="predict checkpoints starting with the same prefix as model_name ending and ending with step number")
     parser.add_argument("--no_cuda", action="store_true",
