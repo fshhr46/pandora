@@ -1,13 +1,9 @@
 import pandora.dataset.dataset_utils as dataset_utils
-from cProfile import label
-from cgitb import text
 from enum import Enum
 import json
 from dataclasses import dataclass
-from mimetypes import init
 from typing import Dict, List, Tuple
 import os
-from pathlib import Path
 
 import json
 
@@ -193,7 +189,8 @@ def partition_poseidon_dataset(
 
 
 def _create_unique_label_name(tag_name, tag_id):
-    return f"{tag_name}_{tag_id}"
+    # return f"{tag_name}_{tag_id}"
+    return f"{tag_name}"
 
 
 def _validate_and_partition_tag_data(tag_data, min_samples, data_ratios: List, seed: int) -> Tuple[bool, Dict, PartitionDistribution]:

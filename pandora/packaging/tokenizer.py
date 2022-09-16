@@ -1,5 +1,4 @@
-# from transformers import BertTokenizer
-from pandora.models.transformers import BertTokenizer
+from transformers import BertTokenizer
 
 
 class SentenceTokenizer(BertTokenizer):
@@ -7,7 +6,6 @@ class SentenceTokenizer(BertTokenizer):
         super().__init__(vocab_file=str(vocab_file),
                          do_lower_case=do_lower_case, *args, **kwargs)
         self.vocab_file = str(vocab_file)
-        self.do_lower_case = do_lower_case
 
     def tokenize(self, text):
         _tokens = []

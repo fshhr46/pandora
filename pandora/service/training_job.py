@@ -36,7 +36,7 @@ class TrainingJob(object):
 
     bert_base_model_name = "bert-base-chinese"
     task_name = "sentence"
-    mode_type = "bert"
+    model_type = "bert"
 
     def __init__(self,
                  job_id,
@@ -238,8 +238,10 @@ def build_model_package(
     if status != JobStatus.packaged:
         if status != JobStatus.completed:
             return False, "", f"Job must be completed to create model package. Current status: {status}"
+        # TODO: Fix hard coded eval_max_seq_length=128
         pkger = packager.ModelPackager(
             model_dir=output_dir,
+            eval_max_seq_length=128,
         )
         package_dir = pkger.build_model_package()
     else:

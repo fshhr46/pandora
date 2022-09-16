@@ -2,8 +2,8 @@
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
-from ..tools.common import load_json
-from ..tools.common import save_json
+from pandora.tools.common import load_json
+from pandora.tools.common import save_json
 plt.switch_backend('agg')
 
 

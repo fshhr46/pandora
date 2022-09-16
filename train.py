@@ -1,7 +1,8 @@
-import pandora.service.job_runner as job_runner
-from pathlib import Path
 import os
+import shutil
+from pathlib import Path
 
+import pandora.service.job_runner as job_runner
 from pandora.dataset.sentence_data import Dataset
 import pandora.packaging.packager as packager
 
@@ -10,7 +11,7 @@ import pandora.packaging.packager as packager
 TEST_DATASETS = list(Dataset)
 TEST_DATASETS = [
     Dataset.synthetic_data,
-    # Dataset.column_data,
+    # Dataset.column_data_all,
     # Dataset.short_sentence,
     # Dataset.long_sentence,
 ]
@@ -24,11 +25,11 @@ def main():
     cache_dir = os.path.join(home, ".cache/torch/transformers")
 
     task_name = "sentence"
-    mode_type = "bert"
+    model_type = "bert"
     bert_base_model_name = "bert-base-chinese"
     arg_list = job_runner.get_training_args(
         task_name=task_name,
-        mode_type=mode_type,
+        mode_type=model_type,
         bert_base_model_name=bert_base_model_name,
     )
 
@@ -46,15 +47,21 @@ def main():
             do_predict=True,
         ))
     resource_dir = os.path.join(Path.home(), "workspace", "resource")
-    job_runner.train_eval_test(arg_list, resource_dir=resource_dir,
-                               datasets=TEST_DATASETS)
+    args = job_runner.train_eval_test(arg_list, resource_dir=resource_dir,
+                                      datasets=TEST_DATASETS)
 
     # packaging
     dataset_names = "_".join(TEST_DATASETS)
     output_dir = os.path.join(resource_dir, "outputs",
                               bert_base_model_name, dataset_names)
-    pkger = packager.ModelPackager(model_dir=output_dir)
-    package_dir = pkger.build_model_package()
+    pkger = packager.ModelPackager(
+        model_dir=output_dir,
+        eval_max_seq_length=args.eval_max_seq_length)
+    package_dir = packager.get_package_dir(model_dir=output_dir)
+    shutil.rmtree(package_dir)
+    assert not os.path.isdir(
+        package_dir), f"package_dir {package_dir} already exists, please delete"
+    pkger.build_model_package()
     print(f"package_dir is {package_dir}")
 
 

@@ -27,7 +27,7 @@ bash package.sh $model_name $model_version
 
 # copy to model-store
 versioned_name="${model_name}-${model_version}.mar"
-cp -n $model_name.mar /home/model-server/model-store/$versioned_name
+cp $model_name.mar /home/model-server/model-store/$versioned_name
 
 # register
 curl -X POST "http://localhost:8081/models?url=${versioned_name}&batch_size=3"
