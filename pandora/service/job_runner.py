@@ -1,10 +1,11 @@
 import errno
 import argparse
-import glob
 import json
 import logging
 import os
 from typing import List
+
+from transformers import BertConfig
 
 import numpy as np
 import torch
@@ -14,26 +15,25 @@ from torch.utils.data.distributed import DistributedSampler
 from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
 from pandora.callback.optimizater.adamw import AdamW
 from pandora.callback.progressbar import ProgressBar
-from pandora.models.transformers import WEIGHTS_NAME, BertConfig
 from pandora.service.job_utils import get_all_checkpoints
-from pandora.processors.feature import (
+from pandora.packaging.feature import (
     batch_collate_fn,
 )
 
 
 from pandora.packaging.model import BertForSentence
-from pandora.processors.feature import cls_processors
-from pandora.dataset import sentence_data
+from pandora.packaging.cache_configs import BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
+from pandora.packaging.feature import cls_processors
 from pandora.packaging.tokenizer import SentenceTokenizer
 from pandora.tools.common import init_logger, logger
 import pandora.tools.common as common_utils
 import pandora.tools.runner_utils as runner_utils
 import pandora.tools.mps_utils as mps_utils
 import pandora.dataset.dataset_utils as dataset_utils
+import pandora.packaging.inference as inference
 
 
-ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys())
-                 for conf in (BertConfig,)), ())
+ALL_MODELS = tuple(BERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys())
 
 
 MODEL_CLASSES = {
@@ -48,26 +48,39 @@ def get_training_args(
     # optional parameters
     sample_size: int = 0,
 ) -> List[str]:
+
+    # guidence: batch_size * max_seq_length in range[3000, 4000]
     batch_size = 24
+    max_seq_length = 128
     checkpoint_steps = 500
+
     arg_list = [f"--model_type={mode_type}",
                 f"--model_name_or_path={bert_base_model_name}",
                 f"--task_name={task_name}",
                 "--do_lower_case",
                 "--loss_type=ce",
-                "--train_max_seq_length=128",
-                "--eval_max_seq_length=512",
+
+                # Original values: train_max_seq_length=128 and eval_max_seq_length=512
+                # Now setting to the same
+                f"--train_max_seq_length={max_seq_length}",
+                f"--eval_max_seq_length={max_seq_length}",
+
+
                 f"--per_gpu_train_batch_size={batch_size}",
                 f"--per_gpu_eval_batch_size={batch_size}",
+
                 "--learning_rate=3e-5",
-                "--num_train_epochs=4.0",
+
+                # changed from 4 -> 2
+                "--num_train_epochs=2.0",
+
                 f"--logging_steps={checkpoint_steps}",
                 f"--save_steps={checkpoint_steps}",
                 "--seed=42",
                 "--eval_all_checkpoints",
-                "--predict_all_checkpoints",
-                # "--overwrite_cache",
-                "--overwrite_output_dir",
+                # "--predict_all_checkpoints",
+                "--overwrite_cache",
+                # "--overwrite_output_dir",
                 ]
 
     if sample_size:
@@ -141,8 +154,8 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
 
     data = runner_utils.prepare_data(args, tokenizer, processor=processor)
     dataset_partitions = data["datasets"]
-    train_dataset, eval_dataset, test_dataset = \
-        dataset_partitions["train"], dataset_partitions["eval"], dataset_partitions["test"]
+    train_dataset, eval_dataset, test_dataset = dataset_partitions[
+        "train"], dataset_partitions["eval"], dataset_partitions["test"]
     examples = data["examples"]
     # Training
     if train_dataset:
@@ -227,11 +240,16 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
             report_dir = os.path.join(args.output_dir, prefix)
             if not os.path.exists(report_dir) and args.local_rank in [-1, 0]:
                 os.makedirs(report_dir)
-            predictions = predict(args, model, test_dataset, prefix=prefix)
+            predictions = predict(
+                args.model_type, model,
+                args.id2label, test_dataset,
+                args.local_rank, args.device,
+                prefix=prefix)
             test_examples = examples["test"]
             runner_utils.build_train_report(
                 test_examples, predictions, report_dir,
                 processor=processor)
+    return args
 
 
 def train(args, train_dataset, eval_dataset, model, tokenizer):
@@ -451,49 +469,43 @@ def evaluate(args, model, eval_dataset, prefix=""):
     results['loss'] = eval_loss
     logger.info(f"***** Eval results ***** prefix: {prefix}")
     info = "-".join([f' {key}: {value:.4f} ' for key,
-                    value in results.items()])
+                     value in results.items()])
     logger.info(info)
     logger.info(f"***** Entity results ***** prefix: {prefix}")
     return results
 
 
-def predict(args, model, test_dataset, prefix=""):
-    batch_size = 1
+def predict(
+        model_type, model,
+        id2label, test_dataset,
+        local_rank, device,
+        prefix="",
+        batch_size=1):
+    assert batch_size == 1
     # Note that DistributedSampler samples randomly
     test_sampler = SequentialSampler(
-        test_dataset) if args.local_rank == -1 else DistributedSampler(test_dataset)
+        test_dataset) if local_rank == -1 else DistributedSampler(test_dataset)
     test_dataloader = DataLoader(
         test_dataset, sampler=test_sampler, batch_size=batch_size, collate_fn=batch_collate_fn)
     # Predict!
     logger.info(f"***** Running prediction ***** prefix: {prefix}")
     logger.info("  Num examples = %d", len(test_dataset))
     logger.info("  Batch size = %d", batch_size)
-    assert batch_size == 1
 
     predictions = []
     pbar = ProgressBar(n_total=len(test_dataloader), desc="Predicting")
     for step, batch in enumerate(test_dataloader):
         model.eval()
-        batch = tuple(t.to(args.device) for t in batch)
+        batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
-            token_type_ids = None
-            # XLM and RoBERTa don"t use segment_ids
-            if args.model_type != "distilbert" and args.model_type in [
-                    "bert", "xlnet"]:
-                token_type_ids = batch[2]
-            inputs = {"input_ids": batch[0],
-                      "attention_mask": batch[1],
-                      "token_type_ids": token_type_ids,
-                      "labels": None
-                      }
-            outputs = model(**inputs)
-        logits = outputs[0]
-        preds = logits.detach().cpu().numpy()
-        preds = np.argmax(preds, axis=1).tolist()
-
-        tags = [args.id2label[x] for x in preds]
+            # TODO: Fix hard coded "sequence_classification"
+            # input_ids_batch, attention_mask_batch, token_type_ids, indexes
+            batch = (batch[0], batch[1], batch[2], [])
+            preds = inference.run_inference(
+                "sequence_classification", model, id2label, batch)
+        tags = [pred["class"] for pred in preds]
         json_d = {}
-        json_d['tags_sentence'] = tags
+        json_d['tags'] = tags
         predictions.append(json_d)
         pbar(step)
     return predictions

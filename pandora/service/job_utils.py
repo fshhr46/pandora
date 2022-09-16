@@ -2,7 +2,7 @@
 import os
 import glob
 
-from pandora.models.transformers import WEIGHTS_NAME
+from transformers import WEIGHTS_NAME
 
 
 def get_all_checkpoints(output_dir):

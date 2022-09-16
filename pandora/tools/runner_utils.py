@@ -4,9 +4,9 @@ import pandora.tools.report as report
 from pandora.tools.common import json_to_text
 
 
-from pandora.processors.feature import SentenceProcessor
-from pandora.processors.feature import convert_examples_to_features
-from pandora.processors.feature import (
+from pandora.packaging.feature import SentenceProcessor
+from pandora.packaging.feature import convert_examples_to_features
+from pandora.packaging.feature import (
     convert_examples_to_features,
     RandomDataSampler,
 )
@@ -28,11 +28,11 @@ def build_train_report(examples, predictions, report_dir, processor):
     test_submit = []
     for x, y in zip(examples, predictions):
         json_d = {}
-        json_d['guid'] = x.guid
+        json_d['guid'] = x.id
         json_d['text'] = x.sentence
         json_d['words'] = x.words
         json_d['label'] = x.labels
-        json_d['pred'] = y['tags_sentence']
+        json_d['pred'] = y['tags']
         test_submit.append(json_d)
     json_to_text(output_submit_file, test_submit)
 
@@ -66,7 +66,7 @@ def prepare_data(args, tokenizer, processor):
 
     if args.do_predict:
         test_dataset, test_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type="test", evaluate=False, processor=processor)
+            args, args.task_name, tokenizer, data_type="test", evaluate=True, processor=processor)
     return {
         "datasets": {
             "train": train_dataset,
@@ -117,12 +117,6 @@ def load_and_cache_examples(args, task, tokenizer, data_type, evaluate: bool, pr
                                                 tokenizer=tokenizer,
                                                 label_list=label_list,
                                                 max_seq_length=args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length,
-                                                cls_token_at_end=False,
-                                                pad_on_left=False,
-                                                cls_token=tokenizer.cls_token,
-                                                cls_token_segment_id=2 if args.model_type in [
-                                                    "xlnet"] else 0,
-                                                sep_token=tokenizer.sep_token,
                                                 # pad on the left for xlnet
                                                 pad_token=tokenizer.convert_tokens_to_ids(
                                                     [tokenizer.pad_token])[0],
@@ -132,24 +126,30 @@ def load_and_cache_examples(args, task, tokenizer, data_type, evaluate: bool, pr
             logger.info("Saving features into cached file %s",
                         cached_features_file)
             torch.save(features, cached_features_file)
-    if args.local_rank == 0 and not evaluate:
+    dataset = convert_features_to_dataset(args.local_rank, features, evaluate)
+    return dataset, examples
+
+
+def convert_features_to_dataset(local_rank, features, evaluate):
+    if local_rank == 0 and not evaluate:
         # Make sure only the first process in distributed training process the dataset, and the others will use the cache
         torch.distributed.barrier()
     # Convert to Tensors and build dataset
-    all_input_ids = torch.tensor(
-        [f.input_ids for f in features], dtype=torch.long)
-    all_input_mask = torch.tensor(
-        [f.input_mask for f in features], dtype=torch.long)
-    all_segment_ids = torch.tensor(
-        [f.segment_ids for f in features], dtype=torch.long)
-    # Only support single label now.
-    all_label_ids = torch.tensor(
-        [f.sentence_labels[0] for f in features], dtype=torch.long)
+    all_input_ids = torch.stack(
+        [f.input_ids for f in features])
+    all_input_mask = torch.stack(
+        [f.input_mask for f in features])
+    all_segment_ids = torch.stack(
+        [f.segment_ids for f in features])
 
-    all_lens = torch.tensor([f.input_len for f in features], dtype=torch.long)
+    # Only support single label now.
+    all_label_ids = torch.stack(
+        [f.sentence_labels[0] for f in features])
+
+    all_lens = torch.stack([f.input_len for f in features])
     dataset = TensorDataset(
         all_input_ids, all_input_mask, all_segment_ids, all_lens, all_label_ids)
-    return dataset, examples
+    return dataset
 
 
 def get_training_log_path(output_dir):

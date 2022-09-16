@@ -2,9 +2,6 @@ import os
 import json
 import pandora.tools.common as common
 import pathlib
-import shutil
-
-import pandora
 
 PACKAGE_DIR_NAME = "torchserve_package"
 
@@ -17,10 +14,17 @@ INDEX2NAME_FILE_NAME = "index_to_name.json"
 MODEL_FILES_TO_COPY = [MODEL_FILE_NAME, MODEL_CONFIG_FILE_NAME,
                        VOCAB_FILE_NAME, INDEX2NAME_FILE_NAME]
 
-# torchserve related names
-PANDORA_DEPENDENCY = "pandora.zip"
-SERUP_CONF_FILE_NAME = "setup_config.json"
+
+# handler and python files
+# PANDORA_DEPENDENCY = "pandora.zip"
 HANDLER_NAME = "handler.py"
+MODEL_NAME = "model.py"
+TOKENIZER_NAME = "tokenizer.py"
+INFERENCE_NAME = "inference.py"
+FEATURE_NAME = "feature.py"
+
+# torchserve related names
+SERUP_CONF_FILE_NAME = "setup_config.json"
 REGISTER_SCRIPT_NAME = "register.sh"
 PACKAGE_SCRIPT_NAME = "package.sh"
 PACKAGING_DONE_FILE = "package.done"
@@ -37,8 +41,10 @@ def done_packaging(model_dir: str):
 
 class ModelPackager(object):
     def __init__(self,
-                 model_dir: str,) -> None:
+                 model_dir: str,
+                 eval_max_seq_length: int) -> None:
         self.model_dir = model_dir
+        self.eval_max_seq_length = eval_max_seq_length
 
     def create_setup_config_file(self, package_dir, num_labels: str):
         setup_conf = {
@@ -49,7 +55,7 @@ class ModelPackager(object):
             "num_labels": num_labels,
             "save_mode": "pretrained",
             # TODO: This needs to be aligned with traning/eval? current set to eval's "eval_max_seq_length".
-            "max_length": "128",
+            "max_length": self.eval_max_seq_length,
             "captum_explanation": False,  # TODO: make this True
             "embedding_name": "bert",
             "FasterTransformer": False,  # TODO: make this True
@@ -72,7 +78,8 @@ class ModelPackager(object):
             self.model_dir, MODEL_CONFIG_FILE_NAME)))
 
         # create torchserve config file
-        self.create_setup_config_file(package_dir, model_config["num_labels"])
+        self.create_setup_config_file(
+            package_dir, len(model_config["id2label"]))
 
         # create package file
         self.create_package_script(package_dir)
@@ -81,13 +88,18 @@ class ModelPackager(object):
         # copy register.sh file
         common.copy_file(curr_dir, package_dir, REGISTER_SCRIPT_NAME)
 
-        # copy handler.py file
+        # copy handler, model and tokenizer
+        # TODO: Make a list out of this
         common.copy_file(curr_dir, package_dir, HANDLER_NAME)
+        common.copy_file(curr_dir, package_dir, MODEL_NAME)
+        common.copy_file(curr_dir, package_dir, TOKENIZER_NAME)
+        common.copy_file(curr_dir, package_dir, INFERENCE_NAME)
+        common.copy_file(curr_dir, package_dir, FEATURE_NAME)
 
         # copy pandora as dependency
-        pandora_dir = os.path.dirname(pandora.__file__)
-        pandora_zip_path = os.path.join(package_dir, PANDORA_DEPENDENCY)
-        common.zipdir(dir_to_zip=pandora_dir, output_path=pandora_zip_path)
+        # pandora_dir = os.path.dirname(pandora.__file__)
+        # pandora_zip_path = os.path.join(package_dir, PANDORA_DEPENDENCY)
+        # common.zipdir(dir_to_zip=pandora_dir, output_path=pandora_zip_path)
 
         for file_name in MODEL_FILES_TO_COPY:
             common.copy_file(self.model_dir, package_dir, file_name)
@@ -97,14 +109,20 @@ class ModelPackager(object):
         return package_dir
 
     def get_command(self):
-        return f"torch-model-archiver \
-            --force \
-            --model-name $model_name \
-            --version $model_version \
-            --serialized-file {MODEL_FILE_NAME} \
-            --handler {HANDLER_NAME} \
-            --extra-files \
-            \"{MODEL_CONFIG_FILE_NAME},{SERUP_CONF_FILE_NAME},{INDEX2NAME_FILE_NAME},{VOCAB_FILE_NAME},{PANDORA_DEPENDENCY}\""
+        base_cmd = [
+            "torch-model-archiver",
+            "--force",
+            f"--model-name $model_name",
+            f"--version $model_version",
+            f"--serialized-file {MODEL_FILE_NAME}",
+            f"--handler {HANDLER_NAME}",
+            "--extra-files"]
+        extra_files = [
+            MODEL_CONFIG_FILE_NAME, SERUP_CONF_FILE_NAME,
+            INDEX2NAME_FILE_NAME, VOCAB_FILE_NAME,
+            MODEL_NAME, TOKENIZER_NAME,
+            INFERENCE_NAME, FEATURE_NAME]
+        return f'{" ".join(base_cmd)} {",".join(extra_files)}'
 
     def create_package_script(self, package_dir):
         # copy sample file to package dir
@@ -114,3 +132,4 @@ class ModelPackager(object):
         script_path = os.path.join(package_dir, PACKAGE_SCRIPT_NAME)
         with open(script_path, "a") as script_f:
             script_f.write(self.get_command())
+            script_f.write("\n")

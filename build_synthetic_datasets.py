@@ -7,7 +7,7 @@ import pathlib
 from dataclasses import fields
 
 from pandora.data.encoder import DataJSONEncoder
-from pandora.data.generators.configs import (
+from pandora.dataset.configs import (
     DATA_GENERATORS,
     DATA_CLASSES,
     CLASSIFICATION_COLUMN_2_LABEL_ID,
@@ -77,7 +77,7 @@ if __name__ == '__main__':
         pathlib.Path.home(), "workspace", "resource", "datasets", "synthetic_data")
 
     os.makedirs(output_dir, exist_ok=True)
-    num_data_entry = 1000
+    num_data_entry = 100
     data_file = generate_data(num_data_entry=num_data_entry, output_dir=output_dir,
                               generators=DATA_GENERATORS, labels=CLASSIFICATION_LABELS)
     data_ratios = {"train": 0.6, "dev": 0.2, "test": 0.2}

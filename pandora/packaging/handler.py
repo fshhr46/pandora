@@ -1,11 +1,6 @@
 from captum.attr import LayerIntegratedGradients
 from ts.torch_handler.base_handler import BaseHandler
-from transformers import GPT2TokenizerFast
-from transformers import (
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    AutoModelForTokenClassification,
-)
+
 import transformers
 import torch
 from abc import ABC
@@ -13,13 +8,12 @@ import json
 import logging
 import os
 import ast
-from typing import Dict
 
-# import sys
-# import pathlib
-# curr_dir = str(pathlib.Path(os.path.dirname(__file__)).absolute())
-# sys.path.append(os.path.join(curr_dir, "pandora.zip"))
-# from pandora.packaging.tokenizer import SentenceTokenizer
+# load python dependencies
+import feature
+import inference
+from tokenizer import SentenceTokenizer
+from model import BertForSentence
 
 logger = logging.getLogger(__name__)
 logger.info("Transformers version %s", transformers.__version__)
@@ -48,9 +42,14 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         serialized_file = self.manifest["model"]["serializedFile"]
         model_pt_path = os.path.join(model_dir, serialized_file)
 
+        # self.device = torch.device(
+        #     "cuda:" + str(properties.get("gpu_id"))
+        #     if torch.cuda.is_available() and properties.get("gpu_id") is not None
+        #     else "cpu"
+        # )
         self.device = torch.device(
-            "cuda:" + str(properties.get("gpu_id"))
-            if torch.cuda.is_available() and properties.get("gpu_id") is not None
+            "cuda"
+            if torch.cuda.is_available()
             else "cpu"
         )
         # read configs for the mode, model_name, etc. from setup_config.json
@@ -74,50 +73,15 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             self.model = torch.jit.load(
                 model_pt_path, map_location=self.device)
         elif self.setup_config["save_mode"] == "pretrained":
-            if self.setup_config["mode"] == "sequence_classification":
-                self.model = AutoModelForSequenceClassification.from_pretrained(
-                    model_dir
-                )
-            elif self.setup_config["mode"] == "token_classification":
-                self.model = AutoModelForTokenClassification.from_pretrained(
-                    model_dir)
-            else:
-                logger.warning("Missing the operation mode.")
-            # HF GPT2 models options can be gpt2, gpt2-medium, gpt2-large, gpt2-xl
-            # this basically palce different model blocks on different devices,
-            # https://github.com/huggingface/transformers/blob/v4.17.0/src/transformers/models/gpt2/modeling_gpt2.py#L962
-            if (
-                self.setup_config["model_parallel"]
-                and "gpt2" in self.setup_config["model_name"]
-            ):
-                self.model.parallelize()
-            else:
-                self.model.to(self.device)
-
+            self.model = BertForSentence.from_pretrained(
+                model_dir)
+            self.model.to(self.device)
         else:
             logger.warning("Missing the checkpoint or state_dict.")
 
-        if "gpt2" in self.setup_config["model_name"]:
-            self.tokenizer = GPT2TokenizerFast.from_pretrained(
-                "gpt2", pad_token="<|endoftext|>"
-            )
-
-        elif any(
-            fname
-            for fname in os.listdir(model_dir)
-            if fname.startswith("vocab.") and os.path.isfile(fname)
-        ):
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model_dir, do_lower_case=self.setup_config["do_lower_case"]
-            )
-        else:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.setup_config["model_name"],
-                do_lower_case=self.setup_config["do_lower_case"],
-            )
-
-        # self.tokenizer = SentenceTokenizer.from_pretrained(
-        #     model_dir, do_lower_case=self.setup_config["do_lower_case"])
+        # Load tokenizer
+        self.tokenizer = SentenceTokenizer.from_pretrained(
+            model_dir, do_lower_case=self.setup_config["do_lower_case"])
 
         self.model.eval()
         logger.info(
@@ -125,9 +89,14 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
 
         # Read the mapping file, index to object name
         mapping_file_path = os.path.join(model_dir, "index_to_name.json")
+        assert os.path.isfile(mapping_file_path)
         if os.path.isfile(mapping_file_path):
             with open(mapping_file_path) as f:
-                self.id2label = json.load(f)
+                index2name = json.load(f)
+                self.label2id = {label: int(i)
+                                 for i, label in index2name.items()}
+                self.id2label = {int(i): label
+                                 for i, label in index2name.items()}
         else:
             logger.warning("Missing the index_to_name.json file.")
         self.initialized = True
@@ -136,6 +105,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             self,
             input_ids_batch,
             attention_mask_batch,
+            segment_ids_batch,
             input_text):
         if isinstance(input_text, (bytes, bytearray)):
             input_text = input_text.decode("utf-8")
@@ -146,30 +116,38 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
 
         max_length = self.setup_config["max_length"]
         logger.info("Received text: '%s'", input_text)
-        # preprocessing text for sequence_classification, token_classification or text_generation
 
-        inputs = self.tokenizer.encode_plus(
-            input_text,
-            max_length=int(max_length),
-            pad_to_max_length=True,
-            add_special_tokens=True,
-            return_tensors="pt",
-        )
-        input_ids = inputs["input_ids"].to(self.device)
-        attention_mask = inputs["attention_mask"].to(self.device)
+        line = feature.read_json_line(line_obj={"text": input_text})
+        # TODO: fix this hack: id=""
+        example = feature.create_example(id="", line=line)
+        feat = feature.convert_example_to_feature(
+            example,
+            self.label2id, log_data=False,
+            max_seq_length=int(max_length),
+            tokenizer=self.tokenizer)
+        input_ids = feat.input_ids[None, :].to(self.device)
+        attention_mask = feat.input_mask[None, :].to(self.device)
+        segment_ids = feat.segment_ids[None, :].to(self.device)
+
         # making a batch out of the recieved requests
         # attention masks are passed for cases where input tokens are padded.
         if input_ids.shape is not None:
+            # must be 2D tensor (batch_size, seq_length)
+            assert len(input_ids.shape) == 2
             if input_ids_batch is None:
                 input_ids_batch = input_ids
                 attention_mask_batch = attention_mask
+                segment_ids_batch = segment_ids
             else:
                 input_ids_batch = torch.cat(
                     (input_ids_batch, input_ids), 0)
                 attention_mask_batch = torch.cat(
                     (attention_mask_batch, attention_mask), 0
                 )
-        return (input_ids_batch, attention_mask_batch)
+                segment_ids_batch = torch.cat(
+                    (segment_ids_batch, segment_ids), 0
+                )
+        return (input_ids_batch, attention_mask_batch, segment_ids_batch)
 
     def preprocess(self, requests):
         """Basic text preprocessing, based on the user's chocie of application mode.
@@ -181,6 +159,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         """
         input_ids_batch = None
         attention_mask_batch = None
+        segment_ids_batch = None
         indexes = []
         num_texts = 0
         for idx, data in enumerate(requests):
@@ -190,9 +169,10 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             elif "data" in data:
                 # Get request expects every reqeusts has one input string
                 input_text = data.get("data")
-                input_ids_batch, attention_mask_batch = self.add_input_text_to_batch(
+                input_ids_batch, attention_mask_batch, segment_ids_batch = self.add_input_text_to_batch(
                     input_ids_batch,
                     attention_mask_batch,
+                    segment_ids_batch,
                     input_text)
                 num_texts += 1
                 indexes.append(num_texts)
@@ -204,20 +184,24 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 # ]
                 json_objs = data.get("body")
                 for json_obj in json_objs:
-                    input_ids_batch, attention_mask_batch = self.add_input_text_to_batch(
+                    input_ids_batch, attention_mask_batch, segment_ids_batch = self.add_input_text_to_batch(
                         input_ids_batch,
                         attention_mask_batch,
+                        segment_ids_batch,
                         json_obj["text"])
                     num_texts += 1
                 indexes.append(num_texts)
             else:
                 # empty request, continue
                 continue
-        return (input_ids_batch, attention_mask_batch, indexes)
+        # Batch definition
+        # input_ids_batch, attention_mask_batch, segment_ids_batch, indexes
+        return (input_ids_batch, attention_mask_batch, segment_ids_batch, indexes)
 
     def inference(self, input_batch):
-        return run_inference(
-            self.setup_config["mode"], self.model, self.id2label, input_batch, self.tokenizer)
+        with torch.no_grad():
+            return inference.run_inference(
+                self.setup_config["mode"], self.model, self.id2label, input_batch)
 
     def postprocess(self, inference_output):
         """Post Process Function converts the predicted response into Torchserve readable format.
@@ -302,68 +286,6 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             response["delta_start"] = delta_start[0].tolist()
             response["delta_end"] = delta_end[0].tolist()
         return [response]
-
-
-def run_inference(mode: str, model, id2label: Dict[str, str], input_batch, tokenizer):
-    """Predict the class (or classes) of the received text using the
-    serialized transformers checkpoint.
-    Args:
-        input_batch (list): List of Text Tensors from the pre-process function is passed here
-    Returns:
-        list : It returns a list of the predicted value for the input text
-    """
-    input_ids_batch, attention_mask_batch, indexes = input_batch
-    inferences = []
-    # Handling inference for sequence_classification.
-    if mode == "sequence_classification":
-        predictions = model(input_ids_batch, attention_mask_batch)
-        logger.info(
-            f"This the output size from the Seq classification model {predictions[0].size()}")
-        logger.info(
-            f"This the output from the Seq classification model {predictions}")
-
-        num_rows, num_cols = predictions[0].shape
-        for i in range(num_rows):
-            out = predictions[0][i].unsqueeze(0)
-            y_hat = out.argmax(1).item()
-            y_softmax = torch.softmax(out, 1)[0]
-            predicted_idx = str(y_hat)
-            named_softmax = {}
-            for idx, prob in enumerate(y_softmax.tolist()):
-                name = id2label[str(idx)]
-                named_softmax[name] = prob
-            inferences.append({
-                "class": id2label[predicted_idx],
-                "probability": named_softmax[id2label[predicted_idx]],
-                "softmax": named_softmax,
-            })
-    # Handling inference for token_classification.
-    elif mode == "token_classification":
-        raise NotImplementedError
-
-    # merge inferences output for column level prediction requests.
-    start = 0
-    merged_inferences = []
-    for index in indexes:
-        sub_inferences = inferences[start:index+1]
-        if len(sub_inferences) == 1:
-            merged_inferences.append(sub_inferences[0])
-        else:
-            names = [inf["class"] for inf in sub_inferences]
-            merged_output = merge_inferences(names)
-            merged_inferences.append(merged_output)
-        start = index
-    return merged_inferences
-
-
-def merge_inferences(inferences):
-    # TODO: replace naive implementation, simply take the max count.
-    max_count_name = max(set(inferences), key=inferences.count)
-    return {
-        "class": max_count_name,
-        "probability": 1.0 * inferences.count(max_count_name) / len(inferences),
-        "softmax": [],
-    }
 
 
 def construct_input_ref(text, tokenizer, device, mode):
