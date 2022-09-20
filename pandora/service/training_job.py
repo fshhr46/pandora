@@ -34,9 +34,9 @@ class JobStatus(str, Enum):
 
 class TrainingJob(object):
 
-    bert_base_model_name = "bert-base-chinese"
-    task_name = "sentence"
     model_type = "bert"
+    task_name = "sentence"
+    bert_base_model_name = "bert-base-chinese"
 
     def __init__(self,
                  job_id,
@@ -55,7 +55,7 @@ class TrainingJob(object):
     def __call__(self, *args, **kwds) -> None:
         arg_list = job_runner.get_training_args(
             task_name=self.task_name,
-            mode_type=self.mode_type,
+            mode_type=self.model_type,
             bert_base_model_name=self.bert_base_model_name,
             sample_size=self.sample_size,
         )

@@ -46,6 +46,7 @@ class ModelPackager(object):
         self.model_dir = model_dir
         self.eval_max_seq_length = eval_max_seq_length
 
+    # TODO: Unify this setup config with model config
     def create_setup_config_file(self, package_dir, num_labels: str):
         setup_conf = {
             "model_name": "bert-base-chinese",
@@ -74,12 +75,12 @@ class ModelPackager(object):
         if not os.path.exists(package_dir):
             os.mkdir(package_dir)
 
-        model_config = json.load(open(os.path.join(
-            self.model_dir, MODEL_CONFIG_FILE_NAME)))
+        id2label = json.load(open(os.path.join(
+            self.model_dir, INDEX2NAME_FILE_NAME)))
 
         # create torchserve config file
         self.create_setup_config_file(
-            package_dir, len(model_config["id2label"]))
+            package_dir, len(id2label))
 
         # create package file
         self.create_package_script(package_dir)
