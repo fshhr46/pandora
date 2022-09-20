@@ -4,7 +4,6 @@ import logging
 import multiprocessing
 import os
 import json
-import pathlib
 import shutil
 import traceback
 import glob
@@ -17,6 +16,7 @@ import pandora.packaging.packager as packager
 from pandora.dataset import sentence_data
 import pandora.dataset.dataset_utils as dataset_utils
 import pandora.tools.runner_utils as runner_utils
+import pandora.tools.common as common
 
 JOB_PREFIX = "PANDORA_TRAINING"
 REPORT_DIR_NAME = "predict"
@@ -249,6 +249,21 @@ def build_model_package(
     return True, package_dir, f"Your model package is created at {package_dir}.\
                    You can copy the model package torchserve and create *.mar file by running\
                    \"sh package.sh model_name model_version\""
+
+
+def download_model_package(
+        job_id: str,
+        server_dir: str) -> Tuple[bool, str]:
+    status = get_training_status(server_dir=server_dir, job_id=job_id)
+    output_dir = get_job_output_dir(server_dir, job_id)
+    if status != JobStatus.packaged:
+        raise ValueError(
+            f"model is not yet packaged, Current status: {status}")
+    package_dir = packager.get_package_dir(output_dir)
+    package_zip_path = os.path.join(output_dir, "package.zip")
+    common.zipdir(dir_to_zip=package_dir, output_path=package_zip_path)
+    logger.info(f"created zipped package at {package_zip_path}")
+    return package_zip_path
 
 
 def get_job_output_dir(output_dir: str, job_id: str) -> str:

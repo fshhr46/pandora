@@ -12,6 +12,9 @@ docker run -d -it --mount type=bind,source=$HOME/workspace,target=/app/workspace
 ### 生成测试数据
 curl -XPOST http://127.0.0.1:18888/testdata\?id=demo_1
 
+### 或者以文件形式注入测试数据（可选，optional）
+curl -XPOST -H "Content-Type: application/json;charset=UTF-8" -d @test_data/dataset.json http://127.0.0.1:18888/ingest-dataset\?id=demo_1
+
 ### 进行数据分区
 curl -XPOST http://127.0.0.1:18888/partition\?id=demo_1
 
@@ -20,6 +23,9 @@ curl -XPOST http://127.0.0.1:18888/start\?id=demo_1
 
 ### 训练完成后打包
 curl -XPOST http://127.0.0.1:18888/package\?id=demo_1
+
+### 打包完成后可以下载模型（可选，optional）
+curl -XPOST http://127.0.0.1:18888/download\?id=test_remote_1 --output package.zip
 
 ### 打包完成后登录到docker里执行注册脚本
 docker exec -it --user root torchserve_demo bash -c "cd /app/workspace/pandora_outputs/PANDORA_TRAINING_demo_1/torchserve_package && bash register.sh demo 1.0"

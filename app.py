@@ -2,6 +2,9 @@ import logging
 import argparse
 import os
 import shutil
+import json
+import pathlib
+import traceback
 
 from pandora.tools.common import logger
 import pandora.service.training_job as training_job
@@ -9,8 +12,12 @@ import pandora.service.server as server
 import pandora.dataset.dataset_utils as dataset_utils
 
 
-from flask import Flask, jsonify, request
-
+from flask import (
+    Flask,
+    jsonify,
+    request,
+    send_file
+)
 
 flaskApp = Flask("Pandora")
 flaskApp.config['JSON_AS_ASCII'] = False
@@ -175,6 +182,16 @@ def start_packaging():
     return jsonify(output)
 
 
+@flaskApp.route('/download', methods=['POST'])
+def download_package():
+    job_id = _get_job_id(args=request.args)
+    package_zip_path = training_job.download_model_package(
+        job_id=job_id,
+        server_dir=server.output_dir,
+    )
+    return send_file(package_zip_path)
+
+
 @flaskApp.route('/testdata', methods=['POST'])
 def get_output_path():
     job_id = _get_job_id(args=request.args)
@@ -189,11 +206,39 @@ def get_output_path():
     except Exception as e:
         return {
             "success": False,
-            "message": e
+            "message": traceback.format_exc()
         }
     return {
         "success": True,
         "message": ""
+    }
+
+
+@flaskApp.route('/ingest-dataset', methods=['POST'])
+def ingest_dataset():
+    job_id = _get_job_id(args=request.args)
+    try:
+        job_output_dir = training_job.get_job_output_dir(
+            server.output_dir, job_id)
+        file_dir = pathlib.Path(job_output_dir)
+        file_dir.mkdir(parents=True, exist_ok=True)
+        dataset_json = request.get_json()
+        dataset_file_name = "dataset.json"
+        dataset_path = os.path.join(job_output_dir, dataset_file_name)
+        if not dataset_json:
+            raise ValueError("invalid input json")
+        with open(dataset_path, 'w') as f:
+            json.dump(dataset_json, f, ensure_ascii=False)
+    except Exception as e:
+        return {
+            "success": False,
+            "message": traceback.format_exc(),
+            "dataset_path": None
+        }
+    return {
+        "success": True,
+        "message": f"ingested dataset to {dataset_path}",
+        "dataset_path": dataset_path
     }
 
 

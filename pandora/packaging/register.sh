@@ -22,12 +22,20 @@ if [ "$model_version" == "" ]; then
   Usage
 fi
 
+model_store_path=$3
+if [ "$model_store_path" != "" ]; then
+  echo "overriding model_store_path to ${model_store_path}"
+else
+  model_store_path="/home/model-server/model-store"
+  echo "using default model_store_path ${model_store_path}"
+fi
+
 # create archive file
 bash package.sh $model_name $model_version
 
 # copy to model-store
 versioned_name="${model_name}-${model_version}.mar"
-cp $model_name.mar /home/model-server/model-store/$versioned_name
+cp $model_name.mar $model_store_path/$versioned_name
 
 # register
 curl -X POST "http://localhost:8081/models?url=${versioned_name}&batch_size=3"

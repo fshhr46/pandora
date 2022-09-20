@@ -14,6 +14,7 @@ import pandora.packaging.feature as feature
 import pandora.tools.runner_utils as runner_utils
 from pandora.tools.common import logger
 from pandora.callback.progressbar import ProgressBar
+import pandora.tools.mps_utils as mps_utils
 
 TEST_DATASETS = [
     Dataset.synthetic_data
@@ -21,7 +22,119 @@ TEST_DATASETS = [
 
 datasets = TEST_DATASETS
 
-device = torch.device("cuda")
+# TODO: Setup M1 chip
+if torch.cuda.is_available():
+    device_name = "cuda"
+elif mps_utils.has_mps:
+    device_name = "mps"
+else:
+    device_name = "cpu"
+logger.info(f"device_name is {device_name}")
+device = torch.device(device_name)
+
+
+def get_test_data():
+    data = [
+        {"text": "郑平", "label": ["中国人名"]},
+        {"text": "王军", "label": ["中国人名"]},
+        {"text": "孙惠", "label": ["中国人名"]},
+        {"text": "王林", "label": ["中国人名"]},
+        {"text": "王敬", "label": ["中国人名"]},
+        {"text": "吴惠", "label": ["中国人名"]},
+        {"text": "李华", "label": ["中国人名"]},
+        {"text": "钱敬", "label": ["中国人名"]},
+        {"text": "吴军", "label": ["中国人名"]},
+        {"text": "孙敬", "label": ["中国人名"]},
+        {"text": "钱林", "label": ["中国人名"]},
+        {"text": "吴军", "label": ["中国人名"]},
+        {"text": "吴平", "label": ["中国人名"]},
+        {"text": "郑兵", "label": ["中国人名"]},
+        {"text": "吴兵", "label": ["中国人名"]},
+        {"text": "钱平", "label": ["中国人名"]},
+        {"text": "孙敬", "label": ["中国人名"]},
+        {"text": "孙明", "label": ["中国人名"]},
+        {"text": "钱明", "label": ["中国人名"]},
+        {"text": "郑兵", "label": ["中国人名"]},
+        {"text": "郑华", "label": ["中国人名"]},
+        {"text": "周华", "label": ["中国人名"]},
+        {"text": "孙军", "label": ["中国人名"]},
+        {"text": "吴明", "label": ["中国人名"]},
+        {"text": "赵敬", "label": ["中国人名"]},
+        {"text": "周林", "label": ["中国人名"]},
+        {"text": "郑明", "label": ["中国人名"]},
+        {"text": "赵兵", "label": ["中国人名"]},
+        {"text": "王平", "label": ["中国人名"]},
+        {"text": "郑敬", "label": ["中国人名"]},
+        {"text": "钱兵", "label": ["中国人名"]},
+        {"text": "吴兵", "label": ["中国人名"]},
+        {"text": "郑军", "label": ["中国人名"]},
+        {"text": "钱惠", "label": ["中国人名"]},
+        {"text": "赵敬", "label": ["中国人名"]},
+        {"text": "孙惠", "label": ["中国人名"]},
+        {"text": "周兵", "label": ["中国人名"]},
+        {"text": "李华", "label": ["中国人名"]},
+        {"text": "钱林", "label": ["中国人名"]},
+        {"text": "周兵", "label": ["中国人名"]},
+        {"text": "孙平", "label": ["中国人名"]},
+        {"text": "newtongutmann@mcdermott.name", "label": ["邮箱地址"]},
+        {"text": "destanywatsica@rutherford.info", "label": ["邮箱地址"]},
+        {"text": "macborer@goyette.com", "label": ["邮箱地址"]},
+        {"text": "cassidyparker@nienow.name", "label": ["邮箱地址"]},
+        {"text": "mitchellmueller@hauck.info", "label": ["邮箱地址"]},
+        {"text": "charleswiza@grimes.com", "label": ["邮箱地址"]},
+        {"text": "akeemschultz@russel.io", "label": ["邮箱地址"]},
+        {"text": "trevakautzer@robel.name", "label": ["邮箱地址"]},
+        {"text": "marjolainepredovic@brakus.org", "label": ["邮箱地址"]},
+        {"text": "isaijewess@ernser.com", "label": ["邮箱地址"]},
+        {"text": "kariannelittel@skiles.io", "label": ["邮箱地址"]},
+        {"text": "josuehoppe@considine.io", "label": ["邮箱地址"]},
+        {"text": "abbywuckert@sauer.com", "label": ["邮箱地址"]},
+        {"text": "randalpredovic@breitenberg.io", "label": ["邮箱地址"]},
+        {"text": "casperwhite@orn.net", "label": ["邮箱地址"]},
+        {"text": "morrisstoltenberg@wisozk.name", "label": ["邮箱地址"]},
+        {"text": "sanfordmayer@rosenbaum.io", "label": ["邮箱地址"]},
+        {"text": "kylerlegros@gerlach.com", "label": ["邮箱地址"]},
+        {"text": "eleazarhoppe@considine.net", "label": ["邮箱地址"]},
+        {"text": "aminaprohaska@denesik.name", "label": ["邮箱地址"]},
+        {"text": "irmafay@bernhard.name", "label": ["邮箱地址"]},
+        {"text": "randiwunsch@dach.org", "label": ["邮箱地址"]},
+        {"text": "kaylincormier@crooks.org", "label": ["邮箱地址"]},
+        {"text": "erickgoldner@fadel.org", "label": ["邮箱地址"]},
+        {"text": "mariaroberts@von.net", "label": ["邮箱地址"]},
+        {"text": "clarissajacobi@ferry.org", "label": ["邮箱地址"]},
+        {"text": "stephanyrippin@beahan.net", "label": ["邮箱地址"]},
+        {"text": "karinekoss@bartell.com", "label": ["邮箱地址"]},
+        {"text": "caliullrich@gerlach.org", "label": ["邮箱地址"]},
+        {"text": "clemmietreutel@padberg.net", "label": ["邮箱地址"]},
+        {"text": "gordondoyle@lockman.info", "label": ["邮箱地址"]},
+        {"text": "meaghanferry@wunsch.name", "label": ["邮箱地址"]},
+        {"text": "ianmosciski@funk.name", "label": ["邮箱地址"]},
+        {"text": "carterstreich@schimmel.info", "label": ["邮箱地址"]},
+        {"text": "wendyrau@towne.com", "label": ["邮箱地址"]},
+        {"text": "brionnaparisian@jacobi.com", "label": ["邮箱地址"]},
+        {"text": "hipolitohowell@bradtke.name", "label": ["邮箱地址"]},
+        {"text": "duanekihn@kunde.biz", "label": ["邮箱地址"]},
+        {"text": "madonnaoberbrunner@daugherty.info", "label": ["邮箱地址"]},
+        {"text": "estefaniacarroll@paucek.io", "label": ["邮箱地址"]},
+        {"text": "heberkuvalis@zieme.org", "label": ["邮箱地址"]},
+        {"text": "winnifredgreenholt@hills.io", "label": ["邮箱地址"]},
+        {"text": "linneaterry@mayert.biz", "label": ["邮箱地址"]},
+        {"text": "taureandoyle@boyle.com", "label": ["邮箱地址"]},
+        {"text": "garrisonwillms@kertzmann.org", "label": ["邮箱地址"]},
+        {"text": "koreywalker@hintz.org", "label": ["邮箱地址"]},
+        {"text": "daytonsanford@osinski.org", "label": ["邮箱地址"]},
+        {"text": "saigebecker@spinka.net", "label": ["邮箱地址"]},
+        {"text": "claregrady@pfannerstill.io", "label": ["邮箱地址"]},
+        {"text": "bridiemuller@glover.name", "label": ["邮箱地址"]},
+        {"text": "coltentillman@metz.io", "label": ["邮箱地址"]},
+        {"text": "ethelkilback@huels.net", "label": ["邮箱地址"]},
+        {"text": "lailalang@rosenbaum.com", "label": ["邮箱地址"]},
+        {"text": "ozellakihn@oberbrunner.com", "label": ["邮箱地址"]},
+        {"text": "mavisjohnston@durgan.com", "label": ["邮箱地址"]},
+        {"text": "stephaniewaters@bailey.io", "label": ["邮箱地址"]},
+        {"text": "odacrooks@oreilly.org", "label": ["邮箱地址"]},
+    ]
+    return [json.dumps(line) for line in data]
 
 
 def load_model():
@@ -106,7 +219,8 @@ def inference_online(text: str, pp):
     # time.sleep(1)
     model_name = "synthetic"
     version = "1"
-    url = f"http://localhost:18080/predictions/{model_name}/{version}"
+    url = "http://10.0.1.48:18080/predictions"
+    url = f"{url}/{model_name}/{version}"
     result = make_request(url, False, {"data": text})
     return result
 
@@ -121,9 +235,11 @@ def test_online(lines):
         res = inference_online(text, pp)
         pred = res["class"]
         label = obj["label"][0]
-        if pred != label:
-            incorrect += 1
+        if pred != label or True:
+            incorrect += 1 if pred != label else 0
             logger.info("")
+            logger.info("=========")
+            logger.info(pred != label)
             logger.info(pred)
             logger.info(label)
             logger.info(res)
@@ -198,18 +314,15 @@ def compare(lines):
 
 if __name__ == '__main__':
     init_logger(log_file=None)
+
+    home = str(Path.home())
     # =========== test
-    # test_file = "/home/haoranhuang/workspace/resource/datasets/synthetic_data/test.json"
-    # test_file = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/synthetic_data_1000/predict/test_submit.json"
-    test_file = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/synthetic_data/predict/test_submit.json"
+    test_file = f"{home}/workspace/resource/datasets/synthetic_data/test.json"
+    test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data_1000/predict/test_submit.json"
+    test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data/predict/test_submit.json"
     data = open(test_file)
-    # data = [
-    #     json.dumps({"text": "440602199110191812",
-    #                "label": ["个人信息"], "pred": ["个人信息"]}, ),
-    #     json.dumps({"text": "13702557628", "label": ["个人信息"]}),
-    #     json.dumps({"text": "137-02557628", "label": ["个人信息"]}),
-    # ]
-    lines = [line for line in data]
-    test_offline(lines)
-    # test_online(lines)
+
+    # run_inference_online(lines)
+    # test_offline(lines)
+    test_online(lines)
     # compare(lines)
