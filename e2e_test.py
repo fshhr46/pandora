@@ -40,9 +40,9 @@ def start_test_server(host, port, output_dir):
     app.server.run(args)
 
 
-def make_request(url: str, post: bool = False):
+def make_request(url: str, post: bool = False, json_data=None):
     if post:
-        url_obj = requests.post(url)
+        url_obj = requests.post(url, json=json_data)
     else:
         url_obj = requests.get(url)
     text = url_obj.text
@@ -139,7 +139,8 @@ def test_training_success():
     print(f"test Job ID is {job_id}")
 
     # prepare datadir
-    prepare_job_data(job_id=job_id)
+    prepare_job_data(job_id=job_id, file_path=os.path.join(
+        "test_data",  "dataset.json"))
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
@@ -182,9 +183,15 @@ def test_training_success():
         f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
 
 
-def prepare_job_data(job_id):
-    assert make_request(
-        f"{get_url()}/testdata?id={job_id}", post=True)["success"]
+def prepare_job_data(job_id, file_path=None):
+    if file_path:
+        with open(file_path) as f:
+            dataset = json.load(f)
+            assert make_request(
+                f"{get_url()}/ingest-dataset?id={job_id}", post=True, json_data=dataset)["success"]
+    else:
+        assert make_request(
+            f"{get_url()}/testdata?id={job_id}", post=True)["success"]
 
 
 # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers
