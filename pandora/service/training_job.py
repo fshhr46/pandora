@@ -1,13 +1,13 @@
 from enum import Enum
 from genericpath import isdir, isfile
 import logging
-import multiprocessing
 import os
 import json
 import shutil
 import traceback
 import glob
 
+import torch.multiprocessing as mp
 from typing import Dict, Tuple, List
 from pandora.dataset import poseidon_data
 import pandora.service.job_runner as job_runner
@@ -109,8 +109,8 @@ def start_training_job(
         output_dir=output_dir,
         cache_dir=cache_dir,
         sample_size=sample_size)
-    job_process = multiprocessing.Process(
-        name=_get_job_folder_name_by_id(job_id=job_id), target=job)
+    mp.set_start_method("spawn", force=True)
+    job_process = mp.Process(name=_get_job_folder_name_by_id(job_id=job_id), target=job)
     job_process.daemon = True
     job_process.start()
     message = f'Started training job with ID {job_id}'
@@ -214,8 +214,8 @@ def get_training_status(server_dir: str, job_id: str) -> JobStatus:
             return JobStatus.not_started
 
 
-def list_training_jobs() -> Dict[str, multiprocessing.Process]:
-    all_processes = multiprocessing.active_children()
+def list_training_jobs() -> Dict[str, mp.Process]:
+    all_processes = mp.active_children()
     training_jobs = list(filter(lambda process: process.name.startswith(
         JOB_PREFIX), all_processes))
     logger.info(
