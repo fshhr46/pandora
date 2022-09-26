@@ -12,8 +12,17 @@ class DataEntryEncoder(json.JSONEncoder):
 
 @dataclass
 class DataEntry(object):
+    def __init__(self,
+                 text: str,
+                 label: str,
+                 column_name: str = None,
+                 ) -> None:
+        self.text = text
+        self.label = label
+        self.column_name = column_name
     text: str
     label: List
+    column_name: str
 
 
 def split_dataset(all_samples, data_ratios, seed) -> Dict:

@@ -3,19 +3,7 @@ import shutil
 from pathlib import Path
 
 import pandora.service.job_runner as job_runner
-from pandora.dataset.sentence_data import Dataset
 import pandora.packaging.packager as packager
-
-
-# TODO: TEST_DATASETS should be input parameter
-TEST_DATASETS = list(Dataset)
-TEST_DATASETS = [
-    Dataset.synthetic_data,
-    # Dataset.column_data_all,
-    # Dataset.short_sentence,
-    # Dataset.long_sentence,
-]
-TEST_DATASETS.sort()
 
 
 def main():
@@ -27,6 +15,23 @@ def main():
     task_name = "sentence"
     model_type = "bert"
     bert_base_model_name = "bert-base-chinese"
+
+    # Build dataset
+    num_data_entry_train = 30
+    num_data_entry_test = 1000
+    dataset_name = f"synthetic_data_{num_data_entry_train}_{num_data_entry_test}"
+    output_dir = os.path.join(resource_dir, "outputs",
+                              bert_base_model_name, dataset_name)
+    import build_synthetic_datasets as dataset_builder
+
+    dataset_builder.build_dataset(
+        dataset_name=dataset_name,
+        num_data_entry_train=num_data_entry_train,
+        num_data_entry_test=num_data_entry_test,
+    )
+    datasets = [dataset_name]
+
+    # Set args
     arg_list = job_runner.get_training_args(
         task_name=task_name,
         mode_type=model_type,
@@ -38,7 +43,7 @@ def main():
             resource_dir,
             cache_dir,
             bert_base_model_name=bert_base_model_name,
-            datasets=TEST_DATASETS,
+            datasets=datasets,
         ))
     arg_list.extend(
         job_runner.set_actions(
@@ -47,18 +52,19 @@ def main():
             do_predict=True,
         ))
     resource_dir = os.path.join(Path.home(), "workspace", "resource")
+
+    # Start training
     args = job_runner.train_eval_test(arg_list, resource_dir=resource_dir,
-                                      datasets=TEST_DATASETS)
+                                      datasets=datasets)
 
     # packaging
-    dataset_names = "_".join(TEST_DATASETS)
-    output_dir = os.path.join(resource_dir, "outputs",
-                              bert_base_model_name, dataset_names)
     pkger = packager.ModelPackager(
         model_dir=output_dir,
         eval_max_seq_length=args.eval_max_seq_length)
     package_dir = packager.get_package_dir(model_dir=output_dir)
-    shutil.rmtree(package_dir)
+
+    if os.path.exists(package_dir):
+        shutil.rmtree(package_dir)
     assert not os.path.isdir(
         package_dir), f"package_dir {package_dir} already exists, please delete"
     pkger.build_model_package()

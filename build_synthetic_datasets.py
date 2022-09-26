@@ -1,75 +1,86 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from cgi import print_directory
+from distutils.command.config import config
 import json
 import os
 import pathlib
 from dataclasses import fields
 
-import mysql.connector
-
 from pandora.data.encoder import DataJSONEncoder
-from pandora.dataset.configs import (
-    DATA_GENERATORS,
-    DATA_CLASSES,
-    CLASSIFICATION_COLUMN_2_LABEL_ID,
-    CLASSIFICATION_LABELS,
-)
+import pandora.dataset.configs as configs
 
 import pandora.dataset.dataset_utils as dataset_utils
 
 
-def generate_column_names(output_dir):
-    column_names = []
-    for data_class in DATA_CLASSES:
-        column_names.extend(data_class.__annotations__.keys())
-    with open(os.path.join(output_dir, "column_names.json"), "w") as fr:
-        json.dump(column_names, fr, ensure_ascii=False)
-    print(column_names)
-    return column_names
-
-
 def generate_data(
         dataset_name,
-        num_data_entry, output_dir, generators, labels,
-        ingest_data=True):
-    column_names = generate_column_names(output_dir=output_dir)
-    data_file = os.path.join(output_dir, "synthetic_raw.json")
+        database_name,
+        num_data_entry,
+        output_dir,
+        generators,
+        labels,
+        column_name_2_label,
+        is_test_data=False
+):
+    column_names_to_include = sorted(column_name_2_label.keys())
+    print(f"column_names_to_include is {column_names_to_include}")
+    data_file = os.path.join(output_dir, f"{dataset_name}.json")
     dataset = []
-    with open(os.path.join(output_dir, "data_table.json"), "w") as table_fr:
+    with open(os.path.join(output_dir, f"{dataset_name}_data_table.json"), "w") as table_fr:
         with open(data_file, "w") as raw_data_fr:
             for _ in range(num_data_entry):
                 data_entry = {}
                 for generator in generators:
-                    data = generator().generate()
+                    data = generator(is_test_data=is_test_data).generate()
                     for f in fields(data):
+                        if f.name not in column_names_to_include:
+                            continue
                         val = getattr(data, f.name)
                         if f.name in data_entry:
-                            raise "key conflict: {f.name} already exists in output"
-
-                        if f.name not in CLASSIFICATION_COLUMN_2_LABEL_ID:
-                            raise "{f.name} is not labeled. Labels:\n {CLASSIFICATION_COLUMN_2_LABEL_ID}"
+                            print(
+                                f"key conflict: {f.name} already exists in output")
+                            print(data_entry)
+                            raise
                         data_entry[f.name] = val
 
                         # Write training data
                         out_line = {
-                            "text": val, "label": CLASSIFICATION_COLUMN_2_LABEL_ID[f.name]}
+                            "text": val,
+                            "label": column_name_2_label[f.name]}
+                        out_line["column_name"] = f.name
                         json.dump(out_line, raw_data_fr, ensure_ascii=False)
                         raw_data_fr.write("\n")
+                # Sort data_entry so it aligns with column name's order
+                mysql_data_row = sorted(
+                    data_entry.items(), key=lambda k_v: k_v[0])
                 # write table data
                 json.dump(data_entry, table_fr, ensure_ascii=False, sort_keys=True,
                           cls=DataJSONEncoder)
-                dataset.append(data_entry)
+                dataset.append(mysql_data_row)
                 table_fr.write("\n")
     dataset_utils.write_labels(output_dir=output_dir, labels=labels)
 
-    if ingest_data:
+    # Check if mysql is available
+    host = "10.0.1.178"
+    port = "7733"
+    response = os.system("ping -c 1 " + host)
+    # and then check the response...
+    if response == 0:
         print("ingesting data to mysql")
         create_table(
-            table_name=dataset_name)
+            table_name=dataset_name,
+            database_name=database_name,
+            host=host,
+            port=port,
+        )
         ingest_to_mysql(
             table_name=dataset_name,
-            column_names=column_names,
+            database_name=database_name,
+            host=host,
+            port=port,
+            column_names=column_names_to_include,
             dataset=dataset)
     return data_file
 
@@ -82,8 +93,7 @@ def partition_data(output_dir, data_file, data_ratios, seed):
             all_samples.append(data_entry)
     data_partitions = dataset_utils.split_dataset(
         all_samples=all_samples, data_ratios=data_ratios, seed=seed)
-    dataset_utils.write_partitions(
-        data_partitions, output_dir)
+    return data_partitions
 
 
 # alias vm_178_mysql_l="mysql -h 10.0.1.178 -u root -pSudodata-123 -P 7733"
@@ -93,12 +103,13 @@ def partition_data(output_dir, data_file, data_ratios, seed):
 # alias vm_me_mysql="mysql -h 10.0.1.48 -u root -pSudodata-123 -P 33039"
 def create_table(
     table_name,
-    database_name='training_test_data',
-    host="10.0.1.48",
-    port="33039",
+    database_name,
+    host="10.0.1.178",
+    port="7733",
     user="root",
     password="Sudodata-123",
 ):
+    import mysql.connector
     connection = mysql.connector.connect(
         host=host,
         port=port,
@@ -126,12 +137,13 @@ def ingest_to_mysql(
     table_name,
     column_names,
     dataset,
-    database_name='training_test_data',
-    host="10.0.1.48",
-    port="33039",
+    database_name,
+    host="10.0.1.178",
+    port="7733",
     user="root",
     password="Sudodata-123",
 ):
+    import mysql.connector
     connection = mysql.connector.connect(
         host=host,
         port=port,
@@ -140,6 +152,7 @@ def ingest_to_mysql(
     )
     cursor = connection.cursor()
     try:
+        # create table
         cursor.execute(f"use {database_name}")
         columns_query = ", \n".join(
             [f"{col} VARCHAR(50)" for col in column_names])
@@ -151,8 +164,7 @@ def ingest_to_mysql(
         # insert data
         values_template = ", ".join(["%s"] * len(column_names))
         mySql_insert_query = f"INSERT INTO {table_name} VALUES ({values_template})"
-
-        records_to_insert = [tuple(list(data_entry.values()))
+        records_to_insert = [tuple([k_v[1] for k_v in data_entry])
                              for data_entry in dataset]
         cursor.executemany(mySql_insert_query, records_to_insert)
         connection.commit()
@@ -167,21 +179,53 @@ def ingest_to_mysql(
             print("MySQL connection is closed")
 
 
-if __name__ == '__main__':
+def build_dataset(
+    dataset_name="synthetic_data",
+    num_data_entry_train=1000,
+    num_data_entry_test=1000,
+):
     # output_dir = os.path.join(
     #     pathlib.Path.home(), "workspace", "resource", "outputs", "bert-base-chinese", "synthetic_data", "datasets", "synthetic_data")
-    dataset_name = "synthetic_data"
+    database_name = 'pandora'
     output_dir = os.path.join(
         pathlib.Path.home(), "workspace", "resource", "datasets", dataset_name)
+    print(f"dataset output_dir is {output_dir}")
 
     os.makedirs(output_dir, exist_ok=True)
-    num_data_entry = 100
-    data_file = generate_data(
-        dataset_name=dataset_name,
-        num_data_entry=num_data_entry, output_dir=output_dir,
-        generators=DATA_GENERATORS, labels=CLASSIFICATION_LABELS,
-        ingest_data=True)
-    data_ratios = {"train": 0.6, "dev": 0.2, "test": 0.2}
+    # Create train / eval data
     seed = 42
-    partition_data(output_dir, data_file=data_file,
-                   data_ratios=data_ratios, seed=seed)
+    data_file_train = generate_data(
+        dataset_name=f"{dataset_name}_train",
+        database_name=database_name,
+        num_data_entry=num_data_entry_train, output_dir=output_dir,
+        generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
+        is_test_data=False,
+        column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TRAIN)
+    data_ratios_train = {"train": 0.8, "dev": 0.2, "test": 0.0}
+    data_partitions_train_dev = partition_data(output_dir, data_file=data_file_train,
+                                               data_ratios=data_ratios_train, seed=seed)
+
+    # Create test data
+    data_file_test = generate_data(
+        dataset_name=f"{dataset_name}_test",
+        database_name=database_name,
+        num_data_entry=num_data_entry_test, output_dir=output_dir,
+        generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
+        is_test_data=True,
+        column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST)
+    data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
+    data_partitions_test = partition_data(output_dir, data_file=data_file_test,
+                                          data_ratios=data_ratios_test, seed=seed)
+
+    data_partitions = {
+        "train": data_partitions_train_dev["train"],
+        "dev": data_partitions_train_dev["dev"],
+        "test": data_partitions_test["test"]
+    }
+    # dump output
+    dataset_utils.write_partitions(
+        data_partitions, output_dir)
+
+
+if __name__ == '__main__':
+    build_dataset()

@@ -17,8 +17,8 @@ from pandora.data.generators.generator_base import DataGeneratorBase
 
 class PersonalInfoGenerator(DataGeneratorBase):
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self.id_pool = set()
 
     @classmethod

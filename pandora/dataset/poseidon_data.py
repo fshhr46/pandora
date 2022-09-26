@@ -91,7 +91,9 @@ def partition_poseidon_dataset(
     col_data = dataset["column_data"]
     data_by_tag_ids = {}
     for col_id, column_data in col_data.items():
+
         col_tag_ids = column_data["tag_ids"]
+        column_name = column_data["column_name"]
 
         for col_tag_id in col_tag_ids:
             # check if tag_id is valid
@@ -109,13 +111,15 @@ def partition_poseidon_dataset(
             col_text = tag_data[col_id]
 
             # Add data entry
+            # TODO: Hard Coded list
             for data_entry in column_data["recognition_data"]:
                 tag_name = tags_by_id[col_tag_id]["name"]
                 col_text.append(
                     dataset_utils.DataEntry(
                         text=data_entry["content"],
                         label=[_create_unique_label_name(
-                            tag_name=tag_name, tag_id=col_tag_id)]
+                            tag_name=tag_name, tag_id=col_tag_id)],
+                        column_name=column_name,
                     ))
 
     # added up partitions for all tags and columns

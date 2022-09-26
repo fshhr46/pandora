@@ -30,7 +30,8 @@ def build_train_report(examples, predictions, report_dir, processor):
         json_d = {}
         json_d['guid'] = x.id
         json_d['text'] = x.sentence
-        json_d['words'] = x.words
+        # TODO : Remove this commented out line
+        # json_d['words'] = x.words
         json_d['label'] = x.labels
         json_d['pred'] = y['tags']
         test_submit.append(json_d)

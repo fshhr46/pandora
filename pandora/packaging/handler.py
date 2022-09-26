@@ -106,18 +106,18 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             input_ids_batch,
             attention_mask_batch,
             segment_ids_batch,
-            input_text):
+            input_text,
+            column_name: str):
         if isinstance(input_text, (bytes, bytearray)):
             input_text = input_text.decode("utf-8")
         if self.setup_config["captum_explanation"]:
             input_text_target = ast.literal_eval(input_text)
             input_text = input_text_target["text"]
-        logger.info(f"input_text is {input_text}")
-
+        logger.debug(f"input_text is {input_text}")
+        logger.debug(f"column_name is {column_name}")
         max_length = self.setup_config["max_length"]
-        logger.info("Received text: '%s'", input_text)
-
-        line = feature.read_json_line(line_obj={"text": input_text})
+        line = feature.read_json_line(
+            line_obj={"text": input_text, "column_name": column_name})
         # TODO: fix this hack: id=""
         example = feature.create_example(id="", line=line)
         feat = feature.convert_example_to_feature(
@@ -169,11 +169,17 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             elif "data" in data:
                 # Get request expects every reqeusts has one input string
                 input_text = data.get("data")
+                if input_text:
+                    input_text = input_text.decode("utf-8")
+                column_name = data.get("column_name")
+                if column_name:
+                    column_name = column_name.decode("utf-8")
                 input_ids_batch, attention_mask_batch, segment_ids_batch = self.add_input_text_to_batch(
                     input_ids_batch,
                     attention_mask_batch,
                     segment_ids_batch,
-                    input_text)
+                    input_text,
+                    column_name)
                 num_texts += 1
                 indexes.append(num_texts)
             elif "body" in data:
@@ -188,7 +194,8 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                         input_ids_batch,
                         attention_mask_batch,
                         segment_ids_batch,
-                        json_obj["text"])
+                        json_obj["text"],
+                        json_obj.get("column_name", None))
                     num_texts += 1
                 indexes.append(num_texts)
             else:

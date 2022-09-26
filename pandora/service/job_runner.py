@@ -481,6 +481,7 @@ def predict(
         local_rank, device,
         prefix="",
         batch_size=1):
+    # TODO: Fix batch size == 1
     assert batch_size == 1
     # Note that DistributedSampler samples randomly
     test_sampler = SequentialSampler(
