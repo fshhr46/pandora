@@ -38,4 +38,7 @@ versioned_name="${model_name}-${model_version}.mar"
 cp $model_name.mar $model_store_path/$versioned_name
 
 # register
-curl -X POST "http://localhost:8081/models?url=${versioned_name}&batch_size=3"
+curl -X POST "http://localhost:8081/models?url=${versioned_name}&batch_size=1"
+
+# set default
+curl -v -X PUT "http://localhost:8081/models/${model_name}/${model_version}/set-default"
