@@ -102,7 +102,7 @@ def partition_dataset():
     else:
         json_data = {}
     logging.info(f"json input is {json_data}")
-    min_samples = json_data.get("min_samples", 20)
+    min_samples = json_data.get("min_samples", 10)
     data_ratios = json_data.get(
         "data_ratios", {"train": 0.6, "dev": 0.2, "test": 0.2})
     logging.info(f"min_samples is {min_samples}")
