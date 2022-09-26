@@ -7,3 +7,7 @@ def mask_data(origin: str, positions, mask_char="*"):
         else:
             chars[position] = mask_char
     return "".join(chars)
+
+
+def get_mask_chars():
+    return ["*", "_", "#", "X"]

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import random
 
 from pandora.data.generators.generator_base import DataGeneratorBase
-from pandora.data.mask_utils import mask_data
+import pandora.data.mask_utils as mask_utils
 
 
 @dataclass
@@ -27,10 +27,6 @@ class PhoneNumber(object):
     phone_number: str
     phone_number_formatted: str
     phone_number_masked: str
-
-
-def mask_phone(phone_number: str):
-    return mask_data(phone_number, range(3, 7))
 
 
 class PhoneNumberGenerator(DataGeneratorBase):
@@ -47,8 +43,37 @@ class PhoneNumberGenerator(DataGeneratorBase):
 
         last = "".join(str(random.randint(0, 9)) for i in range(8))
         phone_number = "1{}{}{}".format(second, third, last)
-        phone_number_formatted = "1{}{}-{}".format(second, third, last)
-        phone_number_masked = mask_phone(phone_number)
+        phone_number_formatted = "1{}{} {}".format(second, third, last)
+        phone_number_masked = mask_utils.mask_data(
+            phone_number, positions=range(3, 7))
+        return PhoneNumber(
+            phone_number=phone_number,
+            phone_number_formatted=phone_number_formatted,
+            phone_number_masked=phone_number_masked
+        )
+
+    def _generate_test(self):
+        second = random.choice([3, 4, 5, 7, 8])
+        third = {
+            3: random.randint(0, 9),
+            4: random.choice([5, 7, 9]),
+            5: random.choice([i for i in range(10) if i != 4]),
+            7: random.choice([i for i in range(9) if i != 4]),
+            8: random.randint(0, 9),
+        }[second]
+
+        mask_char = random.choice(mask_utils.get_mask_chars())
+
+        start = random.randint(0, 4)
+        rand_len = random.randint(2, 5)
+        random_positions = range(start, start + rand_len)
+
+        last = "".join(str(random.randint(0, 9)) for i in range(8))
+        phone_number = "1{}{}{}".format(second, third, last)
+        phone_number_formatted = "1{}{} {}".format(second, third, last)
+
+        phone_number_masked = mask_utils.mask_data(
+            phone_number, mask_char=mask_char, positions=random_positions)
         return PhoneNumber(
             phone_number=phone_number,
             phone_number_formatted=phone_number_formatted,

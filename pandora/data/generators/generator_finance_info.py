@@ -19,8 +19,8 @@ def mask_card_num(card_num: str):
 
 
 class FinanceInfoGenerator(DataGeneratorBase):
-    def __init__(self, masking_func=None, locales=...) -> None:
-        super().__init__(masking_func, locales=["zh_CN", "en_US"])
+    def __init__(self, masking_func=None, locales=..., *args, **kwargs) -> None:
+        super().__init__(*args, locales=["zh_CN", "en_US"], **kwargs)
 
     def _generate(self):
         info = self.faker.credit_card_full()

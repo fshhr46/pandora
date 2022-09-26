@@ -161,7 +161,7 @@ def convert_example_to_feature(example, label2id, log_data,
 def create_example(id, line):
     words = line['words']
     labels = line['labels']
-    text = line['sentence'],
+    text = line['sentence']
     return InputExample(
         id=id, words=words, labels=labels, sentence=text)
 
@@ -329,6 +329,10 @@ def read_json_line(line_obj: Dict):
     # >> > list(words)
     # ['a', 'b', 'c', 'd', 'e', '你', '好', '啊']
     # >> >
+    # TODO: Fix this column name concat
+    column_name = line_obj.get('column_name')
+    if column_name:
+        text = f"{column_name}, {text}"
     words = list(text)
     labels = _create_labels(line_obj, words)
     return {"words": words, "labels": labels, "sentence": text}
