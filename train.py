@@ -5,6 +5,8 @@ from pathlib import Path
 import pandora.service.job_runner as job_runner
 import pandora.packaging.packager as packager
 
+from pandora.dataset.sentence_data import Dataset
+
 
 def main():
 
@@ -23,13 +25,19 @@ def main():
     output_dir = os.path.join(resource_dir, "outputs",
                               bert_base_model_name, dataset_name)
     import build_synthetic_datasets as dataset_builder
+    # datasets = [dataset_name]
+    dataset_names = [
+        Dataset.short_sentence
+    ]
 
-    dataset_builder.build_dataset(
-        dataset_name=dataset_name,
-        num_data_entry_train=num_data_entry_train,
-        num_data_entry_test=num_data_entry_test,
-    )
-    datasets = [dataset_name]
+    for dataset_name in dataset_names:
+        if dataset_name in Dataset:
+            continue
+        dataset_builder.build_dataset(
+            dataset_name=dataset_name,
+            num_data_entry_train=num_data_entry_train,
+            num_data_entry_test=num_data_entry_test,
+        )
 
     # Set args
     arg_list = job_runner.get_training_args(
@@ -43,7 +51,7 @@ def main():
             resource_dir,
             cache_dir,
             bert_base_model_name=bert_base_model_name,
-            datasets=datasets,
+            datasets=dataset_names,
         ))
     arg_list.extend(
         job_runner.set_actions(
@@ -55,7 +63,7 @@ def main():
 
     # Start training
     args = job_runner.train_eval_test(arg_list, resource_dir=resource_dir,
-                                      datasets=datasets)
+                                      datasets=dataset_names)
 
     # packaging
     pkger = packager.ModelPackager(
