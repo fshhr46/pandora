@@ -310,7 +310,7 @@ if __name__ == '__main__':
     #     print(l2)
     #     print(type(l2))
 
-    lines = open(test_file).readlines()[:100]
+    lines = open(test_file).readlines()
     assert test_online(lines) == 0
     assert test_offline(lines) == 0
     assert compare(lines) == 0
