@@ -27,6 +27,8 @@ class PhoneNumber(object):
     phone_number: str
     phone_number_formatted: str
     phone_number_masked: str
+    work_phone_number: str
+    home_phone_number: str
 
 
 class PhoneNumberGenerator(DataGeneratorBase):
@@ -49,7 +51,9 @@ class PhoneNumberGenerator(DataGeneratorBase):
         return PhoneNumber(
             phone_number=phone_number,
             phone_number_formatted=phone_number_formatted,
-            phone_number_masked=phone_number_masked
+            phone_number_masked=phone_number_masked,
+            work_phone_number=phone_number,
+            home_phone_number=phone_number,
         )
 
     def _generate_test(self):
@@ -77,5 +81,7 @@ class PhoneNumberGenerator(DataGeneratorBase):
         return PhoneNumber(
             phone_number=phone_number,
             phone_number_formatted=phone_number_formatted,
-            phone_number_masked=phone_number_masked
+            phone_number_masked=phone_number_masked,
+            work_phone_number=phone_number,
+            home_phone_number=phone_number,
         )

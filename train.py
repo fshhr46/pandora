@@ -19,19 +19,24 @@ def main():
     bert_base_model_name = "bert-base-chinese"
 
     # Build dataset
-    num_data_entry_train = 30
-    num_data_entry_test = 1000
-    dataset_name = f"synthetic_data_{num_data_entry_train}_{num_data_entry_test}"
+    num_data_entry_train = 100
+    num_data_entry_test = 10
+
+    # dataset_name_prefix = "synthetic_data"
+    dataset_name_prefix = "pandora_demo_meta"
+    dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
     output_dir = os.path.join(resource_dir, "outputs",
                               bert_base_model_name, dataset_name)
+
     import build_synthetic_datasets as dataset_builder
-    # datasets = [dataset_name]
     dataset_names = [
         Dataset.short_sentence
     ]
+    # dataset_names = [dataset_name]
 
+    default_datasets = [e.value for e in Dataset]
     for dataset_name in dataset_names:
-        if dataset_name in Dataset:
+        if dataset_name in default_datasets:
             continue
         dataset_builder.build_dataset(
             dataset_name=dataset_name,

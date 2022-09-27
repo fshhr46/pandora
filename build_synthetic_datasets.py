@@ -9,7 +9,6 @@ import pathlib
 from dataclasses import fields
 
 from pandora.data.encoder import DataJSONEncoder
-import pandora.dataset.configs as configs
 
 import pandora.dataset.dataset_utils as dataset_utils
 
@@ -181,8 +180,8 @@ def ingest_to_mysql(
 
 def build_dataset(
     dataset_name="synthetic_data",
-    num_data_entry_train=1000,
-    num_data_entry_test=1000,
+    num_data_entry_train=10,
+    num_data_entry_test=10,
 ):
     # output_dir = os.path.join(
     #     pathlib.Path.home(), "workspace", "resource", "outputs", "bert-base-chinese", "synthetic_data", "datasets", "synthetic_data")
@@ -194,6 +193,10 @@ def build_dataset(
     os.makedirs(output_dir, exist_ok=True)
     # Create train / eval data
     seed = 42
+
+    # import pandora.dataset.configs as configs
+    import pandora.dataset.configs_demo as configs
+
     data_file_train = generate_data(
         dataset_name=f"{dataset_name}_train",
         database_name=database_name,

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import random
 
 from pandora.data.generators.generator_base import DataGeneratorBase
 from pandora.data.mask_utils import mask_data
@@ -34,4 +35,34 @@ class FinanceInfoGenerator(DataGeneratorBase):
             card_num_masked=mask_card_num(card_num),
             card_expir_date=expir_date,
             card_cvc=cvc
+        )
+
+
+@dataclass
+class FinanceReport(object):
+    sales_agg: str
+    sales_aag: str
+    q1_rev_total: str
+    q2_rev_total: str
+    q3_rev_total: str
+    q4_rev_total: str
+    q1_rev_growth: str
+    q2_rev_growth: str
+    q3_rev_growth: str
+    q4_rev_growth: str
+
+
+class FinanceReportGenerator(DataGeneratorBase):
+    def _generate(self):
+        return FinanceReport(
+            sales_agg=random.randint(10000000, 99999999),
+            sales_aag=random.randint(10000000, 99999999),
+            q1_rev_total=random.randint(1000000, 9999999),
+            q2_rev_total=random.randint(1000000, 9999999),
+            q3_rev_total=random.randint(1000000, 9999999),
+            q4_rev_total=random.randint(1000000, 9999999),
+            q1_rev_growth=random.randint(100000, 999999),
+            q2_rev_growth=random.randint(100000, 999999),
+            q3_rev_growth=random.randint(100000, 999999),
+            q4_rev_growth=random.randint(100000, 999999),
         )
