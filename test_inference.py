@@ -1,3 +1,4 @@
+from tkinter.messagebox import NO
 import pandora.packaging.inference as inference
 from pandora.tools.common import init_logger
 import torch
@@ -16,12 +17,6 @@ from pandora.tools.common import logger
 from pandora.callback.progressbar import ProgressBar
 import pandora.tools.mps_utils as mps_utils
 
-TEST_DATASETS = [
-    Dataset.synthetic_data
-]
-
-datasets = TEST_DATASETS
-
 # TODO: Setup M1 chip
 if torch.cuda.is_available():
     device_name = "cuda"
@@ -35,106 +30,50 @@ device = torch.device(device_name)
 
 def get_test_data():
     data = [
-        {"text": "郑平", "label": ["中国人名"]},
-        {"text": "王军", "label": ["中国人名"]},
-        {"text": "孙惠", "label": ["中国人名"]},
-        {"text": "王林", "label": ["中国人名"]},
-        {"text": "王敬", "label": ["中国人名"]},
-        {"text": "吴惠", "label": ["中国人名"]},
-        {"text": "李华", "label": ["中国人名"]},
-        {"text": "钱敬", "label": ["中国人名"]},
-        {"text": "吴军", "label": ["中国人名"]},
-        {"text": "孙敬", "label": ["中国人名"]},
-        {"text": "钱林", "label": ["中国人名"]},
-        {"text": "吴军", "label": ["中国人名"]},
-        {"text": "吴平", "label": ["中国人名"]},
-        {"text": "郑兵", "label": ["中国人名"]},
-        {"text": "吴兵", "label": ["中国人名"]},
-        {"text": "钱平", "label": ["中国人名"]},
-        {"text": "孙敬", "label": ["中国人名"]},
-        {"text": "孙明", "label": ["中国人名"]},
-        {"text": "钱明", "label": ["中国人名"]},
-        {"text": "郑兵", "label": ["中国人名"]},
-        {"text": "郑华", "label": ["中国人名"]},
-        {"text": "周华", "label": ["中国人名"]},
-        {"text": "孙军", "label": ["中国人名"]},
-        {"text": "吴明", "label": ["中国人名"]},
-        {"text": "赵敬", "label": ["中国人名"]},
-        {"text": "周林", "label": ["中国人名"]},
-        {"text": "郑明", "label": ["中国人名"]},
-        {"text": "赵兵", "label": ["中国人名"]},
-        {"text": "王平", "label": ["中国人名"]},
-        {"text": "郑敬", "label": ["中国人名"]},
-        {"text": "钱兵", "label": ["中国人名"]},
-        {"text": "吴兵", "label": ["中国人名"]},
-        {"text": "郑军", "label": ["中国人名"]},
-        {"text": "钱惠", "label": ["中国人名"]},
-        {"text": "赵敬", "label": ["中国人名"]},
-        {"text": "孙惠", "label": ["中国人名"]},
-        {"text": "周兵", "label": ["中国人名"]},
-        {"text": "李华", "label": ["中国人名"]},
-        {"text": "钱林", "label": ["中国人名"]},
-        {"text": "周兵", "label": ["中国人名"]},
-        {"text": "孙平", "label": ["中国人名"]},
-        {"text": "newtongutmann@mcdermott.name", "label": ["邮箱地址"]},
-        {"text": "destanywatsica@rutherford.info", "label": ["邮箱地址"]},
-        {"text": "macborer@goyette.com", "label": ["邮箱地址"]},
-        {"text": "cassidyparker@nienow.name", "label": ["邮箱地址"]},
-        {"text": "mitchellmueller@hauck.info", "label": ["邮箱地址"]},
-        {"text": "charleswiza@grimes.com", "label": ["邮箱地址"]},
-        {"text": "akeemschultz@russel.io", "label": ["邮箱地址"]},
-        {"text": "trevakautzer@robel.name", "label": ["邮箱地址"]},
-        {"text": "marjolainepredovic@brakus.org", "label": ["邮箱地址"]},
-        {"text": "isaijewess@ernser.com", "label": ["邮箱地址"]},
-        {"text": "kariannelittel@skiles.io", "label": ["邮箱地址"]},
-        {"text": "josuehoppe@considine.io", "label": ["邮箱地址"]},
-        {"text": "abbywuckert@sauer.com", "label": ["邮箱地址"]},
-        {"text": "randalpredovic@breitenberg.io", "label": ["邮箱地址"]},
-        {"text": "casperwhite@orn.net", "label": ["邮箱地址"]},
-        {"text": "morrisstoltenberg@wisozk.name", "label": ["邮箱地址"]},
-        {"text": "sanfordmayer@rosenbaum.io", "label": ["邮箱地址"]},
-        {"text": "kylerlegros@gerlach.com", "label": ["邮箱地址"]},
-        {"text": "eleazarhoppe@considine.net", "label": ["邮箱地址"]},
-        {"text": "aminaprohaska@denesik.name", "label": ["邮箱地址"]},
-        {"text": "irmafay@bernhard.name", "label": ["邮箱地址"]},
-        {"text": "randiwunsch@dach.org", "label": ["邮箱地址"]},
-        {"text": "kaylincormier@crooks.org", "label": ["邮箱地址"]},
-        {"text": "erickgoldner@fadel.org", "label": ["邮箱地址"]},
-        {"text": "mariaroberts@von.net", "label": ["邮箱地址"]},
-        {"text": "clarissajacobi@ferry.org", "label": ["邮箱地址"]},
-        {"text": "stephanyrippin@beahan.net", "label": ["邮箱地址"]},
-        {"text": "karinekoss@bartell.com", "label": ["邮箱地址"]},
-        {"text": "caliullrich@gerlach.org", "label": ["邮箱地址"]},
-        {"text": "clemmietreutel@padberg.net", "label": ["邮箱地址"]},
-        {"text": "gordondoyle@lockman.info", "label": ["邮箱地址"]},
-        {"text": "meaghanferry@wunsch.name", "label": ["邮箱地址"]},
-        {"text": "ianmosciski@funk.name", "label": ["邮箱地址"]},
-        {"text": "carterstreich@schimmel.info", "label": ["邮箱地址"]},
-        {"text": "wendyrau@towne.com", "label": ["邮箱地址"]},
-        {"text": "brionnaparisian@jacobi.com", "label": ["邮箱地址"]},
-        {"text": "hipolitohowell@bradtke.name", "label": ["邮箱地址"]},
-        {"text": "duanekihn@kunde.biz", "label": ["邮箱地址"]},
-        {"text": "madonnaoberbrunner@daugherty.info", "label": ["邮箱地址"]},
-        {"text": "estefaniacarroll@paucek.io", "label": ["邮箱地址"]},
-        {"text": "heberkuvalis@zieme.org", "label": ["邮箱地址"]},
-        {"text": "winnifredgreenholt@hills.io", "label": ["邮箱地址"]},
-        {"text": "linneaterry@mayert.biz", "label": ["邮箱地址"]},
-        {"text": "taureandoyle@boyle.com", "label": ["邮箱地址"]},
-        {"text": "garrisonwillms@kertzmann.org", "label": ["邮箱地址"]},
-        {"text": "koreywalker@hintz.org", "label": ["邮箱地址"]},
-        {"text": "daytonsanford@osinski.org", "label": ["邮箱地址"]},
-        {"text": "saigebecker@spinka.net", "label": ["邮箱地址"]},
-        {"text": "claregrady@pfannerstill.io", "label": ["邮箱地址"]},
-        {"text": "bridiemuller@glover.name", "label": ["邮箱地址"]},
-        {"text": "coltentillman@metz.io", "label": ["邮箱地址"]},
-        {"text": "ethelkilback@huels.net", "label": ["邮箱地址"]},
-        {"text": "lailalang@rosenbaum.com", "label": ["邮箱地址"]},
-        {"text": "ozellakihn@oberbrunner.com", "label": ["邮箱地址"]},
-        {"text": "mavisjohnston@durgan.com", "label": ["邮箱地址"]},
-        {"text": "stephaniewaters@bailey.io", "label": ["邮箱地址"]},
-        {"text": "odacrooks@oreilly.org", "label": ["邮箱地址"]},
+        {"guid": "test-0", "text": "对不起，我们凤县只拿实力说话",
+            "label": ["news_finance"], "pred": ["news_agriculture"]},
+        {"guid": "test-1", "text": "泰国有哪些必买的化妆品？",
+            "label": ["news_world"], "pred": ["news_world"]},
+        {"guid": "test-2", "text": "1993年美国为什么要出兵索马里？",
+            "label": ["news_world"], "pred": ["news_world"]},
+        {"guid": "test-3", "text": "去年冲亚冠恒大“送”三分，如今近况同样不佳的华夏会还人情吗？",
+            "label": ["news_sports"], "pred": ["news_sports"]},
+        {"guid": "test-4", "text": "毛骗中的邵庄",
+            "label": ["news_entertainment"], "pred": ["news_travel"]},
+        {"guid": "test-5", "text": "网上少儿编程的培训机构有哪些？",
+            "label": ["news_edu"], "pred": ["news_edu"]},
+        {"guid": "test-6", "text": "鬼谷子话术，一句话教你不被别人牵着鼻子走",
+            "label": ["news_edu"], "pred": ["news_entertainment"]},
+        {"guid": "test-7", "text": "我没钱只买得起盗版书，这可耻吗？",
+            "label": ["news_tech"], "pred": ["news_culture"]},
+        {"guid": "test-8", "text": "87版红楼梦里最幸福的两个人，因为红楼梦结缘，情定终身",
+            "label": ["news_entertainment"], "pred": ["news_culture"]},
+        {"guid": "test-9", "text": "颜强专栏：更衣室里的千万奖金",
+            "label": ["news_sports"], "pred": ["news_sports"]},
+        {"guid": "test-10", "text": "6年老员工结婚，收到老板送上的“大”红包，婚假结束他就辞职了",
+            "label": ["news_story"], "pred": ["news_story"]},
+        {"guid": "test-11", "text": "“敬礼娃娃”郎铮：想找全救我的解放军叔叔",
+            "label": ["news_sports"], "pred": ["news_military"]},
+        {"guid": "test-12", "text": "现在煤炭价格多少钱一吨?2018年煤炭行情预测会如何?上涨还是下跌？",
+            "label": ["news_agriculture"], "pred": ["news_finance"]},
+        {"guid": "test-13", "text": "生物战已让普京说破，我们是否应该警醒？",
+            "label": ["news_military"], "pred": ["news_military"]},
+        {"guid": "test-14", "text": "去日本购物有哪些APP可以参考呢？",
+            "label": ["news_tech"], "pred": ["news_travel"]},
+        {"guid": "test-15", "text": "海信电器澄清：未参与斯洛文尼亚家电收购事宜",
+            "label": ["news_tech"], "pred": ["news_finance"]},
+        {"guid": "test-16", "text": "想咨询河北大学生医保和农村医保问题，去哪里咨询？",
+            "label": ["news_edu"], "pred": ["news_edu"]},
+        {"guid": "test-17", "text": "农村俗语“男不得初一，女不得十五”，是什么意思？",
+            "label": ["news_agriculture"], "pred": ["news_culture"]},
+        {"guid": "test-18", "text": "如何评价国乒女队教练李隼：日本差中国非一星半点？",
+            "label": ["news_sports"], "pred": ["news_sports"]},
+        {"guid": "test-19", "text": "你吃过大菜糕吗？出了百色买不到！",
+            "label": ["news_travel"], "pred": ["news_travel"]},
+        {"guid": "test-20", "text": "无标题文章",
+            "label": ["news_edu"], "pred": ["news_world"]},
     ]
-    return [json.dumps(line) for line in data]
+    return [json.dumps(line, ensure_ascii=False) for line in data]
 
 
 def load_model():
@@ -151,6 +90,12 @@ def load_model():
         mode_type=mode_type,
         bert_base_model_name=bert_base_model_name,
     )
+
+    TEST_DATASETS = [
+        Dataset.short_sentence
+    ]
+
+    datasets = TEST_DATASETS
 
     arg_list.extend(
         job_runner.get_default_dirs(
@@ -194,6 +139,7 @@ def load_dataset(local_rank, tokenizer, processor, lines):
     partition = "test"
     examples = processor.create_examples(
         feature.read_json_lines(lines), partition)
+
     label_list = processor.get_labels()
     id2label = {}
     for i, label in enumerate(label_list):
@@ -205,11 +151,11 @@ def load_dataset(local_rank, tokenizer, processor, lines):
     return dataset, id2label
 
 
-def make_request(url: str, post: bool = False, data=None):
+def make_request(url: str, post: bool = False, data=None, headers=None):
     if post:
-        url_obj = requests.post(url, data=data)
+        url_obj = requests.post(url, data=data, headers=headers)
     else:
-        url_obj = requests.get(url, data=data)
+        url_obj = requests.get(url, data=data, headers=headers)
     text = url_obj.text
     data = json.loads(text)
     return data
@@ -217,34 +163,45 @@ def make_request(url: str, post: bool = False, data=None):
 
 def inference_online(text: str, pp):
     # time.sleep(1)
-    model_name = "synthetic"
+    model_name = "short_sentence"
     version = "1"
-    url = "http://10.0.1.48:18080/predictions"
+    url = "http://localhost:38080/predictions"
     url = f"{url}/{model_name}/{version}"
-    result = make_request(url, False, {"data": text})
+    result = make_request(url, False,
+                          data={"data": text},
+                          headers={'content-type': "application/x-www-form-urlencoded"})
     return result
 
 
 def test_online(lines):
     pp = pprint.PrettyPrinter(indent=4)
-
     incorrect = 0
-    for line in lines:
+    pbar = ProgressBar(n_total=len(lines), desc='comparing')
+    for step, line in enumerate(lines):
+
+        # Read baseline file data
         obj = json.loads(line)
+        pred_offline = obj["pred"][0]
+        label = obj["label"][0]
+
+        # Run inference online
         text = obj["text"]
         res = inference_online(text, pp)
-        pred = res["class"]
-        label = obj["label"][0]
-        if pred != label or True:
-            incorrect += 1 if pred != label else 0
+        pred_online = res["class"]
+
+        # Compare
+        if pred_online != pred_offline:
+            incorrect += 1
             logger.info("")
             logger.info("=========")
-            logger.info(pred != label)
-            logger.info(pred)
-            logger.info(label)
+            logger.info(
+                f"pred_online: {pred_online}, pred_offline: {pred_offline}")
+            logger.info(f"label: {label}")
             logger.info(res)
             logger.info(obj)
+        pbar(step)
     logger.info(f"incorrect: {incorrect}")
+    return incorrect
 
 
 def test_offline(lines):
@@ -253,6 +210,7 @@ def test_offline(lines):
     dataset, id2label = load_dataset(
         local_rank, tokenizer, processor, lines)
 
+    # Run inference offline and get predictions all at once
     predictions = job_runner.predict(
         model_type, model,
         id2label, dataset,
@@ -261,14 +219,30 @@ def test_offline(lines):
     assert len(predictions) == len(dataset)
 
     incorrect = 0
-    for pred, line in zip(predictions, lines):
+    pbar = ProgressBar(n_total=len(lines), desc='comparing')
+    for step, (pred, line) in enumerate(zip(predictions, lines)):
+
+        # Read baseline file data
         obj = json.loads(line)
-        if pred["tags"][0] != obj["label"][0]:
+        pred_offline = obj["pred"][0]
+        label = obj["label"][0]
+
+        # Read prediction from result
+        pred_online = pred["tags"][0]
+
+        # Compare
+        if pred_online != pred_offline:
             incorrect += 1
-            logger.info("========")
+            logger.info("")
+            logger.info("=========")
+            logger.info(
+                f"pred_online: {pred_online}, pred_offline: {pred_offline}")
+            logger.info(f"label: {label}")
             logger.info(pred)
             logger.info(obj)
+        pbar(step)
     logger.info(f"incorrect: {incorrect}")
+    return incorrect
 
 
 def compare(lines):
@@ -276,14 +250,15 @@ def compare(lines):
     dataset, id2label = load_dataset(
         local_rank, tokenizer, processor, lines)
     incorrect = 0
-    pbar = ProgressBar(n_total=len(dataset), desc='inferencing')
+    pbar = ProgressBar(n_total=len(dataset), desc='comparing')
     for step, (line, data_entry) in enumerate(zip(lines, dataset)):
-        # time.sleep(1)
-        # logger.info("========")
+
+        # Read baseline file data
         obj = json.loads(line)
-        pred = obj["pred"][0]
+        pred_offline = obj["pred"][0]
         label = obj["label"][0]
 
+        # Prepare batch data for inference
         # off-load tensors to device
         data_entry = tuple(t.to(device) for t in data_entry)
 
@@ -295,21 +270,24 @@ def compare(lines):
         # input_ids_batch, attention_mask_batch, token_type_ids, indexes
         batch = (input_ids_batch, attention_mask_batch,
                  token_type_ids_batch, [])
-        inf_results = inference.run_inference(
+        res = inference.run_inference(
             "sequence_classification", model, id2label, batch)
-        assert len(inf_results) == 1
-        inf_offline = inf_results[0]["class"]
+        assert len(res) == 1
+        pred_online = res[0]["class"]
 
-        assert len(inf_offline) == len(pred)
-        if inf_offline != pred:
+        # Compare
+        if pred_online != pred_offline:
             incorrect += 1
             logger.info("")
-            logger.info(label)
-            logger.info(inf_offline)
-            logger.info(pred)
-            logger.info(inf_results)
+            logger.info("=========")
+            logger.info(
+                f"pred_online: {pred_online}, pred_offline: {pred_offline}")
+            logger.info(f"label: {label}")
+            logger.info(res)
+            logger.info(obj)
         pbar(step)
     logger.info(f"incorrect: {incorrect}")
+    return incorrect
 
 
 if __name__ == '__main__':
@@ -320,9 +298,19 @@ if __name__ == '__main__':
     test_file = f"{home}/workspace/resource/datasets/synthetic_data/test.json"
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data_1000/predict/test_submit.json"
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data/predict/test_submit.json"
-    data = open(test_file)
+    test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/short_sentence/predict/test_submit.json"
+    # lines_1 = open(test_file).readlines()
+    # lines_2 = get_test_data()
+    # for l1, l2 in zip(lines_1, lines_2):
+    #     import time
+    #     time.sleep(1)
+    #     print("=======")
+    #     print(l1)
+    #     print(type(l1))
+    #     print(l2)
+    #     print(type(l2))
 
-    # run_inference_online(lines)
-    # test_offline(lines)
-    test_online(lines)
-    # compare(lines)
+    lines = open(test_file).readlines()[:100]
+    assert test_online(lines) == 0
+    assert test_offline(lines) == 0
+    assert compare(lines) == 0
