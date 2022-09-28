@@ -25,14 +25,14 @@ def main():
     # dataset_name_prefix = "synthetic_data"
     dataset_name_prefix = "pandora_demo_meta"
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
-    output_dir = os.path.join(resource_dir, "outputs",
-                              bert_base_model_name, dataset_name)
 
     import build_synthetic_datasets as dataset_builder
     dataset_names = [
         Dataset.short_sentence
     ]
     # dataset_names = [dataset_name]
+    output_dir = os.path.join(resource_dir, "outputs",
+                              bert_base_model_name,  "_".join(dataset_names))
 
     default_datasets = [e.value for e in Dataset]
     for dataset_name in dataset_names:
