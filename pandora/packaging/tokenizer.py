@@ -7,6 +7,7 @@ class SentenceTokenizer(BertTokenizer):
                          do_lower_case=do_lower_case, *args, **kwargs)
         self.vocab_file = str(vocab_file)
 
+    # TODO: Consider using the original BertTokenizer
     def tokenize(self, text):
         _tokens = []
         for c in text:

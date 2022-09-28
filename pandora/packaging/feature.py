@@ -108,13 +108,21 @@ def convert_example_to_feature(example, label2id, log_data,
     sentence_labels = [label2id[x] for x in example.labels]
 
     # Input token IDs from tokenizer
-    tokens = tokenizer.tokenize(example.words)
+    # TODO: Remove duplicate
+    # tokens_words = tokenizer.tokenize(example.words)
+    tokens_sentence = tokenizer.tokenize(example.sentence)
+    # assert tokens_words == tokens_sentence
+    tokens = tokens_sentence
+
+    # TODO: Remove duplicate
+    input_ids = tokenizer.convert_tokens_to_ids(tokens)
+    # encodings = tokenizer.encode(example.sentence, add_special_tokens=False)
+    # assert encodings == input_ids
 
     special_tokens_count = 2
     if len(tokens) > max_seq_length:
         tokens = tokens[: (max_seq_length - special_tokens_count)]
-
-    input_ids = tokenizer.convert_tokens_to_ids(tokens)
+        input_ids = input_ids[: (max_seq_length - special_tokens_count)]
 
     # Input mask
     input_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
@@ -131,9 +139,12 @@ def convert_example_to_feature(example, label2id, log_data,
     segment_ids += [pad_token_segment_id] * padding_length
 
     # Check length
-    assert len(input_ids) == max_seq_length
-    assert len(input_mask) == max_seq_length
-    assert len(segment_ids) == max_seq_length
+    assert len(
+        input_ids) == max_seq_length, f"len(input_ids): {len(input_ids)}, max_seq_length {max_seq_length}"
+    assert len(
+        input_mask) == max_seq_length, f"len(input_ids): {len(input_mask)}, max_seq_length {max_seq_length}"
+    assert len(
+        segment_ids) == max_seq_length, f"len(input_ids): {len(segment_ids)}, max_seq_length {max_seq_length}"
 
     # Only support single label now (or no label)
     assert len(sentence_labels) <= 1
@@ -367,6 +378,40 @@ class RandomDataSampler(object):
         for _, data in examples_by_label.items():
             output_examples.extend(random.sample(data, self.sample_size))
         return output_examples
+
+
+def extract_feature_from_request(
+        request_data, label2id, max_seq_length, tokenizer):
+    """This function extract feature from a request data.
+    Request data is a dictionary with "data" and "column_name" keys
+
+    Args:
+        request_data (int): Batches of tokens IDs of text
+    Returns:
+        feature
+    """
+
+    input_text = request_data.get("data"),
+    if isinstance(input_text, (bytes, bytearray)):
+        input_text = input_text.decode("utf-8")
+    logger.debug(f"input_text is {input_text}")
+
+    column_name = request_data.get("column_name")
+    if isinstance(column_name, (bytes, bytearray)):
+        column_name = column_name.decode("utf-8")
+    logger.debug(f"column_name is {column_name}")
+
+    line = read_json_line(
+        line_obj={"text": input_text, "column_name": column_name})
+    # TODO: fix this hack: id=""
+    example = create_example(id="", line=line)
+    feat = convert_example_to_feature(
+        example,
+        label2id,
+        log_data=False,
+        max_seq_length=int(max_seq_length),
+        tokenizer=tokenizer)
+    return feat
 
 
 # TODO: Delete this
