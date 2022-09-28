@@ -277,11 +277,12 @@ def test_offline(lines):
         # input_ids_batch, attention_mask_batch, token_type_ids, indexes
         input_batch = (input_ids_batch, attention_mask_batch,
                        token_type_ids_batch, [])
-        res = inference.run_inference(
+        inferences = inference.run_inference(
+            input_batch=input_batch,
             mode=HANDLER_MODE,
-            model=model,
-            id2label=id2label,
-            input_batch=input_batch)
+            model=model)
+        res = inference.format_outputs(
+            inferences=inferences, id2label=id2label)
         assert len(res) == 1
         pred_online = res[0]["class"]
 
@@ -333,17 +334,16 @@ def test_get_insights(lines):
             mode=HANDLER_MODE,
             embedding_name="bert",
             captum_explanation=True,
-            max_seq_length=MAX_SEQ_LENGTH,
             # model related
             model=model,
             tokenizer=tokenizer,
-            label2id=label2id,
             # device
             device=device,
             # input related
             input_batch=input_batch,
             request_data=request_data,
-            target=0)
+            target=label2id[label])
+        logger.info(response)
 
 
 if __name__ == '__main__':

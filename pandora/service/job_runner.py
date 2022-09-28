@@ -495,15 +495,20 @@ def predict(
 
     predictions = []
     pbar = ProgressBar(n_total=len(test_dataloader), desc="Predicting")
-    for step, batch in enumerate(test_dataloader):
+    for step, input_batch in enumerate(test_dataloader):
         model.eval()
-        batch = tuple(t.to(device) for t in batch)
+        input_batch = tuple(t.to(device) for t in input_batch)
         with torch.no_grad():
             # TODO: Fix hard coded "sequence_classification"
             # input_ids_batch, attention_mask_batch, token_type_ids, indexes
-            batch = (batch[0], batch[1], batch[2], [])
-            preds = inference.run_inference(
-                "sequence_classification", model, id2label, batch)
+            input_batch_with_index = (
+                input_batch[0], input_batch[1], input_batch[2], [])
+            inferences = inference.run_inference(
+                input_batch_with_index,
+                "sequence_classification",
+                model)
+            preds = inference.format_outputs(
+                inferences=inferences, id2label=id2label)
         tags = [pred["class"] for pred in preds]
         json_d = {}
         json_d['tags'] = tags

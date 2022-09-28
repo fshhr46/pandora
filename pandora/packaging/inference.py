@@ -8,7 +8,7 @@ from captum.attr import LayerIntegratedGradients
 logger = logging.getLogger(__name__)
 
 
-def build_output(logits, id2label):
+def _format_output(logits, id2label):
     y_hat = logits.argmax(0).item()
     y_softmax = torch.softmax(logits, 0)
     predicted_idx = y_hat
@@ -24,7 +24,11 @@ def build_output(logits, id2label):
     }
 
 
-def run_inference(mode: str, model, id2label, input_batch):
+def format_outputs(inferences, id2label):
+    return [_format_output(inference, id2label) for inference in inferences]
+
+
+def run_inference(input_batch, mode: str, model):
     """Predict the class (or classes) of the received text using the
     serialized transformers checkpoint.
     Args:
@@ -32,7 +36,7 @@ def run_inference(mode: str, model, id2label, input_batch):
 
             input_ids_batch, attention_mask_batch, token_type_ids, labels, indexes
     Returns:
-        list : It returns a list of the predicted value for the input text
+        list : It returns a list of the predicted value (list of logits) for the input text
     """
     # token_type_ids, labels are place holders
     input_ids_batch, attention_mask_batch, token_type_ids_batch, indexes = input_batch
@@ -44,42 +48,42 @@ def run_inference(mode: str, model, id2label, input_batch):
     # Handling inference for sequence_classification.
     if mode == "sequence_classification":
         outputs = model(**inputs)
-        predictions = outputs[0]
+        logits_batch = outputs[0]
 
-        num_preds, num_classes = predictions.shape
+        num_preds, num_classes = logits_batch.shape
         for i in range(num_preds):
-            formatted_output = build_output(predictions[i], id2label)
-            inferences.append(formatted_output)
-    # Handling inference for token_classification.
-    elif mode == "token_classification":
+            inference = logits_batch[i]
+            inferences.append(inference)
+    else:
         raise NotImplementedError
-
-    # if indexes is passed, merge results (column level inferencing)
-    if indexes:
-        # merge inferences output for column level prediction requests.
-        start = 0
-        merged_inferences = []
-        for index in indexes:
-            sub_inferences = inferences[start:index+1]
-            if len(sub_inferences) == 1:
-                merged_inferences.append(sub_inferences[0])
-            else:
-                names = [inf["class"] for inf in sub_inferences]
-                merged_output = merge_inferences(names)
-                merged_inferences.append(merged_output)
-            start = index
-        inferences = merged_inferences
     return inferences
 
 
-def merge_inferences(inferences):
+def merge_outputs(formated_outputs, indexes):
+    # merge inferences output for column level prediction requests.
+    start = 0
+    merged_outputs = []
+    for index in indexes:
+        sub_inferences = formated_outputs[start:index+1]
+        if len(sub_inferences) == 1:
+            merged_outputs.append(sub_inferences[0])
+        else:
+            names = [inf["class"] for inf in sub_inferences]
+            merged_output = _merge_outputs(names)
+            merged_outputs.append(merged_output)
+        start = index
+    return merged_outputs
+
+
+def _merge_outputs(formated_outputs):
     # TODO: replace naive implementation, simply take the max count.
-    max_count_name = max(set(inferences), key=inferences.count)
-    return {
-        "class": max_count_name,
-        "probability": 1.0 * inferences.count(max_count_name) / len(inferences),
-        "softmax": [],
-    }
+    # max_count_name = max(set(formated_outputs), key=formated_outputs.count)
+    # return {
+    #     "class": max_count_name,
+    #     "probability": 1.0 * formated_outputs.count(max_count_name) / len(formated_outputs),
+    #     "softmax": [],
+    # }
+    raise NotImplementedError
 
 
 def run_get_insights(
@@ -87,11 +91,9 @@ def run_get_insights(
         mode: str,
         embedding_name: str,
         captum_explanation: bool,
-        max_seq_length: int,
         # model related
         model,
         tokenizer,
-        label2id,
         # device
         device,
         # Input related
@@ -109,7 +111,7 @@ def run_get_insights(
         (list): Returns a list of importances and words.
     """
 
-    input_ids_batch, attention_mask_batch, _, indexes = input_batch
+    input_ids_batch, attention_mask_batch, token_type_ids_batch, indexes = input_batch
     if captum_explanation:
         embedding_layer = getattr(model, embedding_name)
         embeddings = embedding_layer.embeddings
@@ -126,7 +128,7 @@ def run_get_insights(
     # input_ids, ref_input_ids, attention_mask = construct_input_ref(
     #     input_ids_batch, tokenizer, device
     # )
-    ref_input_ids = torch.tensor(
+    ref_input_ids_batch = torch.tensor(
         [tokenizer.pad_token_id] * input_ids_batch.numel(),
         device=device).reshape(input_ids_batch.shape)
 
@@ -136,9 +138,10 @@ def run_get_insights(
     if mode == "sequence_classification":
         attributions, delta = lig.attribute(
             inputs=input_ids_batch,
-            baselines=ref_input_ids,
+            baselines=ref_input_ids_batch,
             target=target,
-            additional_forward_args=(attention_mask_batch, 0, model),
+            additional_forward_args=(
+                attention_mask_batch, token_type_ids_batch, indexes, mode, model),
             return_convergence_delta=True,
         )
         attributions_sum = summarize_attributions(attributions)
@@ -146,7 +149,6 @@ def run_get_insights(
         response["delta"] = delta[0].tolist()
     else:
         raise NotImplementedError
-    logger.info(response)
     return [response]
 
 
@@ -202,7 +204,7 @@ def get_word_token(input_ids, tokenizer):
     return tokens
 
 
-def captum_sequence_forward(inputs, attention_mask=None, position=0, model=None):
+def captum_sequence_forward(input_ids_batch, attention_mask_batch, token_type_ids_batch, indexes, mode: str, model):
     """This function is used to get the predictions from the model and this function
     can be used independent of the type of the BERT Task.
     Args:
@@ -214,11 +216,10 @@ def captum_sequence_forward(inputs, attention_mask=None, position=0, model=None)
     Returns:
         list: Prediction Outcome
     """
-    model.eval()
-    model.zero_grad()
-    pred = model(inputs, attention_mask=attention_mask)
-    pred = pred[position]
-    return pred
+    input_batch = (input_ids_batch, attention_mask_batch,
+                   token_type_ids_batch, indexes)
+    inferences = run_inference(input_batch, mode, model)
+    return torch.stack(inferences)
 
 
 def summarize_attributions(attributions):

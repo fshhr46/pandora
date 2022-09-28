@@ -191,8 +191,17 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
 
     def inference(self, input_batch):
         with torch.no_grad():
-            return inference.run_inference(
-                self.setup_config["mode"], self.model, self.id2label, input_batch)
+            inferences = inference.run_inference(
+                input_batch,
+                self.setup_config["mode"],
+                self.model)
+            _, _, _, indexes = input_batch
+            formated_outputs = inference.format_outputs(
+                inferences=inferences, id2label=self.id2label)
+            # if indexes is passed, merge results (column level inferencing)
+            if indexes:
+                inference.merge_outputs(
+                    formated_outputs=formated_outputs, indexes=indexes)
 
     def postprocess(self, inference_output):
         """Post Process Function converts the predicted response into Torchserve readable format.
@@ -210,11 +219,9 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 mode=self.setup_config["mode"],
                 embedding_name=self.setup_config["embedding_name"],
                 captum_explanation=self.setup_config["captum_explanation"],
-                max_seq_length=self.setup_config["max_length"],
                 # model related
                 model=self.model,
                 tokenizer=self.tokenizer,
-                label2id=self.label2id,
                 # device
                 device=self.device,
                 # input related
