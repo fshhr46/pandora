@@ -31,7 +31,6 @@ logger.info(f"device_name is {device_name}")
 device = torch.device(device_name)
 
 MAX_SEQ_LENGTH = 128
-BATCH_SIZE = 4
 HANDLER_MODE = "sequence_classification"
 
 
@@ -141,7 +140,7 @@ def load_model():
     return args.model_type, args.local_rank, tokenizer, model, processor
 
 
-def load_dataset(local_rank, tokenizer, processor, lines):
+def load_dataset(local_rank, tokenizer, processor, lines, batch_size):
 
     logger.info("========================= Start loading dataset")
     partition = "test"
@@ -160,7 +159,7 @@ def load_dataset(local_rank, tokenizer, processor, lines):
         local_rank, features, True)
 
     sampler = SequentialSampler(dataset)
-    dataloader = DataLoader(dataset, sampler=sampler, batch_size=BATCH_SIZE,
+    dataloader = DataLoader(dataset, sampler=sampler, batch_size=batch_size,
                             collate_fn=batch_collate_fn)
     logger.info("========================= Done loading dataset")
     return dataset, dataloader, id2label, label2id
@@ -223,15 +222,16 @@ def test_online(lines):
 
 
 def test_offline_train(lines):
+    batch_size = 100
     model_type, local_rank, tokenizer, model, processor = load_model()
     dataset, _, id2label, _ = load_dataset(
-        local_rank, tokenizer, processor, lines)
+        local_rank, tokenizer, processor, lines, batch_size=batch_size)
 
     predictions = job_runner.predict(
         model_type, model,
         id2label, dataset,
         local_rank, device,
-        batch_size=BATCH_SIZE,
+        batch_size=batch_size,
     )
     assert len(predictions) == len(dataset)
 
@@ -265,8 +265,9 @@ def test_offline_train(lines):
 
 def test_offline(lines):
     _, local_rank, tokenizer, model, processor = load_model()
+    batch_size = 20
     _, dataloader, id2label, _ = load_dataset(
-        local_rank, tokenizer, processor, lines)
+        local_rank, tokenizer, processor, lines, batch_size=batch_size)
     incorrect = 0
     total = 0
     pbar = ProgressBar(n_total=len(lines), desc='comparing')
@@ -282,7 +283,7 @@ def test_offline(lines):
         results = inference.format_outputs(
             inferences=inferences, id2label=id2label)
 
-        sub_lines = lines[step * BATCH_SIZE: (step+1) * BATCH_SIZE]
+        sub_lines = lines[step * batch_size: (step+1) * batch_size]
         assert len(results) == len(sub_lines)
         for res, line in zip(results, sub_lines):
             # Read baseline file data
@@ -308,9 +309,10 @@ def test_offline(lines):
 
 
 def test_get_insights(lines):
+    batch_size = 2
     _, local_rank, tokenizer, model, processor = load_model()
     _, dataloader, id2label, label2id = load_dataset(
-        local_rank, tokenizer, processor, lines)
+        local_rank, tokenizer, processor, lines, batch_size=batch_size)
     total = 0
     vis_data_records_ig = []
     pbar = ProgressBar(n_total=len(lines), desc='comparing')
@@ -326,8 +328,9 @@ def test_get_insights(lines):
         results = inference.format_outputs(
             inferences=inferences, id2label=id2label)
 
-        sub_lines = lines[step * BATCH_SIZE: (step+1) * BATCH_SIZE]
+        sub_lines = lines[step * batch_size: (step+1) * batch_size]
         assert len(results) == len(sub_lines)
+        logger.info(f"sub_lines is {sub_lines}")
 
         targets = [label2id[res["class"]] for res in results]
         # TODO: Fix hard coded "sequence_classification"
