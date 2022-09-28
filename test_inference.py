@@ -30,7 +30,7 @@ else:
 logger.info(f"device_name is {device_name}")
 device = torch.device(device_name)
 
-MAX_SEQ_LENGTH = 128
+MAX_SEQ_LENGTH = 64
 HANDLER_MODE = "sequence_classification"
 
 
@@ -316,81 +316,101 @@ def test_get_insights(lines):
     total = 0
     vis_data_records_ig = []
     pbar = ProgressBar(n_total=len(lines), desc='comparing')
-    for step, input_batch in enumerate(dataloader):
-        input_batch = tuple(t.to(device) for t in input_batch)
-        input_batch_with_index = (
-            input_batch[0], input_batch[1], input_batch[2], [])
-        # TODO: Fix hard coded "sequence_classification"
-        inferences = inference.run_inference(
-            input_batch=input_batch_with_index,
-            mode=HANDLER_MODE,
-            model=model)
-        results = inference.format_outputs(
-            inferences=inferences, id2label=id2label)
+    with open("attributions.json", 'w+') as f:
+        for step, input_batch in enumerate(dataloader):
+            input_batch = tuple(t.to(device) for t in input_batch)
+            input_batch_with_index = (
+                input_batch[0], input_batch[1], input_batch[2], [])
+            # TODO: Fix hard coded "sequence_classification"
+            inferences = inference.run_inference(
+                input_batch=input_batch_with_index,
+                mode=HANDLER_MODE,
+                model=model)
+            results = inference.format_outputs(
+                inferences=inferences, id2label=id2label)
 
-        sub_lines = lines[step * batch_size: (step+1) * batch_size]
-        assert len(results) == len(sub_lines)
-        logger.info(f"sub_lines is {sub_lines}")
+            sub_lines = lines[step * batch_size: (step+1) * batch_size]
+            assert len(results) == len(sub_lines)
+            logger.info(f"sub_lines is {sub_lines}")
 
-        targets = [label2id[res["class"]] for res in results]
-        # TODO: Fix hard coded "sequence_classification"
-        insights = inference.run_get_insights(
-            # configs
-            mode=HANDLER_MODE,
-            embedding_name="bert",
-            captum_explanation=True,
-            # model related
-            model=model,
-            tokenizer=tokenizer,
-            # device
-            device=device,
-            # input related
-            input_batch=input_batch_with_index,
-            target=targets)
-        torch.cuda.empty_cache()
-        for res, insight, line in zip(results, insights, sub_lines):
+            targets = [label2id[res["class"]] for res in results]
+            # TODO: Fix hard coded "sequence_classification"
+            insights = inference.run_get_insights(
+                # configs
+                mode=HANDLER_MODE,
+                embedding_name="bert",
+                captum_explanation=True,
+                # model related
+                model=model,
+                tokenizer=tokenizer,
+                # device
+                device=device,
+                # input related
+                input_batch=input_batch_with_index,
+                target=targets)
+            torch.cuda.empty_cache()
+            for res, insight, line in zip(results, insights, sub_lines):
 
-            # Read baseline file data
-            obj = json.loads(line)
-            label = obj["label"][0]
-            sentence = obj["text"]
+                # Read baseline file data
+                obj = json.loads(line)
+                label = obj["label"][0]
+                sentence = obj["text"]
 
-            pred_online = res["class"]
-            probability = res["probability"]
+                pred_online = res["class"]
+                probability = res["probability"]
 
-            request_data = {
-                "data": obj["text"],
-                "column_name": obj.get("column_name")
-            }
-            logger.info("")
-            logger.info(
-                "======================================================")
-            logger.info(f"request_data is {request_data}")
-            logger.info(f"pred_online: {pred_online}")
-            logger.info(f"label: {label}")
+                request_data = {
+                    "data": obj["text"],
+                    "column_name": obj.get("column_name")
+                }
+                logger.info("")
+                logger.info(
+                    "======================================================")
+                logger.info(f"request_data is {request_data}")
+                logger.info(f"pred_online: {pred_online}")
+                logger.info(f"label: {label}")
 
-            response = insight
-            delta = response["delta"]
+                response = insight
+                delta = response["delta"]
 
-            non_pad_words = list(
-                filter(lambda word: word != tokenizer.pad_token, response["words"]))
-            non_pad_attributions = response["importances"][:len(non_pad_words)]
-            combined = list(zip(non_pad_words, non_pad_attributions))
-            # logger.info(sorted(
-            #     combined, key=lambda k_v: k_v[1], reverse=True))
+                non_pad_words = list(
+                    filter(lambda word: word != tokenizer.pad_token, response["words"]))
+                non_pad_attributions = response["importances"][:len(
+                    non_pad_words)]
+                positions = list(range(len(non_pad_words)))
+                combined = list(
+                    zip(non_pad_words, positions, non_pad_attributions))
+                sorted_attributions = sorted(
+                    combined, key=lambda tp: tp[2], reverse=True)
+                attributions = torch.tensor(response["importances"])
+                logger.info(sorted_attributions)
+                json.dump(
+                    {
+                        "sentence": sentence,
+                        "probability": probability,
+                        "pred_online": pred_online,
+                        "label": label,
+                        "attributions_sum": attributions.sum().item(),
+                        "delta": delta,
+                        "sorted_attributions": sorted_attributions,
+                    },
+                    f,
+                    indent=4,
+                    ensure_ascii=False
+                )
+                f.write("\n")
 
-            attributions = torch.tensor(response["importances"])
-            vis_data_records_ig.append(visualization.VisualizationDataRecord(
-                attributions,
-                probability,
-                pred_online,
-                label,
-                tokenizer.pad_token,
-                attributions.sum(),
-                sentence,
-                delta))
-            pbar(total)
-            total += 1
+                vis_data_records_ig.append(visualization.VisualizationDataRecord(
+                    attributions,
+                    probability,
+                    pred_online,
+                    label,
+                    tokenizer.pad_token,
+                    attributions.sum(),
+                    sentence,
+                    delta))
+                pbar(total)
+                total += 1
     logger.info('Visualize attributions based on Integrated Gradients')
     html_obj = visualization.visualize_text(vis_data_records_ig)
     return html_obj
