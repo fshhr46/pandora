@@ -3,8 +3,9 @@ import os
 import requests
 import json
 import logging
-
 import pathlib
+
+from torch.utils.data import DataLoader, SequentialSampler
 
 import pandora.packaging.feature as feature
 import pandora.tools.runner_utils as runner_utils
@@ -16,6 +17,7 @@ from pandora.tools.common import logger
 from pandora.callback.progressbar import ProgressBar
 from pandora.tools.common import init_logger
 from pandora.dataset.sentence_data import Dataset
+from pandora.packaging.feature import batch_collate_fn
 
 # TODO: Setup M1 chip
 if torch.cuda.is_available():
@@ -28,6 +30,7 @@ logger.info(f"device_name is {device_name}")
 device = torch.device(device_name)
 
 MAX_SEQ_LENGTH = 128
+BATCH_SIZE = 24
 HANDLER_MODE = "sequence_classification"
 
 
@@ -153,7 +156,11 @@ def load_dataset(local_rank, tokenizer, processor, lines):
         examples, label_list, max_seq_length=MAX_SEQ_LENGTH, tokenizer=tokenizer)
     dataset = runner_utils.convert_features_to_dataset(
         local_rank, features, True)
-    return dataset, id2label, label2id
+
+    sampler = SequentialSampler(dataset)
+    dataloader = DataLoader(dataset, sampler=sampler, batch_size=BATCH_SIZE,
+                            collate_fn=batch_collate_fn)
+    return dataset, dataloader, id2label, label2id
 
 
 def make_request(url: str, post: bool = False, data=None, headers=None):
@@ -214,14 +221,14 @@ def test_online(lines):
 
 def test_offline_train(lines):
     model_type, local_rank, tokenizer, model, processor = load_model()
-    dataset, id2label, _ = load_dataset(
+    dataset, _, id2label, _ = load_dataset(
         local_rank, tokenizer, processor, lines)
 
     predictions = job_runner.predict(
         model_type, model,
         id2label, dataset,
         local_rank, device,
-        batch_size=128,
+        batch_size=BATCH_SIZE,
     )
     assert len(predictions) == len(dataset)
 
@@ -255,49 +262,44 @@ def test_offline_train(lines):
 
 def test_offline(lines):
     _, local_rank, tokenizer, model, processor = load_model()
-    dataset, id2label, _ = load_dataset(
+    _, dataloader, id2label, _ = load_dataset(
         local_rank, tokenizer, processor, lines)
     incorrect = 0
-    pbar = ProgressBar(n_total=len(dataset), desc='comparing')
-    for step, (line, data_entry) in enumerate(zip(lines, dataset)):
-
-        # Read baseline file data
-        obj = json.loads(line)
-        pred_offline = obj["pred"][0]
-        label = obj["label"][0]
-
-        # Prepare batch data for inference
-        # off-load tensors to device
-        data_entry = tuple(t.to(device) for t in data_entry)
-
-        input_ids_batch = data_entry[0][None, :].to(device)
-        attention_mask_batch = data_entry[1][None, :].to(device)
-        token_type_ids_batch = data_entry[2][None, :].to(device)
-
-        # input_ids_batch, attention_mask_batch, token_type_ids, indexes
-        input_batch = (input_ids_batch, attention_mask_batch,
-                       token_type_ids_batch, [])
+    total = 0
+    pbar = ProgressBar(n_total=len(lines), desc='comparing')
+    for step, input_batch in enumerate(dataloader):
+        input_batch = tuple(t.to(device) for t in input_batch)
+        input_batch_with_index = (
+            input_batch[0], input_batch[1], input_batch[2], [])
         # TODO: Fix hard coded "sequence_classification"
         inferences = inference.run_inference(
-            input_batch=input_batch,
+            input_batch=input_batch_with_index,
             mode=HANDLER_MODE,
             model=model)
-        res = inference.format_outputs(
+        results = inference.format_outputs(
             inferences=inferences, id2label=id2label)
-        assert len(res) == 1
-        pred_online = res[0]["class"]
 
-        # Compare
-        if pred_online != pred_offline:
-            incorrect += 1
-            logger.info("")
-            logger.info("=========")
-            logger.info(
-                f"pred_online: {pred_online}, pred_offline: {pred_offline}")
-            logger.info(f"label: {label}")
-            logger.info(res)
-            logger.info(obj)
-        pbar(step)
+        sub_lines = lines[step * BATCH_SIZE: (step+1) * BATCH_SIZE]
+        assert len(results) == len(sub_lines)
+        for res, line in zip(results, sub_lines):
+            # Read baseline file data
+            obj = json.loads(line)
+            pred_offline = obj["pred"][0]
+            label = obj["label"][0]
+            pred_online = res["class"]
+
+            # Compare
+            if pred_online != pred_offline:
+                incorrect += 1
+                logger.info("")
+                logger.info("=========")
+                logger.info(
+                    f"pred_online: {pred_online}, pred_offline: {pred_offline}")
+                logger.info(f"label: {label}")
+                logger.info(res)
+                logger.info(obj)
+            total += 1
+            pbar(total)
     logger.info(f"incorrect: {incorrect}")
     return incorrect
 
@@ -417,9 +419,9 @@ def run_test():
     # Test inferencing by calling an online model registered in torchserve
     # assert test_online(lines) == 0
     # Test inferencing by loading a model offline and calling predict in training pipeline (batch)
-    assert test_offline_train(lines) == 0
+    # assert test_offline_train(lines) == 0
     # Test inferencing by loading a model offline and calling inference.run_inference offline
-    # assert test_offline(lines) == 0
+    assert test_offline(lines) == 0
     # test_get_insights(lines)
 
 
