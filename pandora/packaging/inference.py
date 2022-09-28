@@ -119,9 +119,7 @@ def run_get_insights(
         logger.warning(
             "Captum Explanation is not chosen and will not be available")
 
-    # TODO: Support batching
     batch_size, _ = input_ids_batch.shape
-    assert batch_size == 1, "get_insights only support non-batch for now"
 
     # TODO: Fix construct_input_ref.
     # Currently construct_input_ref is adding [CLS] and [SEP] token to
@@ -133,9 +131,6 @@ def run_get_insights(
         [tokenizer.pad_token_id] * input_ids_batch.numel(),
         device=device).reshape(input_ids_batch.shape)
 
-    all_tokens = get_word_token(input_ids_batch, tokenizer)
-    response = {}
-    response["words"] = all_tokens
     if mode == "sequence_classification":
         attributions, delta = lig.attribute(
             inputs=input_ids_batch,
@@ -146,11 +141,18 @@ def run_get_insights(
             return_convergence_delta=True,
         )
         attributions_sum = summarize_attributions(attributions)
-        response["importances"] = attributions_sum.tolist()
-        response["delta"] = delta[0].tolist()
     else:
         raise NotImplementedError
-    return [response]
+
+    responses = []
+    for i in range(batch_size):
+        response = {}
+        all_tokens = get_word_token(input_ids_batch, tokenizer, i)
+        response["words"] = all_tokens
+        response["importances"] = attributions_sum[i].tolist()
+        response["delta"] = delta[i].tolist()
+        responses.append(response)
+    return responses
 
 
 def construct_input_ref(input_ids, tokenizer, device):
@@ -189,7 +191,7 @@ def construct_input_ref(input_ids, tokenizer, device):
     return input_ids, ref_input_ids, attention_mask
 
 
-def get_word_token(input_ids, tokenizer):
+def get_word_token(input_ids, tokenizer, batch_id):
     """constructs word tokens from token id using the BERT's
     Auto Tokenizer
     Args:
@@ -198,7 +200,7 @@ def get_word_token(input_ids, tokenizer):
     Returns:
         (list): Returns the word tokens
     """
-    indices = input_ids[0].detach().tolist()
+    indices = input_ids[batch_id].detach().tolist()
     tokens = tokenizer.convert_ids_to_tokens(indices)
     # Remove unicode space character from BPE Tokeniser
     tokens = [token.replace("Ġ", "") for token in tokens]
