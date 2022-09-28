@@ -217,11 +217,11 @@ def test_offline_train(lines):
     dataset, id2label, _ = load_dataset(
         local_rank, tokenizer, processor, lines)
 
-    # Run inference offline and get predictions all at once
     predictions = job_runner.predict(
         model_type, model,
         id2label, dataset,
         local_rank, device,
+        batch_size=128,
     )
     assert len(predictions) == len(dataset)
 
@@ -247,6 +247,7 @@ def test_offline_train(lines):
             logger.info(f"label: {label}")
             logger.info(pred)
             logger.info(obj)
+            raise
         pbar(step)
     logger.info(f"incorrect: {incorrect}")
     return incorrect
@@ -308,6 +309,7 @@ def test_get_insights(lines):
     incorrect = 0
     pbar = ProgressBar(n_total=len(dataset), desc='comparing')
     vis_data_records_ig = []
+    metrics_by_label = {label: {} for label in label2id.keys()}
     for step, (line, data_entry) in enumerate(zip(lines, dataset)):
 
         # Read baseline file data
@@ -381,6 +383,10 @@ def test_get_insights(lines):
             attributions.sum(),
             sentence,
             delta))
+
+        # for word in response["words"]:
+
+        pbar(step)
     logger.info('Visualize attributions based on Integrated Gradients')
     html_obj = visualization.visualize_text(vis_data_records_ig)
     return html_obj
@@ -406,15 +412,15 @@ def run_test():
     #     print(l2)
     #     print(type(l2))
 
-    lines = open(test_file).readlines()[:100]
+    lines = open(test_file).readlines()
 
     # Test inferencing by calling an online model registered in torchserve
     # assert test_online(lines) == 0
     # Test inferencing by loading a model offline and calling predict in training pipeline (batch)
-    # assert test_offline_train(lines) == 0
+    assert test_offline_train(lines) == 0
     # Test inferencing by loading a model offline and calling inference.run_inference offline
     # assert test_offline(lines) == 0
-    test_get_insights(lines)
+    # test_get_insights(lines)
 
 
 if __name__ == '__main__':

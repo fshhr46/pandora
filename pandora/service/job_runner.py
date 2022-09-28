@@ -481,8 +481,6 @@ def predict(
         local_rank, device,
         prefix="",
         batch_size=1):
-    # TODO: Fix batch size == 1
-    assert batch_size == 1
     # Note that DistributedSampler samples randomly
     test_sampler = SequentialSampler(
         test_dataset) if local_rank == -1 else DistributedSampler(test_dataset)
@@ -509,11 +507,12 @@ def predict(
                 model)
             preds = inference.format_outputs(
                 inferences=inferences, id2label=id2label)
-        tags = [pred["class"] for pred in preds]
-        json_d = {}
-        json_d['tags'] = tags
-        predictions.append(json_d)
-        pbar(step)
+            for pred in preds:
+                tags = [pred["class"]]
+                json_d = {}
+                json_d['tags'] = tags
+                predictions.append(json_d)
+            pbar(step)
     return predictions
 
 
