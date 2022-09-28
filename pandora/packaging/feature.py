@@ -101,9 +101,16 @@ def convert_examples_to_features(examples, label_list,
 
 
 # Convert example to feature, and pad them
-def convert_example_to_feature(example, label2id, log_data,
-                               max_seq_length, tokenizer, pad_token=0, pad_token_segment_id=0,
-                               sequence_a_segment_id=0, mask_padding_with_zero=True,):
+def convert_example_to_feature(
+        example,
+        label2id,
+        log_data: bool,
+        max_seq_length,
+        tokenizer, pad_token=0,
+        pad_token_segment_id=0,
+        sequence_a_segment_id=0,
+        mask_padding_with_zero=True):
+
     # sentence labels
     sentence_labels = [label2id[x] for x in example.labels]
 
@@ -119,6 +126,8 @@ def convert_example_to_feature(example, label2id, log_data,
     # encodings = tokenizer.encode(example.sentence, add_special_tokens=False)
     # assert encodings == input_ids
 
+    # TODO: Fix this. Currently special token is removed.
+    # However, this is not necessary for sentence classification
     special_tokens_count = 2
     if len(tokens) > max_seq_length:
         tokens = tokens[: (max_seq_length - special_tokens_count)]
@@ -127,6 +136,7 @@ def convert_example_to_feature(example, label2id, log_data,
     # Input mask
     input_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
 
+    # TODO: Remove Segment ID, it is not needed for classification task
     # Segment ID
     segment_ids = [sequence_a_segment_id] * len(tokens)
 
@@ -151,7 +161,9 @@ def convert_example_to_feature(example, label2id, log_data,
     if log_data:
         logger.info("*** Example ***")
         logger.info("id: %s", example.id)
+        logger.info("num tokens: %s", len(tokens))
         logger.info("tokens: %s", " ".join([str(x) for x in tokens]))
+        logger.info("input_ids size: %s", len(input_ids))
         logger.info("input_ids: %s", " ".join([str(x) for x in input_ids]))
         logger.info("input_mask: %s", " ".join(
             [str(x) for x in input_mask]))

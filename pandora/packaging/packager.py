@@ -50,7 +50,6 @@ class ModelPackager(object):
     def create_setup_config_file(self, package_dir, num_labels: str):
         setup_conf = {
             "model_name": "bert-base-chinese",
-            # "mode": "sequence_classification",
             "mode": "sequence_classification",
             "do_lower_case": True,
             "num_labels": num_labels,

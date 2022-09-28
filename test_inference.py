@@ -1,13 +1,10 @@
-import ast
 import torch
 import os
 import requests
 import json
-import pprint
+import logging
 
 from pathlib import Path
-
-from captum.attr import LayerIntegratedGradients
 
 import pandora.packaging.feature as feature
 import pandora.tools.runner_utils as runner_utils
@@ -169,20 +166,19 @@ def make_request(url: str, post: bool = False, data=None, headers=None):
     return data
 
 
-def inference_online(text: str, pp):
+def inference_online(data_obj):
     # time.sleep(1)
     model_name = "short_sentence"
     version = "1"
     url = "http://localhost:38080/predictions"
     url = f"{url}/{model_name}/{version}"
     result = make_request(url, False,
-                          data={"data": text},
+                          data=data_obj,
                           headers={'content-type': "application/x-www-form-urlencoded"})
     return result
 
 
 def test_online(lines):
-    pp = pprint.PrettyPrinter(indent=4)
     incorrect = 0
     pbar = ProgressBar(n_total=len(lines), desc='comparing')
     for step, line in enumerate(lines):
@@ -193,8 +189,12 @@ def test_online(lines):
         label = obj["label"][0]
 
         # Run inference online
-        text = obj["text"]
-        res = inference_online(text, pp)
+        request_data = {
+            "data": obj["text"],
+            "column_name": obj.get("column_name")
+        }
+
+        res = inference_online(request_data)
         pred_online = res["class"]
 
         # Compare
@@ -213,7 +213,6 @@ def test_online(lines):
 
 
 def test_offline_train(lines):
-    pp = pprint.PrettyPrinter(indent=4)
     model_type, local_rank, tokenizer, model, processor = load_model()
     dataset, id2label, _ = load_dataset(
         local_rank, tokenizer, processor, lines)
@@ -325,7 +324,10 @@ def test_get_insights(lines):
         input_batch = (input_ids_batch, attention_mask_batch,
                        token_type_ids_batch, [])
 
-        request_data = {"data": obj["text"]}
+        request_data = {
+            "data": obj["text"],
+            "column_name": obj.get("column_name")
+        }
         response = inference.run_get_insights(
             # configs
             mode=HANDLER_MODE,
@@ -342,11 +344,10 @@ def test_get_insights(lines):
             input_batch=input_batch,
             request_data=request_data,
             target=0)
-        print(response)
 
 
 if __name__ == '__main__':
-    init_logger(log_file=None)
+    init_logger(log_file=None, log_file_level=logging.DEBUG)
 
     home = str(Path.home())
     # =========== test
