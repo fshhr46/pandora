@@ -119,6 +119,10 @@ def run_get_insights(
         logger.warning(
             "Captum Explanation is not chosen and will not be available")
 
+    # TODO: Support batching
+    batch_size, _ = input_ids_batch.shape
+    assert batch_size == 1, "get_insights only support non-batch for now"
+
     # TODO: Fix construct_input_ref.
     # Currently construct_input_ref is adding [CLS] and [SEP] token to
     # the tensor but our feature extraction doesn't do that.

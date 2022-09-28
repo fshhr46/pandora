@@ -4,7 +4,7 @@ import requests
 import json
 import logging
 
-from pathlib import Path
+import pathlib
 
 import pandora.packaging.feature as feature
 import pandora.tools.runner_utils as runner_utils
@@ -81,7 +81,7 @@ def get_test_data():
 
 def load_model():
 
-    home = str(Path.home())
+    home = str(pathlib.Path.home())
     resource_dir = os.path.join(home, "workspace", "resource")
     cache_dir = os.path.join(home, ".cache/torch/transformers")
 
@@ -273,10 +273,10 @@ def test_offline(lines):
         attention_mask_batch = data_entry[1][None, :].to(device)
         token_type_ids_batch = data_entry[2][None, :].to(device)
 
-        # TODO: Fix hard coded "sequence_classification"
         # input_ids_batch, attention_mask_batch, token_type_ids, indexes
         input_batch = (input_ids_batch, attention_mask_batch,
                        token_type_ids_batch, [])
+        # TODO: Fix hard coded "sequence_classification"
         inferences = inference.run_inference(
             input_batch=input_batch,
             mode=HANDLER_MODE,
@@ -303,16 +303,17 @@ def test_offline(lines):
 
 def test_get_insights(lines):
     _, local_rank, tokenizer, model, processor = load_model()
-    dataset, _, label2id = load_dataset(
+    dataset, id2label, label2id = load_dataset(
         local_rank, tokenizer, processor, lines)
     incorrect = 0
     pbar = ProgressBar(n_total=len(dataset), desc='comparing')
+    vis_data_records_ig = []
     for step, (line, data_entry) in enumerate(zip(lines, dataset)):
 
         # Read baseline file data
         obj = json.loads(line)
-        pred_offline = obj["pred"][0]
         label = obj["label"][0]
+        sentence = obj["text"]
 
         data_entry = tuple(t.to(device) for t in data_entry)
 
@@ -320,15 +321,26 @@ def test_get_insights(lines):
         attention_mask_batch = data_entry[1][None, :].to(device)
         token_type_ids_batch = data_entry[2][None, :].to(device)
 
-        # TODO: Fix hard coded "sequence_classification"
         # input_ids_batch, attention_mask_batch, token_type_ids, indexes
         input_batch = (input_ids_batch, attention_mask_batch,
                        token_type_ids_batch, [])
+        # TODO: Fix hard coded "sequence_classification"
+        inferences = inference.run_inference(
+            input_batch=input_batch,
+            mode=HANDLER_MODE,
+            model=model)
+        res = inference.format_outputs(
+            inferences=inferences, id2label=id2label)
+        assert len(res) == 1
+        pred_online = res[0]["class"]
+        probability = res[0]["probability"]
 
         request_data = {
             "data": obj["text"],
             "column_name": obj.get("column_name")
         }
+        target = label2id[pred_online]
+        # TODO: Fix hard coded "sequence_classification"
         responses = inference.run_get_insights(
             # configs
             mode=HANDLER_MODE,
@@ -341,25 +353,43 @@ def test_get_insights(lines):
             device=device,
             # input related
             input_batch=input_batch,
-            target=label2id[pred_offline])
+            target=target)
         logger.info("")
         logger.info("======================================================")
         logger.info(f"request_data is {request_data}")
-        logger.info(f"pred_offline: {pred_offline}")
+        logger.info(f"pred_online: {pred_online}")
         logger.info(f"label: {label}")
-        for response in responses:
-            non_pad_words = list(
-                filter(lambda word: word != '[PAD]', response["words"]))
-            non_pad_attributions = response["importances"][:len(non_pad_words)]
-            combined = list(zip(non_pad_words, non_pad_attributions))
-            logger.info(sorted(
-                combined, key=lambda k_v: k_v[1], reverse=True))
+
+        response = responses[0]
+        delta = response["delta"]
+
+        non_pad_words = list(
+            filter(lambda word: word != tokenizer.pad_token, response["words"]))
+        non_pad_attributions = response["importances"][:len(non_pad_words)]
+        combined = list(zip(non_pad_words, non_pad_attributions))
+        logger.info(sorted(
+            combined, key=lambda k_v: k_v[1], reverse=True))
+
+        from captum.attr import visualization
+        attributions = torch.tensor(response["importances"])
+        vis_data_records_ig.append(visualization.VisualizationDataRecord(
+            attributions,
+            probability,
+            pred_online,
+            label,
+            tokenizer.pad_token,
+            attributions.sum(),
+            sentence,
+            delta))
+    logger.info('Visualize attributions based on Integrated Gradients')
+    html_obj = visualization.visualize_text(vis_data_records_ig)
+    return html_obj
 
 
-if __name__ == '__main__':
+def run_test():
     init_logger(log_file=None, log_file_level=logging.DEBUG)
 
-    home = str(Path.home())
+    home = str(pathlib.Path.home())
     # =========== test
     test_file = f"{home}/workspace/resource/datasets/synthetic_data/test.json"
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data_1000/predict/test_submit.json"
@@ -376,7 +406,7 @@ if __name__ == '__main__':
     #     print(l2)
     #     print(type(l2))
 
-    lines = open(test_file).readlines()
+    lines = open(test_file).readlines()[:100]
 
     # Test inferencing by calling an online model registered in torchserve
     # assert test_online(lines) == 0
@@ -385,3 +415,7 @@ if __name__ == '__main__':
     # Test inferencing by loading a model offline and calling inference.run_inference offline
     # assert test_offline(lines) == 0
     test_get_insights(lines)
+
+
+if __name__ == '__main__':
+    run_test()
