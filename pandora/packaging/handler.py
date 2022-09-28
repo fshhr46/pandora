@@ -213,6 +213,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         return inference_output
 
     def get_insights(self, input_batch, request_data, target):
+        logger.info(f"request_data is {request_data}")
         with torch.no_grad():
             return inference.run_get_insights(
                 # configs
@@ -226,5 +227,4 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 device=self.device,
                 # input related
                 input_batch=input_batch,
-                request_data=request_data,
                 target=target)

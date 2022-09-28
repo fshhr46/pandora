@@ -329,7 +329,7 @@ def test_get_insights(lines):
             "data": obj["text"],
             "column_name": obj.get("column_name")
         }
-        response = inference.run_get_insights(
+        responses = inference.run_get_insights(
             # configs
             mode=HANDLER_MODE,
             embedding_name="bert",
@@ -341,9 +341,19 @@ def test_get_insights(lines):
             device=device,
             # input related
             input_batch=input_batch,
-            request_data=request_data,
-            target=label2id[label])
-        logger.info(response)
+            target=label2id[pred_offline])
+        logger.info("")
+        logger.info("======================================================")
+        logger.info(f"request_data is {request_data}")
+        logger.info(f"pred_offline: {pred_offline}")
+        logger.info(f"label: {label}")
+        for response in responses:
+            non_pad_words = list(
+                filter(lambda word: word != '[PAD]', response["words"]))
+            non_pad_attributions = response["importances"][:len(non_pad_words)]
+            combined = list(zip(non_pad_words, non_pad_attributions))
+            logger.info(sorted(
+                combined, key=lambda k_v: k_v[1], reverse=True))
 
 
 if __name__ == '__main__':

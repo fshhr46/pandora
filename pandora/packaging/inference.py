@@ -99,7 +99,6 @@ def run_get_insights(
         # Input related
         # Original API def
         input_batch,
-        request_data,
         target):
     """This function initialize and calls the layer integrated gradient to get word importance
     of the input text if captum explanation has been selected through setup_config
@@ -119,8 +118,6 @@ def run_get_insights(
     else:
         logger.warning(
             "Captum Explanation is not chosen and will not be available")
-
-    logger.info(f"request_data is {request_data}")
 
     # TODO: Fix construct_input_ref.
     # Currently construct_input_ref is adding [CLS] and [SEP] token to
