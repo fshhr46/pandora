@@ -42,6 +42,16 @@ class FinanceInfoGenerator(DataGeneratorBase):
 class FinanceReport(object):
     sales_agg: str
     sales_aag: str
+    sales_agg_2022: str
+    sales_aag_2022: str
+    sales_agg_q1: str
+    sales_aag_q1: str
+    agg_sales: str
+    aag_sales: str
+    agg_sales_2022: str
+    aag_sales_2022: str
+    agg_sales_q1: str
+    aag_sales_q1: str
     q1_rev_total: str
     q2_rev_total: str
     q3_rev_total: str
@@ -57,6 +67,16 @@ class FinanceReportGenerator(DataGeneratorBase):
         return FinanceReport(
             sales_agg=random.randint(10000000, 99999999),
             sales_aag=random.randint(10000000, 99999999),
+            sales_agg_2022=random.randint(10000000, 99999999),
+            sales_aag_2022=random.randint(10000000, 99999999),
+            sales_agg_q1=random.randint(10000000, 99999999),
+            sales_aag_q1=random.randint(10000000, 99999999),
+            agg_sales=random.randint(10000000, 99999999),
+            aag_sales=random.randint(10000000, 99999999),
+            agg_sales_2022=random.randint(10000000, 99999999),
+            aag_sales_2022=random.randint(10000000, 99999999),
+            agg_sales_q1=random.randint(10000000, 99999999),
+            aag_sales_q1=random.randint(10000000, 99999999),
             q1_rev_total=random.randint(1000000, 9999999),
             q2_rev_total=random.randint(1000000, 9999999),
             q3_rev_total=random.randint(1000000, 9999999),
