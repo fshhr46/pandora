@@ -60,6 +60,22 @@ class FinanceReport(object):
     q2_rev_growth: str
     q3_rev_growth: str
     q4_rev_growth: str
+    total_q1_rev: str
+    total_q2_rev: str
+    total_q3_rev: str
+    total_q4_rev: str
+    growth_q1_rev: str
+    growth_q2_rev: str
+    growth_q3_rev: str
+    growth_q4_rev: str
+    total_rev_q1: str
+    total_rev_q2: str
+    total_rev_q3: str
+    total_rev_q4: str
+    growth_rev_q1: str
+    growth_rev_q2: str
+    growth_rev_q3: str
+    growth_rev_q4: str
 
 
 class FinanceReportGenerator(DataGeneratorBase):
@@ -85,4 +101,20 @@ class FinanceReportGenerator(DataGeneratorBase):
             q2_rev_growth=random.randint(100000, 999999),
             q3_rev_growth=random.randint(100000, 999999),
             q4_rev_growth=random.randint(100000, 999999),
+            total_q1_rev=random.randint(100000, 999999),
+            total_q2_rev=random.randint(100000, 999999),
+            total_q3_rev=random.randint(100000, 999999),
+            total_q4_rev=random.randint(100000, 999999),
+            growth_q1_rev=random.randint(100000, 999999),
+            growth_q2_rev=random.randint(100000, 999999),
+            growth_q3_rev=random.randint(100000, 999999),
+            growth_q4_rev=random.randint(100000, 999999),
+            total_rev_q1=random.randint(100000, 999999),
+            total_rev_q2=random.randint(100000, 999999),
+            total_rev_q3=random.randint(100000, 999999),
+            total_rev_q4=random.randint(100000, 999999),
+            growth_rev_q1=random.randint(100000, 999999),
+            growth_rev_q2=random.randint(100000, 999999),
+            growth_rev_q3=random.randint(100000, 999999),
+            growth_rev_q4=random.randint(100000, 999999),
         )
