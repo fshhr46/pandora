@@ -99,6 +99,7 @@ def load_model():
 
     TEST_DATASETS = [
         Dataset.short_sentence
+        # "pandora_demo_meta_100_10"
     ]
 
     datasets = TEST_DATASETS
@@ -381,7 +382,7 @@ def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visua
                 combined, key=lambda tp: tp[2], reverse=True)
             attributions = torch.tensor(response["importances"])
 
-            json_obj = {
+            obj = {
                 "sentence": sentence,
                 "probability": probability,
                 "pred_online": pred_online,
@@ -390,13 +391,34 @@ def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visua
                 "delta": delta,
                 "sorted_attributions": sorted_attributions,
             }
-            json_objs.append(json_obj)
-            logger.info(json.dumps(json_obj,
+            obj.append(obj)
+            logger.info(json.dumps(obj,
                                    ensure_ascii=False,
                                    indent=4))
 
     if visual:
         return visualize_insights(json_objs=json_objs)
+
+
+def build_keyword_dict(json_objs):
+
+    label_to_keyword_attrs = {}
+    for obj in json_objs:
+        label = obj["label"]
+        if label not in label_to_keyword_attrs:
+            label_to_keyword_attrs[label] = {}
+
+        attributions = label_to_keyword_attrs[label]
+        for entry in obj["sorted_attributions"]:
+            word, pos, attribution = entry
+            attributions[word] = attributions.get(word, 0) + attribution
+
+    label_to_keyword_attrs_sorted = {}
+    for label, keywords in label_to_keyword_attrs.items():
+        keywords_sorted = sorted(
+            keywords.items(), key=lambda k_v: k_v[1], reverse=True)
+        label_to_keyword_attrs_sorted[label] = keywords_sorted
+    print(json.dumps(label_to_keyword_attrs_sorted, indent=4, ensure_ascii=False))
 
 
 def visualize_insights(json_objs):
@@ -433,6 +455,7 @@ def run_test():
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data_1000/predict/test_submit.json"
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data/predict/test_submit.json"
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/short_sentence/predict/test_submit.json"
+    test_file = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_meta_100_10/predict/test_submit.json"
     # lines_1 = open(test_file).readlines()
     # lines_2 = get_test_data()
     # for l1, l2 in zip(lines_1, lines_2):
@@ -444,7 +467,7 @@ def run_test():
     #     print(l2)
     #     print(type(l2))
 
-    lines = open(test_file).readlines()
+    # lines = open(test_file).readlines()
 
     # Test inferencing by calling an online model registered in torchserve
     # assert test_online(lines) == 0
@@ -453,7 +476,11 @@ def run_test():
     # Test inferencing by loading a model offline and calling inference.run_inference offline
     # assert test_offline(lines) == 0
     # Run get insights
-    test_get_insights(lines)
+    # test_get_insights(lines, 10, 10, False, True)
+
+    lines = open("/home/haoranhuang/attributions.json").readlines()
+    json_objs = [json.loads(line) for line in lines]
+    build_keyword_dict(json_objs)
 
 
 if __name__ == '__main__':
