@@ -315,7 +315,7 @@ def test_get_insights(lines):
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
     total = 0
     vis_data_records_ig = []
-    pbar = ProgressBar(n_total=len(lines), desc='comparing')
+    pbar = ProgressBar(n_total=len(lines), desc='Attributing')
     with open("attributions.json", 'w+') as f:
         for step, input_batch in enumerate(dataloader):
             input_batch = tuple(t.to(device) for t in input_batch)
@@ -331,7 +331,6 @@ def test_get_insights(lines):
 
             sub_lines = lines[step * batch_size: (step+1) * batch_size]
             assert len(results) == len(sub_lines)
-            logger.info(f"sub_lines is {sub_lines}")
 
             targets = [label2id[res["class"]] for res in results]
             # TODO: Fix hard coded "sequence_classification"
@@ -347,7 +346,8 @@ def test_get_insights(lines):
                 device=device,
                 # input related
                 input_batch=input_batch_with_index,
-                target=targets)
+                target=targets,
+                n_steps=1)
             torch.cuda.empty_cache()
             for res, insight, line in zip(results, insights, sub_lines):
 
@@ -366,9 +366,9 @@ def test_get_insights(lines):
                 logger.info("")
                 logger.info(
                     "======================================================")
-                logger.info(f"request_data is {request_data}")
-                logger.info(f"pred_online: {pred_online}")
-                logger.info(f"label: {label}")
+                # logger.info(f"request_data is {request_data}")
+                # logger.info(f"pred_online: {pred_online}")
+                # logger.info(f"label: {label}")
 
                 response = insight
                 delta = response["delta"]
@@ -383,22 +383,25 @@ def test_get_insights(lines):
                 sorted_attributions = sorted(
                     combined, key=lambda tp: tp[2], reverse=True)
                 attributions = torch.tensor(response["importances"])
-                logger.info(sorted_attributions)
-                json.dump(
-                    {
-                        "sentence": sentence,
-                        "probability": probability,
-                        "pred_online": pred_online,
-                        "label": label,
-                        "attributions_sum": attributions.sum().item(),
-                        "delta": delta,
-                        "sorted_attributions": sorted_attributions,
-                    },
-                    f,
-                    indent=4,
-                    ensure_ascii=False
-                )
-                f.write("\n")
+
+                json_obj = {
+                    "sentence": sentence,
+                    "probability": probability,
+                    "pred_online": pred_online,
+                    "label": label,
+                    "attributions_sum": attributions.sum().item(),
+                    "delta": delta,
+                    "sorted_attributions": sorted_attributions,
+                }
+                # logger.info(json.dumps(json_obj,
+                #                        ensure_ascii=False,
+                #                        indent=4))
+                # json.dump(
+                #     json_obj,
+                #     f,
+                #     ensure_ascii=False
+                # )
+                # f.write("\n")
 
                 vis_data_records_ig.append(visualization.VisualizationDataRecord(
                     attributions,

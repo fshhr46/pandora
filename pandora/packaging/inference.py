@@ -99,7 +99,8 @@ def run_get_insights(
         # Input related
         # Original API def
         input_batch,
-        target):
+        target,
+        n_steps=50):
     """This function initialize and calls the layer integrated gradient to get word importance
     of the input text if captum explanation has been selected through setup_config
     Args:
@@ -114,7 +115,9 @@ def run_get_insights(
     if captum_explanation:
         embedding_layer = getattr(model, embedding_name)
         embeddings = embedding_layer.embeddings
-        lig = LayerIntegratedGradients(captum_sequence_forward, embeddings)
+        lig = LayerIntegratedGradients(
+            forward_func=captum_sequence_forward,
+            layer=embeddings)
     else:
         logger.warning(
             "Captum Explanation is not chosen and will not be available")
@@ -132,14 +135,25 @@ def run_get_insights(
         device=device).reshape(input_ids_batch.shape)
 
     if mode == "sequence_classification":
+        # attributions: shape - batch_size, num_tokens, bert's num_hidden_states (bert base  num_hidden_states=768)
+        # delta       : shape - batch_size, 1. compute_convergence_delta
         attributions, delta = lig.attribute(
             inputs=input_ids_batch,
             baselines=ref_input_ids_batch,
             target=target,
             additional_forward_args=(
                 attention_mask_batch, token_type_ids_batch, indexes, mode, model),
+            # Setting this slows down the processing as it splits the example batch
+            # into examples and process one at a time
+            # internal_batch_size=batch_size,
+
+            #  If the approximation error is large,
+            # we can try a larger number of integral approximation steps by setting n_steps to a larger value
+            n_steps=n_steps,
             return_convergence_delta=True,
         )
+        # shape: batch_size, num_tokens
+        # This calculates the normalized attribution for each token
         attributions_sum = summarize_attributions(attributions)
     else:
         raise NotImplementedError
