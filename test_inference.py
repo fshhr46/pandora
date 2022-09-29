@@ -307,12 +307,11 @@ def test_offline(lines, batch_size=20):
     return incorrect
 
 
-def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visual=False):
+def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visualize_output=False):
     _, local_rank, tokenizer, model, processor = load_model()
     _, dataloader, id2label, label2id = load_dataset(
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
     total = 0
-    vis_data_records_ig = []
     pbar = ProgressBar(n_total=len(lines), desc='Attributing')
     json_objs = []
     for step, input_batch in enumerate(dataloader):
@@ -391,12 +390,21 @@ def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visua
                 "delta": delta,
                 "sorted_attributions": sorted_attributions,
             }
-            obj.append(obj)
-            logger.info(json.dumps(obj,
-                                   ensure_ascii=False,
-                                   indent=4))
+            json_objs.append(obj)
+            # logger.info(json.dumps(obj,
+            #                        ensure_ascii=False,
+            #                        indent=4))
+            pbar(total)
+            total += 1
 
-    if visual:
+    label_2_keywords = build_keyword_dict(json_objs)
+    if dump_output:
+        with open("attributions.json", 'w') as f:
+            for json_obj in json_objs:
+                json.dump(json_obj, f, ensure_ascii=False)
+        with open("keywords.json", 'w') as f:
+            json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
+    if visualize_output:
         return visualize_insights(json_objs=json_objs)
 
 
@@ -418,7 +426,7 @@ def build_keyword_dict(json_objs):
         keywords_sorted = sorted(
             keywords.items(), key=lambda k_v: k_v[1], reverse=True)
         label_to_keyword_attrs_sorted[label] = keywords_sorted
-    print(json.dumps(label_to_keyword_attrs_sorted, indent=4, ensure_ascii=False))
+    return label_to_keyword_attrs_sorted
 
 
 def visualize_insights(json_objs):
@@ -455,32 +463,21 @@ def run_test():
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data_1000/predict/test_submit.json"
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/synthetic_data/predict/test_submit.json"
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/short_sentence/predict/test_submit.json"
-    test_file = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_meta_100_10/predict/test_submit.json"
-    # lines_1 = open(test_file).readlines()
-    # lines_2 = get_test_data()
-    # for l1, l2 in zip(lines_1, lines_2):
-    #     import time
-    #     time.sleep(1)
-    #     print("=======")
-    #     print(l1)
-    #     print(type(l1))
-    #     print(l2)
-    #     print(type(l2))
+    # test_file = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_meta_100_10/predict/test_submit.json"
 
-    # lines = open(test_file).readlines()
+    lines = open(test_file).readlines()
 
     # Test inferencing by calling an online model registered in torchserve
     # assert test_online(lines) == 0
+
     # Test inferencing by loading a model offline and calling predict in training pipeline (batch)
     # assert test_offline_train(lines) == 0
+
     # Test inferencing by loading a model offline and calling inference.run_inference offline
     # assert test_offline(lines) == 0
-    # Run get insights
-    # test_get_insights(lines, 10, 10, False, True)
 
-    lines = open("/home/haoranhuang/attributions.json").readlines()
-    json_objs = [json.loads(line) for line in lines]
-    build_keyword_dict(json_objs)
+    # Run get insights
+    test_get_insights(lines, 5, 30, True, True)
 
 
 if __name__ == '__main__':
