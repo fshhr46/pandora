@@ -1,9 +1,11 @@
+import jieba
 import torch
 import os
 import requests
 import json
 import logging
 import pathlib
+import jieba.posseg as pseg
 
 from torch.utils.data import DataLoader, SequentialSampler
 from captum.attr import visualization
@@ -408,7 +410,9 @@ def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visua
         return visualize_insights(json_objs=json_objs)
 
 
-def build_keyword_dict(json_objs):
+def build_keyword_dict(json_objs, use_jieba=True):
+    if use_jieba:
+        jieba.enable_paddle()
 
     label_to_keyword_attrs = {}
     for obj in json_objs:
@@ -416,10 +420,33 @@ def build_keyword_dict(json_objs):
         if label not in label_to_keyword_attrs:
             label_to_keyword_attrs[label] = {}
 
-        attributions = label_to_keyword_attrs[label]
-        for entry in obj["sorted_attributions"]:
-            word, pos, attribution = entry
-            attributions[word] = attributions.get(word, 0) + attribution
+        index = 0
+        attributions_sorted_by_index = sorted(
+            obj["sorted_attributions"], key=lambda k_v: k_v[1])
+
+        per_label_attributions = label_to_keyword_attrs[label]
+        # 词粒度
+        if use_jieba:
+            sentence = obj["sentence"][:MAX_SEQ_LENGTH - 2]
+            segs = list(pseg.cut(sentence, use_paddle=True))
+            # tokens = [entry[0] for entry in attributions_sorted_by_index]
+            assert sum([len(seg.word) for seg in segs]) == len(sentence)
+            index = 0
+            for seg in segs:
+                seg_attribution = 0
+                # logger.info(seg)
+                # logger.info(attributions_sorted_by_index[index])
+                for i in range(len(seg.word)):
+                    seg_attribution += attributions_sorted_by_index[index][2]
+                    index += 1
+                per_label_attributions[seg.word] = per_label_attributions.get(
+                    seg.word, 0) + seg_attribution
+        else:
+            # 字粒度
+            for entry in obj["sorted_attributions"]:
+                word, _, attribution = entry
+                per_label_attributions[word] = per_label_attributions.get(
+                    word, 0) + attribution
 
     label_to_keyword_attrs_sorted = {}
     for label, keywords in label_to_keyword_attrs.items():
@@ -477,7 +504,19 @@ def run_test():
     # assert test_offline(lines) == 0
 
     # Run get insights
-    test_get_insights(lines, 5, 30, True, True)
+    # test_get_insights(lines, 2, 50, True, True)
+
+    # Test merge attributions
+    test_file = f"{home}/attributions.json"
+    lines = open(test_file).readlines()
+    json_objs = [json.loads(line) for line in lines]
+
+    with open(f"{home}/workspace/resource/attribution/keywords_char.json", 'w') as f:
+        label_2_keywords = build_keyword_dict(json_objs, use_jieba=False)
+        json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
+    with open(f"{home}/workspace/resource/attribution/keywords_word.json", 'w') as f:
+        label_2_keywords = build_keyword_dict(json_objs, use_jieba=True)
+        json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
 
 
 if __name__ == '__main__':
