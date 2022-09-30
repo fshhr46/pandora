@@ -430,22 +430,25 @@ def filter_by_word_type(segment_type: str):
     ]
 
 
-def build_keyword_dict(json_objs, use_jieba=True):
+def build_keyword_dict(json_objs, use_jieba=True, do_average=False):
     if use_jieba:
         jieba.enable_paddle()
         # jieba.enable_parallel(4)
 
     label_to_keyword_attrs = {}
+    label_to_keyword_count = {}
     for obj in json_objs:
         label = obj["label"]
         if label not in label_to_keyword_attrs:
             label_to_keyword_attrs[label] = {}
+            label_to_keyword_count[label] = {}
 
         index = 0
         attributions_sorted_by_index = sorted(
             obj["sorted_attributions"], key=lambda k_v: k_v[1])
 
         per_label_attributions = label_to_keyword_attrs[label]
+        per_label_counts = label_to_keyword_count[label]
         # 词粒度
         if use_jieba:
             sentence = obj["sentence"][:MAX_SEQ_LENGTH - 2]
@@ -466,17 +469,30 @@ def build_keyword_dict(json_objs, use_jieba=True):
                     index += 1
                 per_label_attributions[seg.word] = per_label_attributions.get(
                     seg.word, 0) + seg_attribution
+                per_label_counts[seg.word] = per_label_counts.get(
+                    seg.word, 0) + 1
         else:
             # 字粒度
             for entry in obj["sorted_attributions"]:
                 word, _, attribution = entry
                 per_label_attributions[word] = per_label_attributions.get(
                     word, 0) + attribution
+                per_label_counts[word] = per_label_counts.get(word, 0) + 1
 
     label_to_keyword_attrs_sorted = {}
     for label, keywords in label_to_keyword_attrs.items():
+        keyword_attributions = keywords.items()
+        if do_average:
+            keyword_counts = label_to_keyword_count[label]
+            averaged_keyword_attributions = []
+            for k, v in keyword_attributions:
+                if keyword_counts[k] != 1:
+                    logger.info(f"label: {label}, k {k}: {keyword_counts[k]}")
+                averaged_v = 0 if v == 0 else 1.0 * v / keyword_counts[k]
+                averaged_keyword_attributions.append([k, averaged_v])
+            keyword_attributions = averaged_keyword_attributions
         keywords_sorted = sorted(
-            keywords.items(), key=lambda k_v: k_v[1], reverse=True)
+            keyword_attributions, key=lambda k_v: k_v[1], reverse=True)
         label_to_keyword_attrs_sorted[label] = keywords_sorted
     return label_to_keyword_attrs_sorted
 
@@ -536,11 +552,22 @@ def run_test():
     lines = open(test_file).readlines()
     json_objs = [json.loads(line) for line in lines]
 
+    with open(f"{home}/workspace/resource/attribution/keywords_char_averaged.json", 'w') as f:
+        label_2_keywords = build_keyword_dict(
+            json_objs, use_jieba=False, do_average=True)
+        json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
+    with open(f"{home}/workspace/resource/attribution/keywords_word_averaged.json", 'w') as f:
+        label_2_keywords = build_keyword_dict(
+            json_objs, use_jieba=True, do_average=True)
+        json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
+
     with open(f"{home}/workspace/resource/attribution/keywords_char.json", 'w') as f:
-        label_2_keywords = build_keyword_dict(json_objs, use_jieba=False)
+        label_2_keywords = build_keyword_dict(
+            json_objs, use_jieba=False, do_average=False)
         json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
     with open(f"{home}/workspace/resource/attribution/keywords_word.json", 'w') as f:
-        label_2_keywords = build_keyword_dict(json_objs, use_jieba=True)
+        label_2_keywords = build_keyword_dict(
+            json_objs, use_jieba=True, do_average=False)
         json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
 
 
