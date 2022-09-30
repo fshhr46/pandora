@@ -410,9 +410,30 @@ def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visua
         return visualize_insights(json_objs=json_objs)
 
 
+def filter_by_word_type(segment_type: str):
+    # paddle模式词性标注对应表如下：
+
+    # paddle模式词性和专名类别标签集合如下表，其中词性标签 24 个（小写字母），专名类别标签 4 个（大写字母）。
+
+    # 标签	 含义	    标签	含义	    标签	含义	    标签	含义
+    # n	    普通名词	f	    方位名词	  s	   处所名词     t	    时间
+    # nr    人名	   ns	    地名	    nt	  机构名	   nw	  作品名
+    # nz	其他专名	v	    普通动词	 vd	   动副词	    vn	    名动词
+    # a	    形容词	    ad	    副形词	    an	   名形词	    d	    副词
+    # m	    数量词	    q	    量词	    r	   代词	        p	    介词
+    # c	    连词	    u	    助词	    xc	   其他虚词	    w	    标点符号
+    # PER	人名	    LOC	    地名	    ORG     机构名	    TIME	时间
+    return segment_type in [
+        "n", "ns", "s", "t"
+        "nr", "v", "nt", "nw"
+        "nz", "vn"
+    ]
+
+
 def build_keyword_dict(json_objs, use_jieba=True):
     if use_jieba:
         jieba.enable_paddle()
+        # jieba.enable_parallel(4)
 
     label_to_keyword_attrs = {}
     for obj in json_objs:
@@ -433,6 +454,10 @@ def build_keyword_dict(json_objs, use_jieba=True):
             assert sum([len(seg.word) for seg in segs]) == len(sentence)
             index = 0
             for seg in segs:
+                # Filter word types that doesn't matter
+                if filter_by_word_type(seg.flag):
+                    index += len(seg.word)
+                    continue
                 seg_attribution = 0
                 # logger.info(seg)
                 # logger.info(attributions_sorted_by_index[index])
