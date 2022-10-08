@@ -403,7 +403,7 @@ def extract_feature_from_request(
         feature
     """
 
-    input_text = request_data.get("data"),
+    input_text = request_data.get("data")
     if isinstance(input_text, (bytes, bytearray)):
         input_text = input_text.decode("utf-8")
     logger.debug(f"input_text is {input_text}")

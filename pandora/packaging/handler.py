@@ -200,8 +200,9 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 inferences=inferences, id2label=self.id2label)
             # if indexes is passed, merge results (column level inferencing)
             if indexes:
-                inference.merge_outputs(
+                formated_outputs = inference.merge_outputs(
                     formated_outputs=formated_outputs, indexes=indexes)
+            return formated_outputs
 
     def postprocess(self, inference_output):
         """Post Process Function converts the predicted response into Torchserve readable format.
