@@ -9,8 +9,8 @@ import logging
 import os
 
 # load pandora python dependencies
-from . import feature
-from . import inference
+import feature
+import inference
 from tokenizer import SentenceTokenizer
 from model import BertForSentence
 

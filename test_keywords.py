@@ -1,3 +1,4 @@
+import os
 import jieba
 import torch
 import json
@@ -17,7 +18,12 @@ from pandora.tools.common import init_logger
 device = test_utils.get_device()
 
 
-def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visualize_output=False):
+def test_get_insights(
+        lines,
+        batch_size=40,
+        n_steps=50,
+        output_dir=None,
+        visualize_output=False):
     _, local_rank, tokenizer, model, processor = test_utils.load_model(device)
     _, dataloader, id2label, label2id = test_utils.load_dataset(
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
@@ -108,11 +114,11 @@ def test_get_insights(lines, batch_size=40, n_steps=50, dump_output=False, visua
             total += 1
 
     label_2_keywords = build_keyword_dict(json_objs)
-    if dump_output:
-        with open("attributions.json", 'w') as f:
+    if output_dir:
+        with open(os.path.join(output_dir, "attributions.json"), 'w') as f:
             for json_obj in json_objs:
                 json.dump(json_obj, f, ensure_ascii=False)
-        with open("keywords.json", 'w') as f:
+        with open(os.path.join(output_dir, "keywords.json"), 'w') as f:
             json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
     if visualize_output:
         return visualize_insights(json_objs=json_objs)
@@ -235,8 +241,20 @@ def run_test():
 
     home = str(pathlib.Path.home())
 
+    # =========== test
+    test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/short_sentence/predict/test_submit.json"
+    # test_file = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_meta_100_10/predict/test_submit.json"
+
+    lines = open(test_file).readlines()
+    output_dir = f"{home}/workspace/resource/attribution/"
+
     # Run get insights
-    # test_get_insights(lines, 2, 50, True, True)
+    test_get_insights(
+        lines=lines,
+        batch_size=2,
+        n_steps=50,
+        output_dir=output_dir,
+        visualize_output=False)
 
     # Test merge attributions
     test_file = f"{home}/attributions.json"
