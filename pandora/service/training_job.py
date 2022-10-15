@@ -18,6 +18,8 @@ import pandora.dataset.dataset_utils as dataset_utils
 import pandora.tools.runner_utils as runner_utils
 import pandora.tools.common as common
 
+from pandora.packaging.feature import TrainingType
+
 JOB_PREFIX = "PANDORA_TRAINING"
 REPORT_DIR_NAME = "predict"
 DATASET_FILE_NAME = "dataset.json"
@@ -43,7 +45,8 @@ class TrainingJob(object):
                  data_dir,
                  output_dir,
                  cache_dir,
-                 sample_size: int) -> None:
+                 sample_size: int,
+                 training_type: TrainingType) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
         self.output_dir = output_dir
@@ -51,6 +54,7 @@ class TrainingJob(object):
 
         # Training parameters
         self.sample_size = sample_size
+        self.training_type = training_type
 
     def __call__(self, *args, **kwds) -> None:
         arg_list = job_runner.get_training_args(
@@ -58,6 +62,7 @@ class TrainingJob(object):
             mode_type=self.model_type,
             bert_base_model_name=self.bert_base_model_name,
             sample_size=self.sample_size,
+            training_type=self.training_type,
         )
 
         dir_args = [f"--data_dir={self.data_dir}",
@@ -75,6 +80,7 @@ class TrainingJob(object):
 
         resource_dir = dataset_utils.get_partitioned_data_folder(
             self.output_dir)
+
         # TODO: this is hacky as we relies on os.path.join("1", "", "2")
         # returns "1/2"
         #
@@ -89,7 +95,8 @@ def start_training_job(
         job_id: str,
         server_dir,
         cache_dir,
-        sample_size: int) -> Tuple[bool, str]:
+        sample_size: int,
+        training_type: TrainingType) -> Tuple[bool, str]:
     # partitioned data locates in job/datasets/{train|dev|test}.json
     output_dir = get_job_output_dir(server_dir, job_id)
     partition_dir = dataset_utils.get_partitioned_data_folder(
@@ -108,9 +115,11 @@ def start_training_job(
         data_dir=partition_dir,
         output_dir=output_dir,
         cache_dir=cache_dir,
-        sample_size=sample_size)
+        sample_size=sample_size,
+        training_type=training_type)
     mp.set_start_method("spawn", force=True)
-    job_process = mp.Process(name=_get_job_folder_name_by_id(job_id=job_id), target=job)
+    job_process = mp.Process(
+        name=_get_job_folder_name_by_id(job_id=job_id), target=job)
     job_process.daemon = True
     job_process.start()
     message = f'Started training job with ID {job_id}'
@@ -130,8 +139,12 @@ def stop_training_job(job_id: str) -> Tuple[bool, str]:
 
 
 def partition_dataset(
-        server_dir: str, job_id: str,
-        min_samples: int, data_ratios: List, seed: int = 42) -> Tuple[bool, Dict, str]:
+        server_dir: str,
+        job_id: str,
+        training_type: TrainingType,
+        min_samples: int,
+        data_ratios: List,
+        seed: int = 42) -> Tuple[bool, Dict, str]:
     dataset_path = _get_dataset_file_path(server_dir, job_id)
     if not os.path.isfile(dataset_path):
         return False, {}, f"dataset file {dataset_path} not exists"
@@ -142,7 +155,9 @@ def partition_dataset(
             os.mkdir(partition_dir)
 
         result = poseidon_data.partition_poseidon_dataset(
-            dataset_path=dataset_path, output_dir=partition_dir,
+            dataset_path=dataset_path,
+            training_type=training_type,
+            output_dir=partition_dir,
             min_samples=min_samples,
             data_ratios=data_ratios, seed=seed)
     except ValueError as e:

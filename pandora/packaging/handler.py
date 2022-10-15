@@ -82,6 +82,9 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         self.tokenizer = SentenceTokenizer.from_pretrained(
             model_dir, do_lower_case=self.setup_config["do_lower_case"])
 
+        # set model training type
+        self.training_type = self.setup_config["training_type"]
+
         self.model.eval()
         logger.info(
             "Transformer model from path %s loaded successfully", model_dir)
@@ -110,6 +113,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
 
         feat = feature.extract_feature_from_request(
             request_data,
+            self.training_type,
             self.label2id,
             max_seq_length,
             self.tokenizer,
@@ -153,6 +157,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         indexes = []
         num_texts = 0
         for idx, request_data in enumerate(requests):
+            logger.info(f"request_data is {request_data}")
             if "data" in request_data and "body" in request_data:
                 raise ValueError(
                     "Expect one of field in [data, body] to be set, but got both")
@@ -213,14 +218,16 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         """
         return inference_output
 
-    def get_insights(self, input_batch, request_data, target):
-        logger.info(f"request_data is {request_data}")
+    def get_insights(self, input_batch, request_data, target_id):
+        target_id = int(target_id.decode("utf-8"))
+        assert target_id in self.id2label, f"target_id not found in {self.id2label}"
+        target = self.id2label[target_id]
+        logger.info(f"getting insights for target {target}")
         with torch.no_grad():
             return inference.run_get_insights(
                 # configs
                 mode=self.setup_config["mode"],
                 embedding_name=self.setup_config["embedding_name"],
-                captum_explanation=self.setup_config["captum_explanation"],
                 # model related
                 model=self.model,
                 tokenizer=self.tokenizer,
@@ -228,4 +235,4 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 device=self.device,
                 # input related
                 input_batch=input_batch,
-                target=target)
+                target=target_id)

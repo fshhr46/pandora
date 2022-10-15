@@ -6,6 +6,7 @@ import pandora.service.job_runner as job_runner
 import pandora.packaging.packager as packager
 
 from pandora.dataset.sentence_data import Dataset
+from pandora.packaging.feature import TrainingType
 
 
 def main():
@@ -22,15 +23,22 @@ def main():
     num_data_entry_train = 100
     num_data_entry_test = 10
 
+    # Training args
+    training_type = TrainingType.column_data
+    training_type = TrainingType.meta_data
+    training_type = TrainingType.mixed_data
+    num_epochs = 2
+
     # dataset_name_prefix = "synthetic_data"
     dataset_name_prefix = "pandora_demo_meta"
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
 
     import build_synthetic_datasets as dataset_builder
     dataset_names = [
-        Dataset.short_sentence
+        # Dataset.short_sentence
+        Dataset.column_data
     ]
-    # dataset_names = [dataset_name]
+    dataset_names = [dataset_name]
     output_dir = os.path.join(resource_dir, "outputs",
                               bert_base_model_name,  "_".join(dataset_names))
 
@@ -49,6 +57,8 @@ def main():
         task_name=task_name,
         mode_type=model_type,
         bert_base_model_name=bert_base_model_name,
+        training_type=training_type,
+        num_epochs=num_epochs,
     )
 
     arg_list.extend(

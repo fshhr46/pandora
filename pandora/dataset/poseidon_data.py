@@ -1,4 +1,3 @@
-import pandora.dataset.dataset_utils as dataset_utils
 from enum import Enum
 import json
 from dataclasses import dataclass
@@ -6,6 +5,9 @@ from typing import Dict, List, Tuple
 import os
 
 import json
+
+import pandora.dataset.dataset_utils as dataset_utils
+from pandora.packaging.feature import TrainingType
 
 
 class DatasetJSONEncoder(json.JSONEncoder):
@@ -58,8 +60,11 @@ class PartitionResult(object):
 
 
 def partition_poseidon_dataset(
-        dataset_path: str, output_dir: str,
-        min_samples: int, data_ratios: Dict, seed: int):
+        dataset_path: str,
+        training_type: TrainingType,
+        output_dir: str,
+        min_samples: int,
+        data_ratios: Dict, seed: int):
 
     with open(dataset_path, "r", encoding='utf-8') as dataset_f:
         dataset = json.load(dataset_f)
@@ -93,7 +98,6 @@ def partition_poseidon_dataset(
     for col_id, column_data in col_data.items():
 
         col_tag_ids = column_data["tag_ids"]
-        column_name = column_data["column_name"]
 
         for col_tag_id in col_tag_ids:
             # check if tag_id is valid
@@ -109,18 +113,17 @@ def partition_poseidon_dataset(
             if col_id not in tag_data:
                 tag_data[col_id] = []
             col_text = tag_data[col_id]
+            tag_name = tags_by_id[col_tag_id]["name"]
+            label_ids = [_create_unique_label_name(
+                tag_name=tag_name, tag_id=col_tag_id)]
 
-            # Add data entry
-            # TODO: Hard Coded list
-            for data_entry in column_data["recognition_data"]:
-                tag_name = tags_by_id[col_tag_id]["name"]
-                col_text.append(
-                    dataset_utils.DataEntry(
-                        text=data_entry["content"],
-                        label=[_create_unique_label_name(
-                            tag_name=tag_name, tag_id=col_tag_id)],
-                        column_name=column_name,
-                    ))
+            data_entries = _create_data_entries_by_training_type(
+                training_type=training_type,
+                label_ids=label_ids,
+                tag_name=tag_name,
+                column_data=column_data,
+            )
+            col_text.extend(data_entries)
 
     # added up partitions for all tags and columns
     partitions_train = []
@@ -190,6 +193,34 @@ def partition_poseidon_dataset(
         "invalid_tags": invalid_tags,
     }
     return summary
+
+
+def _create_data_entries_by_training_type(
+        training_type: TrainingType,
+        label_ids: List[str],
+        tag_name: str,
+        column_data: dict):
+    column_name = column_data["column_name"]
+    if training_type == TrainingType.column_data:
+        # Add data entry
+        # TODO: Hard Coded list
+        data_entries = []
+        for data_entry in column_data["recognition_data"]:
+            tag_name = tag_name,
+            data_entries.append(dataset_utils.DataEntry(
+                text=data_entry["content"],
+                label=label_ids,
+                column_name=column_name,
+            ))
+        return data_entries
+    elif training_type == TrainingType.meta_data:
+        return [dataset_utils.DataEntry(
+            text="",
+            label=label_ids,
+            column_name=column_name,
+        )]
+    else:
+        raise ValueError
 
 
 def _create_unique_label_name(tag_name, tag_id):

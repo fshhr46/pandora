@@ -10,17 +10,22 @@ logger = logging.getLogger(__name__)
 
 def _format_output(logits, id2label):
     y_hat = logits.argmax(0).item()
-    y_softmax = torch.softmax(logits, 0)
+    y_softmax = torch.softmax(logits, 0).tolist()
+    y_sigmoid = torch.sigmoid(logits).tolist()
     predicted_idx = y_hat
+    num_labels = len(id2label)
 
     named_softmax = {}
-    for idx, prob in enumerate(y_softmax.tolist()):
+    named_sigmoid = {}
+    for idx in range(num_labels):
         name = id2label[idx]
-        named_softmax[name] = prob
+        named_softmax[name] = y_softmax[idx]
+        named_sigmoid[name] = y_sigmoid[idx]
     return {
         "class": id2label[predicted_idx],
         "probability": named_softmax[id2label[predicted_idx]],
         "softmax": named_softmax,
+        "sigmoid": named_sigmoid,
     }
 
 
@@ -90,7 +95,6 @@ def run_get_insights(
         # configs
         mode: str,
         embedding_name: str,
-        captum_explanation: bool,
         # model related
         model,
         tokenizer,
@@ -99,7 +103,7 @@ def run_get_insights(
         # Input related
         # Original API def
         input_batch,
-        target,
+        target: int,
         n_steps=50):
     """This function initialize and calls the layer integrated gradient to get word importance
     of the input text if captum explanation has been selected through setup_config
@@ -112,16 +116,11 @@ def run_get_insights(
     """
 
     input_ids_batch, attention_mask_batch, token_type_ids_batch, indexes = input_batch
-    if captum_explanation:
-        embedding_layer = getattr(model, embedding_name)
-        embeddings = embedding_layer.embeddings
-        lig = LayerIntegratedGradients(
-            forward_func=captum_sequence_forward,
-            layer=embeddings)
-    else:
-        logger.warning(
-            "Captum Explanation is not chosen and will not be available")
-
+    embedding_layer = getattr(model, embedding_name)
+    embeddings = embedding_layer.embeddings
+    lig = LayerIntegratedGradients(
+        forward_func=captum_sequence_forward,
+        layer=embeddings)
     batch_size, _ = input_ids_batch.shape
 
     # TODO: Fix construct_input_ref.
@@ -154,16 +153,21 @@ def run_get_insights(
         )
         # shape: batch_size, num_tokens
         # This calculates the normalized attribution for each token
-        attributions_sum = summarize_attributions(attributions)
+        attributions_sum = summarize_attributions(attributions, batch_size)
     else:
         raise NotImplementedError
 
     responses = []
     for i in range(batch_size):
         response = {}
+        # Remove padding
         all_tokens = get_word_token(input_ids_batch, tokenizer, i)
-        response["words"] = all_tokens
-        response["importances"] = attributions_sum[i].tolist()
+        words = list(
+            filter(lambda word: word != tokenizer.pad_token, all_tokens))
+        attributions = attributions_sum[i].tolist()[:len(words)]
+
+        response["words"] = words
+        response["importances"] = attributions
         response["delta"] = delta[i].tolist()
         responses.append(response)
     return responses
@@ -239,13 +243,15 @@ def captum_sequence_forward(input_ids_batch, attention_mask_batch, token_type_id
     return torch.stack(inferences)
 
 
-def summarize_attributions(attributions):
+def summarize_attributions(attributions, batch_size):
     """Summarises the attribution across multiple runs
     Args:
         attributions ([list): attributions from the Layer Integrated Gradients
     Returns:
         list : Returns the attributions after normalizing them.
     """
-    attributions = attributions.sum(dim=-1).squeeze(0)
+    attributions = attributions.sum(dim=-1)
+    if batch_size > 1:
+        attributions = attributions.squeeze(0)
     attributions = attributions / torch.norm(attributions)
     return attributions

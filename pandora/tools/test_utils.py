@@ -13,7 +13,10 @@ import pandora.service.job_runner as job_runner
 
 from pandora.tools.common import logger
 from pandora.dataset.sentence_data import Dataset
-from pandora.packaging.feature import batch_collate_fn
+from pandora.packaging.feature import (
+    batch_collate_fn,
+    TrainingType
+)
 
 
 MAX_SEQ_LENGTH = 64
@@ -95,6 +98,7 @@ def load_model(device):
         task_name=task_name,
         mode_type=mode_type,
         bert_base_model_name=bert_base_model_name,
+        training_type=TrainingType.column_data,
     )
 
     TEST_DATASETS = [

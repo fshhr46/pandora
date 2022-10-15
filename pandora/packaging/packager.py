@@ -10,9 +10,11 @@ MODEL_FILE_NAME = "pytorch_model.bin"
 MODEL_CONFIG_FILE_NAME = "config.json"
 VOCAB_FILE_NAME = "vocab.txt"
 INDEX2NAME_FILE_NAME = "index_to_name.json"
+SERUP_CONF_FILE_NAME = "setup_config.json"
 
 MODEL_FILES_TO_COPY = [MODEL_FILE_NAME, MODEL_CONFIG_FILE_NAME,
-                       VOCAB_FILE_NAME, INDEX2NAME_FILE_NAME]
+                       VOCAB_FILE_NAME, INDEX2NAME_FILE_NAME,
+                       SERUP_CONF_FILE_NAME]
 
 
 # handler and python files
@@ -24,7 +26,6 @@ INFERENCE_NAME = "inference.py"
 FEATURE_NAME = "feature.py"
 
 # torchserve related names
-SERUP_CONF_FILE_NAME = "setup_config.json"
 REGISTER_SCRIPT_NAME = "register.sh"
 PACKAGE_SCRIPT_NAME = "package.sh"
 PACKAGING_DONE_FILE = "package.done"
@@ -46,25 +47,6 @@ class ModelPackager(object):
         self.model_dir = model_dir
         self.eval_max_seq_length = eval_max_seq_length
 
-    # TODO: Unify this setup config with model config
-    def create_setup_config_file(self, package_dir, num_labels: str):
-        setup_conf = {
-            "model_name": "bert-base-chinese",
-            "mode": "sequence_classification",
-            "do_lower_case": True,
-            "num_labels": num_labels,
-            "save_mode": "pretrained",
-            # TODO: This needs to be aligned with traning/eval? current set to eval's "eval_max_seq_length".
-            "max_length": self.eval_max_seq_length,
-            "captum_explanation": False,  # TODO: make this True
-            "embedding_name": "bert",
-            "FasterTransformer": False,  # TODO: make this True
-            "model_parallel": False  # Beta Feature, set to False for now.
-        }
-        setup_conf_path = os.path.join(package_dir, SERUP_CONF_FILE_NAME)
-        with open(setup_conf_path, "w") as setup_conf_f:
-            json.dump(setup_conf, setup_conf_f, indent=4)
-
     def build_model_package(self):
         assert os.path.isdir(
             self.model_dir), f"model_dir {self.model_dir} is not a directory"
@@ -73,13 +55,6 @@ class ModelPackager(object):
         package_dir = get_package_dir(self.model_dir)
         if not os.path.exists(package_dir):
             os.mkdir(package_dir)
-
-        id2label = json.load(open(os.path.join(
-            self.model_dir, INDEX2NAME_FILE_NAME)))
-
-        # create torchserve config file
-        self.create_setup_config_file(
-            package_dir, len(id2label))
 
         # create package file
         self.create_package_script(package_dir)

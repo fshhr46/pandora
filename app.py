@@ -27,8 +27,12 @@ server = server.Server(flaskApp)
 @flaskApp.route('/start', methods=['POST'])
 def start_training():
     job_id = _get_job_id(args=request.args)
+
     sample_size = request.args.get("sample_size", default=0, type=int)
     logging.info(f"sample_size is {sample_size}")
+
+    training_type = _get_training_type(args=request.args)
+
     active_training_jobs = training_job.list_training_jobs()
     has_resource, msg = server.has_enough_resource(len(active_training_jobs))
     if not has_resource:
@@ -40,7 +44,8 @@ def start_training():
         job_id=job_id,
         server_dir=server.output_dir,
         cache_dir=server.cache_dir,
-        sample_size=sample_size)
+        sample_size=sample_size,
+        training_type=training_type)
     output = {
         "success": success,
         "message": message
@@ -54,6 +59,13 @@ def _get_job_id(args) -> str:
         logger.info(f"job id is {job_id}")
         return job_id
     raise ValueError(f"invalid Job ID: {job_id}")
+
+
+def _get_training_type(args) -> str:
+    training_type = args.get(
+        "training_type", default=training_job.TrainingType.column_data, type=str)
+    logging.info(f"training_type is {training_type}")
+    return training_type
 
 
 @flaskApp.route('/stop', methods=['POST'])
@@ -108,6 +120,8 @@ def partition_dataset():
     logging.info(f"min_samples is {min_samples}")
     logging.info(f"data_ratios is {data_ratios}")
 
+    training_type = _get_training_type(args=request.args)
+
     # Validations
     error_msg = dataset_utils.validate_ratios(data_ratios)
     if error_msg:
@@ -127,6 +141,7 @@ def partition_dataset():
     success, result, message = training_job.partition_dataset(
         server_dir=server.output_dir,
         job_id=job_id,
+        training_type=training_type,
         min_samples=min_samples,
         data_ratios=data_ratios,
     )

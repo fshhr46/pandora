@@ -1,20 +1,31 @@
 import csv
 import json
+from multiprocessing.sharedctypes import Value
 import os
 import copy
 import random
-from typing import List, Dict
-import torch
 
+from enum import Enum
+from typing import List, Dict
+
+import torch
 import logging
 
 logger = logging.getLogger(__name__)
 
 
+class TrainingType(str, Enum):
+    def __str__(self):
+        return str(self.value)
+    meta_data = "meta_data"  # use meta data for training (like column names)
+    column_data = "column_data"  # use data entries column
+    mixed_data = "mixed_data"  # use metadata and column data together
+
+
 class InputExample(object):
     """A single training/test example for token classification."""
 
-    def __init__(self, id, words, labels, sentence):
+    def __init__(self, id, labels, sentence, column_name):
         """Constructs a InputExample.
         Args:
             guid: Unique id for the example.
@@ -23,9 +34,9 @@ class InputExample(object):
         """
         # TODO: Remove id from example
         self.id = id
-        self.words = words
         self.labels = labels
         self.sentence = sentence
+        self.column_name = column_name
 
     def __repr__(self):
         return str(self.to_json_string())
@@ -78,7 +89,9 @@ def batch_collate_fn(batch):
     return all_input_ids, all_attention_mask, all_token_type_ids, all_labels, all_lens
 
 
-def convert_examples_to_features(examples, label_list,
+def convert_examples_to_features(examples,
+                                 training_type,
+                                 label_list,
                                  max_seq_length, tokenizer,
                                  *args, **kwargs):
     """
@@ -93,8 +106,12 @@ def convert_examples_to_features(examples, label_list,
         if ex_index % 10000 == 0:
             logger.info("Writing example %d of %d", ex_index, len(examples))
         feature = convert_example_to_feature(
-            example, label2id, ex_index < 5,
-            max_seq_length, tokenizer,
+            example,
+            training_type,
+            label2id,
+            ex_index < 5,
+            max_seq_length,
+            tokenizer,
             *args, **kwargs)
         features.append(feature)
     return features
@@ -103,6 +120,7 @@ def convert_examples_to_features(examples, label_list,
 # Convert example to feature, and pad them
 def convert_example_to_feature(
         example,
+        training_type: TrainingType,
         label2id,
         log_data: bool,
         max_seq_length,
@@ -114,12 +132,12 @@ def convert_example_to_feature(
     # sentence labels
     sentence_labels = [label2id[x] for x in example.labels]
 
-    # Input token IDs from tokenizer
-    # TODO: Remove duplicate
-    # tokens_words = tokenizer.tokenize(example.words)
-    tokens_sentence = tokenizer.tokenize(example.sentence)
-    # assert tokens_words == tokens_sentence
-    tokens = tokens_sentence
+    # Extract tokens
+    tokens = extract_tokens_from_example(
+        example=example,
+        training_type=training_type,
+        tokenizer=tokenizer,
+    )
 
     # TODO: Remove duplicate
     input_ids = tokenizer.convert_tokens_to_ids(tokens)
@@ -181,12 +199,46 @@ def convert_example_to_feature(
     return feature
 
 
+def extract_tokens_from_example(
+        example,
+        training_type: TrainingType,
+        tokenizer):
+
+    if training_type == TrainingType.column_data:
+        assert example.sentence, "text data is required for column_data model"
+        # Input token IDs from tokenizer
+        # TODO: Remove duplicate
+        # tokens_words = tokenizer.tokenize(example.words)
+        tokens = tokenizer.tokenize(example.sentence)
+        # assert tokens_words == tokens_sentence
+        # tokens = tokens_sentence
+
+    elif training_type == TrainingType.meta_data:
+        assert example.column_name, "column_name data is required for column_data model"
+        tokens = tokenizer.tokenize(example.column_name)
+
+    elif training_type == TrainingType.mixed_data:
+        assert example.sentence, "text data is required for mixed_data training"
+        assert example.column_name, "column_name data is required for mixed_data model"
+        # TODO: find better way to combine text
+        combined_text = f"{example.column_name}|{example.sentence}"
+        tokens = tokenizer.tokenize(combined_text)
+
+    else:
+        raise ValueError(f"invalid training_type {training_type}")
+
+    return tokens
+
+
 def create_example(id, line):
-    words = line['words']
     labels = line['labels']
-    text = line['sentence']
+    sentence = str(line['sentence'])
+    column_name = str(line['column_name'])
     return InputExample(
-        id=id, words=words, labels=labels, sentence=text)
+        id=id,
+        labels=labels,
+        sentence=sentence,
+        column_name=column_name)
 
 
 class DataProcessor(object):
@@ -207,78 +259,27 @@ class DataProcessor(object):
     @classmethod
     def _read_tsv(cls, input_file, quotechar=None):
         """Reads a tab separated value file."""
-        with open(input_file, "r", encoding="utf-8-sig") as f:
-            reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
-            lines = []
-            for line in reader:
-                lines.append(line)
-            return lines
+        raise NotImplementedError()
 
     @classmethod
     def _read_text(self, input_file):
-        lines = []
-        with open(input_file, 'r') as f:
-            words = []
-            labels = []
-            for line in f:
-                if line.startswith("-DOCSTART-") or line == "" or line == "\n":
-                    if words:
-                        lines.append({"words": words, "labels": labels})
-                        words = []
-                        labels = []
-                else:
-                    splits = line.split(" ")
-                    words.append(splits[0])
-                    if len(splits) > 1:
-                        labels.append(splits[-1].replace("\n", ""))
-                    else:
-                        # Examples could have no label for mode = "test"
-                        labels.append("O")
-            if words:
-                lines.append({"words": words, "labels": labels})
-        return lines
+        raise NotImplementedError()
 
     @classmethod
     def _read_json(cls, input_file):
-        lines = []
-        with open(input_file, 'r') as f:
-            for line in f:
-                line = json.loads(line.strip())
-                text = line['text'].decode("utf-8")
-                # 把句子拆成一个一个单词
-                # >> > words = "abcde你好啊"
-                # >> > list(words)
-                # ['a', 'b', 'c', 'd', 'e', '你', '好', '啊']
-                # >> >
-                words = list(text)
-                labels = cls._create_labels(line, words)
-                lines.append({"words": words, "labels": labels})
-        return lines
+        raise NotImplementedError()
 
     @classmethod
-    def _create_labels(self, line, words):
-        label_entities = line.get('label', None)
-        labels = ['O'] * len(words)
-        if label_entities is not None:
-            for key, value in label_entities.items():
-                for sub_name, sub_index in value.items():
-                    for start_index, end_index in sub_index:
-                        assert ''.join(
-                            words[start_index:end_index + 1]) == sub_name
-                        if start_index == end_index:
-                            labels[start_index] = 'S-' + key
-                        else:
-                            labels[start_index] = 'B-' + key
-                            labels[start_index + 1:end_index +
-                                   1] = ['I-' + key] * (len(sub_name) - 1)
-        return labels
+    def _create_labels(self, line):
+        raise NotImplementedError()
 
 
 class SentenceProcessor(DataProcessor):
     """Processor for the chinese ner data set."""
 
-    def __init__(self, resource_dir, datasets: List[str]) -> None:
+    def __init__(self, training_type: TrainingType, resource_dir, datasets: List[str]) -> None:
         super().__init__()
+        self.training_type = training_type
         self.resource_dir = resource_dir
         self.datasets = datasets
 
@@ -333,8 +334,8 @@ class SentenceProcessor(DataProcessor):
             return read_json_lines(f)
 
     @classmethod
-    def _create_labels(self, line, words):
-        return _create_labels(line, words)
+    def _create_labels(self, line):
+        return _create_labels(line)
 
 
 def read_json_lines(json_lines_itr):
@@ -346,22 +347,22 @@ def read_json_lines(json_lines_itr):
 
 
 def read_json_line(line_obj: Dict):
-    text = line_obj['text']
     # 把句子拆成一个一个单词
     # >> > words = "abcde你好啊"
     # >> > list(words)
     # ['a', 'b', 'c', 'd', 'e', '你', '好', '啊']
     # >> >
     # TODO: Fix this column name concat
+    sentence = line_obj['text']
     column_name = line_obj.get('column_name')
-    if column_name:
-        text = f"{column_name}, {text}"
-    words = list(text)
-    labels = _create_labels(line_obj, words)
-    return {"words": words, "labels": labels, "sentence": text}
+    labels = _create_labels(line_obj)
+    return {
+        "labels": labels,
+        "sentence": sentence,
+        "column_name": column_name}
 
 
-def _create_labels(line_obj, words):
+def _create_labels(line_obj):
     # label is a list of sentence level classes
     # words is not used as this is sentence level classification
     return line_obj.get('label', [])
@@ -393,7 +394,11 @@ class RandomDataSampler(object):
 
 
 def extract_feature_from_request(
-        request_data, label2id, max_seq_length, tokenizer):
+        request_data,
+        training_type: TrainingType,
+        label2id,
+        max_seq_length,
+        tokenizer):
     """This function extract feature from a request data.
     Request data is a dictionary with "data" and "column_name" keys
 
@@ -419,6 +424,7 @@ def extract_feature_from_request(
     example = create_example(id="", line=line)
     feat = convert_example_to_feature(
         example,
+        training_type,
         label2id,
         log_data=False,
         max_seq_length=int(max_seq_length),

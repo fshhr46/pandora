@@ -51,7 +51,6 @@ def test_get_insights(
             # configs
             mode=test_utils.HANDLER_MODE,
             embedding_name="bert",
-            captum_explanation=True,
             # model related
             model=model,
             tokenizer=tokenizer,
@@ -83,26 +82,21 @@ def test_get_insights(
             # logger.info(f"pred_online: {pred_online}")
             # logger.info(f"label: {label}")
 
-            response = insight
-            delta = response["delta"]
+            words = insight["words"]
+            attributions = insight["importances"]
+            delta = insight["delta"]
 
-            non_pad_words = list(
-                filter(lambda word: word != tokenizer.pad_token, response["words"]))
-            non_pad_attributions = response["importances"][:len(
-                non_pad_words)]
-            positions = list(range(len(non_pad_words)))
-            combined = list(
-                zip(non_pad_words, positions, non_pad_attributions))
+            positions = list(range(len(words)))
+            combined = list(zip(words, positions, attributions))
             sorted_attributions = sorted(
                 combined, key=lambda tp: tp[2], reverse=True)
-            attributions = torch.tensor(response["importances"])
 
             obj = {
                 "sentence": sentence,
                 "probability": probability,
                 "pred_online": pred_online,
                 "label": label,
-                "attributions_sum": attributions.sum().item(),
+                "attributions_sum": torch.tensor(attributions).sum().item(),
                 "delta": delta,
                 "sorted_attributions": sorted_attributions,
             }

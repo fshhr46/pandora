@@ -15,7 +15,8 @@ from torch.utils.data.distributed import DistributedSampler
 from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
 from pandora.callback.optimizater.adamw import AdamW
 from pandora.callback.progressbar import ProgressBar
-from pandora.service.job_utils import get_all_checkpoints
+from pandora.packaging.feature import TrainingType
+from pandora.service.job_utils import get_all_checkpoints, create_setup_config_file
 from pandora.packaging.feature import (
     batch_collate_fn,
 )
@@ -26,6 +27,7 @@ from pandora.packaging.cache_configs import BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
 from pandora.packaging.feature import cls_processors
 from pandora.packaging.tokenizer import SentenceTokenizer
 from pandora.tools.common import init_logger, logger
+import pandora.packaging.packager as packager
 import pandora.tools.common as common_utils
 import pandora.tools.runner_utils as runner_utils
 import pandora.tools.mps_utils as mps_utils
@@ -45,8 +47,10 @@ def get_training_args(
     task_name,
     mode_type,
     bert_base_model_name,
+    training_type: TrainingType,
     # optional parameters
     sample_size: int = 0,
+    num_epochs: int = 2,
 ) -> List[str]:
 
     # guidence: batch_size * max_seq_length in range[3000, 4000]
@@ -72,7 +76,7 @@ def get_training_args(
                 "--learning_rate=3e-5",
 
                 # changed from 4 -> 2
-                "--num_train_epochs=2.0",
+                f"--num_train_epochs={num_epochs}",
 
                 f"--logging_steps={checkpoint_steps}",
                 f"--save_steps={checkpoint_steps}",
@@ -87,6 +91,7 @@ def get_training_args(
         arg_list.append(
             f"--sample_size={sample_size}",
         )
+    arg_list.append(f"--training_type={training_type}")
     return arg_list
 
 
@@ -144,15 +149,27 @@ def get_default_dirs(
 def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     parser = get_args_parser()
     args = parser.parse_args(arg_list)
+    training_type = args.training_type
 
     processor = runner_utils.get_data_processor(
-        resource_dir=resource_dir, datasets=datasets)
+        training_type=training_type,
+        resource_dir=resource_dir,
+        datasets=datasets)
 
     args, config, tokenizer, model, model_classes = setup(
         args=args, processor=processor)
     config_class, model_class, tokenizer_class = model_classes
 
-    data = runner_utils.prepare_data(args, tokenizer, processor=processor)
+    # create torchserve config file
+    create_setup_config_file(
+        args.output_dir,
+        packager.SERUP_CONF_FILE_NAME,
+        args.training_type,
+        args.eval_max_seq_length,
+        len(args.id2label))
+
+    data = runner_utils.prepare_data(
+        args, tokenizer, processor=processor)
     dataset_partitions = data["datasets"]
     train_dataset, eval_dataset, test_dataset = dataset_partitions[
         "train"], dataset_partitions["eval"], dataset_partitions["test"]
@@ -179,11 +196,13 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
         )  # Take care of distributed/parallel training
         model_to_save.save_pretrained(args.output_dir)
         tokenizer.save_vocabulary(args.output_dir)
+
         # Good practice: save your training arguments together with the trained model
         # save as binary
         torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
+
         # save as json
-        with open(os.path.join(args.output_dir, "index_to_name.json"), "w") as id2label_f:
+        with open(os.path.join(args.output_dir, packager.INDEX2NAME_FILE_NAME), "w") as id2label_f:
             json.dump(args.id2label, id2label_f, indent=4, ensure_ascii=False)
 
     # Evaluation
@@ -530,6 +549,17 @@ def get_args_parser():
                             ALL_MODELS), )
     parser.add_argument("--output_dir", default=None, type=str, required=True,
                         help="The output directory where the model predictions and checkpoints will be written.", )
+
+    # data related parameters
+    parser.add_argument("--sample_size", type=int, default=0,
+                        help="number of samples for each class")
+    parser.add_argument("--training_type", type=str, required=True,
+                        choices=[TrainingType.meta_data,
+                                 TrainingType.column_data,
+                                 TrainingType.mixed_data
+                                 ],
+                        help="Training type selected in TrainingType")
+
     # Other parameters
     parser.add_argument('--markup', default='bios',
                         type=str, choices=['bios', 'bio'])
@@ -599,8 +629,6 @@ def get_args_parser():
                         help="Overwrite the cached training and evaluation sets")
     parser.add_argument("--seed", type=int, default=42,
                         help="random seed for initialization")
-    parser.add_argument("--sample_size", type=int, default=0,
-                        help="number of samples for each class")
     parser.add_argument("--fp16", action="store_true",
                         help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit", )
     parser.add_argument("--fp16_opt_level", type=str, default="O1",

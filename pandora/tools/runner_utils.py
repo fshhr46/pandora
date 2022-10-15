@@ -1,5 +1,6 @@
 import os
 import json
+from pandora.packaging.feature import TrainingType
 import pandora.tools.report as report
 from pandora.tools.common import json_to_text
 
@@ -30,8 +31,6 @@ def build_train_report(examples, predictions, report_dir, processor):
         json_d = {}
         json_d['guid'] = x.id
         json_d['text'] = x.sentence
-        # TODO : Remove this commented out line
-        # json_d['words'] = x.words
         json_d['label'] = x.labels
         json_d['pred'] = y['tags']
         test_submit.append(json_d)
@@ -46,11 +45,16 @@ def build_train_report(examples, predictions, report_dir, processor):
                         report_dir=report_dir)
 
 
-def get_data_processor(datasets, resource_dir: str):
-    return SentenceProcessor(resource_dir=resource_dir, datasets=datasets)
+def get_data_processor(datasets, training_type: TrainingType, resource_dir: str):
+    return SentenceProcessor(
+        training_type=training_type,
+        resource_dir=resource_dir,
+        datasets=datasets)
 
 
-def prepare_data(args, tokenizer, processor):
+def prepare_data(args,
+                 tokenizer,
+                 processor):
     train_dataset = eval_dataset = test_dataset = None
     train_examples = eval_examples = test_examples = None
     if args.do_train:
@@ -94,7 +98,13 @@ def load_examples(data_dir, processor, data_type):
     return examples
 
 
-def load_and_cache_examples(args, task, tokenizer, data_type, evaluate: bool, processor, sampler=None):
+def load_and_cache_examples(args,
+                            task,
+                            tokenizer,
+                            data_type,
+                            evaluate: bool,
+                            processor,
+                            sampler=None):
     if args.local_rank not in [-1, 0] and not evaluate:
         # Make sure only the first process in distributed training process the dataset, and the others will use the cache
         torch.distributed.barrier()
@@ -115,6 +125,7 @@ def load_and_cache_examples(args, task, tokenizer, data_type, evaluate: bool, pr
         if sampler:
             examples = sampler.sample(examples=examples)
         features = convert_examples_to_features(examples=examples,
+                                                training_type=processor.training_type,
                                                 tokenizer=tokenizer,
                                                 label_list=label_list,
                                                 max_seq_length=args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length,

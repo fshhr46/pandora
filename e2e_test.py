@@ -132,7 +132,7 @@ def test_training_failed():
         f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
 
 
-def test_training_success():
+def test_training_success(training_type: str):
     sample_size = 10
     # generate job ID
     job_id = time.time_ns()
@@ -146,7 +146,7 @@ def test_training_success():
 
     # start job
     assert make_request(
-        f"{get_url()}/start?id={job_id}&sample_size={sample_size}", post=True)["success"]
+        f"{get_url()}/start?id={job_id}&sample_size={sample_size}&training_type={training_type}", post=True)["success"]
     print("waiting for job to be started")
 
     # Check job status changed from running to completed.
@@ -219,7 +219,9 @@ if __name__ == '__main__':
                 print("waiting for server to be ready")
                 time.sleep(3)
             test_training_failed()
-            test_training_success()
+            test_training_success(training_type="meta_data")
+            test_training_success(training_type="column_data")
+            test_training_success(training_type="mixed_data")
         finally:
             print("start killing processes")
             kill_proc_tree(os.getpid())
