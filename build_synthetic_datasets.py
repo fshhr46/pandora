@@ -21,8 +21,8 @@ def generate_data(
         generators,
         labels,
         column_name_2_label,
-        is_test_data=False
-):
+        is_test_data=False):
+
     column_names_to_include = sorted(column_name_2_label.keys())
     print(f"column_names_to_include is {column_names_to_include}")
     data_file = os.path.join(output_dir, f"{dataset_name}.json")
@@ -57,6 +57,8 @@ def generate_data(
                 # write table data
                 json.dump(data_entry, table_fr, ensure_ascii=False, sort_keys=True,
                           cls=DataJSONEncoder)
+                assert len(mysql_data_row) == len(column_names_to_include), \
+                    f"{len(mysql_data_row)} != {len(column_names_to_include)}"
                 dataset.append(mysql_data_row)
                 table_fr.write("\n")
     dataset_utils.write_labels(output_dir=output_dir, labels=labels)
@@ -179,7 +181,7 @@ def ingest_to_mysql(
 
 
 def build_dataset(
-    dataset_name="synthetic_data",
+    dataset_name="demo_dataset",
     num_data_entry_train=10,
     num_data_entry_test=10,
 ):
@@ -196,6 +198,7 @@ def build_dataset(
 
     # import pandora.dataset.configs as configs
     import pandora.dataset.configs_demo as configs
+    import pandora.dataset.configs_demo_2 as configs
 
     data_file_train = generate_data(
         dataset_name=f"{dataset_name}_train",
@@ -231,4 +234,13 @@ def build_dataset(
 
 
 if __name__ == '__main__':
-    build_dataset()
+    dataset_name_prefix = f"pandora_demo_meta"
+    num_data_entry_train = 100
+    num_data_entry_test = 100
+    dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
+
+    build_dataset(
+        dataset_name=dataset_name,
+        num_data_entry_train=num_data_entry_train,
+        num_data_entry_test=num_data_entry_test,
+    )

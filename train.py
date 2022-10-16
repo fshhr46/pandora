@@ -30,7 +30,7 @@ def main():
     num_epochs = 2
 
     # dataset_name_prefix = "synthetic_data"
-    dataset_name_prefix = "pandora_demo_meta"
+    dataset_name_prefix = f"pandora_demo_meta"
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
 
     import build_synthetic_datasets as dataset_builder
@@ -39,8 +39,13 @@ def main():
         Dataset.column_data
     ]
     dataset_names = [dataset_name]
-    output_dir = os.path.join(resource_dir, "outputs",
-                              bert_base_model_name,  "_".join(dataset_names))
+    output_dir = os.path.join(
+        resource_dir,
+        "outputs",
+        bert_base_model_name,
+        "_".join(dataset_names),
+        training_type
+    )
 
     default_datasets = [e.value for e in Dataset]
     for dataset_name in dataset_names:

@@ -79,7 +79,9 @@ class Person(object):
                  id: str,
                  check_digit: str) -> None:
         self.id = id
+        self.id_head_6 = id[:6]
         self.id_masked = mask_data(id, range(len(id) - 6, len(id)))
+        self.cert_type = str(random.randint(0, 6))
 
         self.birth_year = int(self.id[6:10])
         self.birth_month = int(self.id[10:12])
@@ -99,14 +101,18 @@ class Person(object):
 
         self.age = str(self.get_age())  # 年龄:23(岁)
         self.gender = self.get_gender()  # 性别:1(男)
+        self.gender_digit = str(int(self.id[16:17]) % 2)
 
     # basics
     id: str
+    id_head_6: str
+    cert_type: str
     id_masked: str
     check_digit: str
 
     # personal
     gender: str
+    gender_digit: str
     age: str
 
     # birthday and variations
