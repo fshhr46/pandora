@@ -5,6 +5,7 @@ import shutil
 import json
 import pathlib
 import traceback
+from pandora.packaging.feature import TrainingType
 
 from pandora.tools.common import logger
 import pandora.service.training_job as training_job
@@ -62,10 +63,16 @@ def _get_job_id(args) -> str:
 
 
 def _get_training_type(args) -> str:
-    training_type = args.get(
-        "training_type", default=training_job.TrainingType.column_data, type=str)
+    # TODO: use training_type instead of model name
+    training_type = args.get("training_type", type=str)
+    if training_type:
+        logger.info("training_type is passed")
+    else:
+        model_name = args.get("name", type=str)
+        logger.info(f"model name is {model_name}")
+        training_type = f'{model_name.split("_")[-1]}_data'
     logging.info(f"training_type is {training_type}")
-    return training_type
+    return TrainingType(training_type)
 
 
 @flaskApp.route('/stop', methods=['POST'])
