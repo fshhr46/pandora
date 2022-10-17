@@ -201,7 +201,8 @@ def _create_data_entries_by_training_type(
         tag_name: str,
         column_data: dict):
     column_name = column_data["column_name"]
-    if training_type == TrainingType.column_data:
+    if training_type == TrainingType.column_data or \
+            training_type == TrainingType.mixed_data:
         # Add data entry
         # TODO: Hard Coded list
         data_entries = []
