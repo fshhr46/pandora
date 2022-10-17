@@ -33,6 +33,7 @@ CLASSIFICATION_LABELS = [
     # 基于字段名
     "业务信息",  # 账户创建日期，活跃账户(0和1)，套餐类型(service_type, 0-4)
     "营收信息",  # 组合词能力：q1, sales, 2022, rev
+    "销量信息",  # 与营收信息混淆.
 
     # 需基于两者结合 - address，只用元数据的话会与邮箱混淆。
     "联系信息",  # home_add, work_add, home_postal_code, work_postal_code(六位数)
@@ -68,6 +69,10 @@ CLASSIFICATION_COLUMN_2_LABEL_ID_TRAIN = {
     # =========== 营收信息
     "q1_2022_rev": ["营收信息"],
     "q1_2022_rev_growth": ["营收信息"],
+
+    # =========== 销量信息
+    "q1_2022_rev": ["销量信息"],
+    "q1_2022_rev_growth": ["销量信息"],
 
     # =========== 联系信息
     # 居住地址
@@ -141,6 +146,28 @@ CLASSIFICATION_COLUMN_2_LABEL_ID_TEST = {
     "q3_2021_rev_growth": ["营收信息"],
     "q4_2021_rev_growth": ["营收信息"],
     "total_2021_rev_growth": ["营收信息"],
+
+    # =========== 销量信息
+    "q1_2022_sales": ["销售信息"],
+    "q2_2022_sales": ["销售信息"],
+    "q3_2022_sales": ["销售信息"],
+    "q4_2022_sales": ["销售信息"],
+    "total_2022_sales": ["销售信息"],
+    "q1_2022_sales_growth": ["销售信息"],
+    "q2_2022_sales_growth": ["销售信息"],
+    "q3_2022_sales_growth": ["销售信息"],
+    "q4_2022_sales_growth": ["销售信息"],
+    "total_2022_sales_growth": ["销售信息"],
+    "q1_2021_sales": ["销售信息"],
+    "q2_2021_sales": ["销售信息"],
+    "q3_2021_sales": ["销售信息"],
+    "q4_2021_sales": ["销售信息"],
+    "total_2021_sales": ["销售信息"],
+    "q1_2021_sales_growth": ["销售信息"],
+    "q2_2021_sales_growth": ["销售信息"],
+    "q3_2021_sales_growth": ["销售信息"],
+    "q4_2021_sales_growth": ["销售信息"],
+    "total_2021_sales_growth": ["销售信息"],
 
     # =========== 联系信息
     # 居住地址

@@ -50,13 +50,20 @@ def get_training_args(
     training_type: TrainingType,
     # optional parameters
     sample_size: int = 0,
-    num_epochs: int = 2,
+    num_epochs: int = 0,
 ) -> List[str]:
 
     # guidence: batch_size * max_seq_length in range[3000, 4000]
     batch_size = 24
     max_seq_length = 128
     checkpoint_steps = 500
+
+    # if num_epochs is not passed, set num_epochs by training type
+    if num_epochs == 0:
+        if training_type == TrainingType.meta_data:
+            num_epochs = 4
+        else:
+            num_epochs = 2
 
     arg_list = [f"--model_type={mode_type}",
                 f"--model_name_or_path={bert_base_model_name}",

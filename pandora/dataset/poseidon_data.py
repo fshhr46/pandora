@@ -143,7 +143,7 @@ def partition_poseidon_dataset(
             # get column data, validate and write data by tag
             tag_data = data_by_tag_ids[valid_tag_id]
             valid, data_partitions, distribution = _validate_and_partition_tag_data(
-                tag_data, min_samples, data_ratios=data_ratios, seed=seed)
+                tag_data, training_type, min_samples, data_ratios=data_ratios, seed=seed)
             tag_dir = os.path.join(output_dir, str(valid_tag_id))
             os.makedirs(tag_dir, exist_ok=True)
             dataset_utils.write_partitions(data_partitions, tag_dir)
@@ -228,11 +228,21 @@ def _create_unique_label_name(tag_name, tag_id):
     return f"{tag_name}"
 
 
-def _validate_and_partition_tag_data(tag_data, min_samples, data_ratios: List, seed: int) -> Tuple[bool, Dict, PartitionDistribution]:
+def _validate_and_partition_tag_data(tag_data, training_type, min_samples, data_ratios: List, seed: int) -> Tuple[bool, Dict, PartitionDistribution]:
     # TODO: provide multiple partition/selection functions
     all_samples = []
     for col_id, col_data in tag_data.items():
         all_samples.extend(col_data)
+
+    # TODO: get a better strategy for meta_data training
+    if training_type == TrainingType.meta_data:
+        data_partitions = {
+            "train": all_samples,
+            "dev": all_samples,
+            "test": all_samples
+        }
+        return True, data_partitions, get_partition_distribution(data_partitions)
+
     valid = len(all_samples) >= min_samples
     data_partitions = dataset_utils.split_dataset(
         all_samples=all_samples, data_ratios=data_ratios, seed=seed)
