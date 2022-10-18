@@ -38,23 +38,26 @@ def generate_data(
                 for generator in generators:
                     data = generator(is_test_data=is_test_data).generate()
                     for f in fields(data):
-                        if f.name not in column_names_to_include:
+                        # some field name starts with "_" to use numeric data.
+                        # For example "2022_q1_sales" will be written as field "_2022_q1_sales"
+                        column_name = f.name.strip("_")
+                        if column_name not in column_names_to_include:
                             continue
                         val = getattr(data, f.name)
-                        if f.name in data_entry:
+                        if column_name in data_entry:
                             print(
-                                f"key conflict: {f.name} already exists in output")
+                                f"key conflict: column_name {column_name} already exists in output")
                             print(data_entry)
                             raise
-                        data_entry[f.name] = val
+                        data_entry[column_name] = val
 
                         # Handle non-meta_data use case. Write data entries
                         if training_type != TrainingType.meta_data:
                             # Write training data
                             out_line = {
                                 "text": val,
-                                "label": column_name_2_label[f.name]}
-                            out_line["column_name"] = f.name
+                                "label": column_name_2_label[column_name]}
+                            out_line["column_name"] = column_name
                             json.dump(out_line, raw_data_fr,
                                       ensure_ascii=False)
                             raw_data_fr.write("\n")
@@ -86,26 +89,26 @@ def generate_data(
     dataset_utils.write_labels(output_dir=output_dir, labels=labels)
 
     # Check if mysql is available
-    # host = "10.0.1.178"
-    # port = "7733"
-    # response = os.system("ping -c 1 " + host)
-    # # and then check the response...
-    # if response == 0:
-    #     print("ingesting data to mysql")
-    #     create_table(
-    #         table_name=dataset_name,
-    #         database_name=database_name,
-    #         host=host,
-    #         port=port,
-    #     )
-    #     ingest_to_mysql(
-    #         table_name=dataset_name,
-    #         database_name=database_name,
-    #         host=host,
-    #         port=port,
-    #         column_names=column_names_to_include,
-    #         column_name_2_comment=column_name_2_comment,
-    #         dataset=dataset)
+    host = "10.0.1.178"
+    port = "7733"
+    response = os.system("ping -c 1 " + host)
+    # and then check the response...
+    if response == 0:
+        print("ingesting data to mysql")
+        create_table(
+            table_name=dataset_name,
+            database_name=database_name,
+            host=host,
+            port=port,
+        )
+        ingest_to_mysql(
+            table_name=dataset_name,
+            database_name=database_name,
+            host=host,
+            port=port,
+            column_names=column_names_to_include,
+            column_name_2_comment=column_name_2_comment,
+            dataset=dataset)
     return data_file
 
 
@@ -290,12 +293,13 @@ def build_dataset(
 
 
 if __name__ == '__main__':
-    dataset_name_prefix = f"pandora_demo_meta_comment_2"
+    dataset_name_prefix = f"pandora_demo_1019"
     num_data_entry_train = 100
-    num_data_entry_test = 100
+    num_data_entry_test = 10
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
 
     build_dataset(
+        TrainingType.meta_data,
         dataset_name=dataset_name,
         num_data_entry_train=num_data_entry_train,
         num_data_entry_test=num_data_entry_test,

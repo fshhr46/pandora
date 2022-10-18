@@ -79,10 +79,8 @@ CLASSIFICATION_COLUMN_2_LABEL_ID_TRAIN = {
     # =========== 联系信息
     # 居住地址
     "home_add": ["联系信息"],
-    "jiating_dizhi": ["联系信息"],
 
     # 工作地址
-    "gongzuo_dizhi": ["联系信息"],
     "work_postal_code": ["联系信息"],
 }
 
@@ -106,7 +104,7 @@ CLASSIFICATION_COLUMN_2_LABEL_ID_TEST = {
     # 邮箱
     "email_add": ["身份信息"],
     "email_add_masked": ["身份信息"],
-    "col_1": ["身份信息"],
+    "data": ["身份信息"],
     # 电话号码
     "phone_number": ["身份信息"],
     "phone_number_masked": ["身份信息"],
@@ -132,16 +130,16 @@ CLASSIFICATION_COLUMN_2_LABEL_ID_TEST = {
     "q3_2022_rev_growth": ["营收信息"],
     "q4_2022_rev_growth": ["营收信息"],
     "total_2022_rev_growth": ["营收信息"],
-    "q1_2021_rev": ["营收信息"],
-    "q2_2021_rev": ["营收信息"],
-    "q3_2021_rev": ["营收信息"],
-    "q4_2021_rev": ["营收信息"],
-    "total_2021_rev": ["营收信息"],
-    "q1_2021_rev_growth": ["营收信息"],
-    "q2_2021_rev_growth": ["营收信息"],
-    "q3_2021_rev_growth": ["营收信息"],
-    "q4_2021_rev_growth": ["营收信息"],
-    "total_2021_rev_growth": ["营收信息"],
+    "rev_q1_2021": ["营收信息"],
+    "rev_q2_2021": ["营收信息"],
+    "rev_q3_2021": ["营收信息"],
+    "rev_q4_2021": ["营收信息"],
+    "rev_total_2021": ["营收信息"],
+    "rev_growth_q1_2021": ["营收信息"],
+    "rev_growth_q2_2021": ["营收信息"],
+    "rev_growth_q3_2021": ["营收信息"],
+    "rev_growth_q4_2021": ["营收信息"],
+    "rev_growth_total_2021": ["营收信息"],
 
     # =========== 销量信息
     "q1_2022_sales": ["销量信息"],
@@ -154,16 +152,16 @@ CLASSIFICATION_COLUMN_2_LABEL_ID_TEST = {
     "q3_2022_sales_growth": ["销量信息"],
     "q4_2022_sales_growth": ["销量信息"],
     "total_2022_sales_growth": ["销量信息"],
-    "q1_2021_sales": ["销量信息"],
-    "q2_2021_sales": ["销量信息"],
-    "q3_2021_sales": ["销量信息"],
-    "q4_2021_sales": ["销量信息"],
-    "total_2021_sales": ["销量信息"],
-    "q1_2021_sales_growth": ["销量信息"],
-    "q2_2021_sales_growth": ["销量信息"],
-    "q3_2021_sales_growth": ["销量信息"],
-    "q4_2021_sales_growth": ["销量信息"],
-    "total_2021_sales_growth": ["销量信息"],
+    "2021_q1_sales": ["销量信息"],
+    "2021_q2_sales": ["销量信息"],
+    "2021_q3_sales": ["销量信息"],
+    "2021_q4_sales": ["销量信息"],
+    "2021_total_sales": ["销量信息"],
+    "2021_q1_sales_growth": ["销量信息"],
+    "2021_q2_sales_growth": ["销量信息"],
+    "2021_q3_sales_growth": ["销量信息"],
+    "2021_q4_sales_growth": ["销量信息"],
+    "2021_total_sales_growth": ["销量信息"],
 
     # =========== 联系信息
     # 居住地址
@@ -175,6 +173,9 @@ CLASSIFICATION_COLUMN_2_LABEL_ID_TEST = {
     "work_add": ["联系信息"],
     "gongzuo_dizhi": ["联系信息"],
     "work_postal_code": ["联系信息"],
+
+    # 邮寄地址
+    "mail_add": ["联系信息"],
 }
 
 CLASSIFICATION_COLUMN_2_COMMENT = {
@@ -196,7 +197,7 @@ CLASSIFICATION_COLUMN_2_COMMENT = {
     # 邮箱
     "email_add": "邮箱地址",
     "email_add_masked": "脱敏邮箱地址",
-    "col_1": "字段名1",
+    "data": "数据",
     # 电话号码
     "phone_number": "电话号码",
     "phone_number_masked": "脱敏电话号码",
@@ -222,16 +223,16 @@ CLASSIFICATION_COLUMN_2_COMMENT = {
     "q3_2022_rev_growth": "2022年3季度营收增长",
     "q4_2022_rev_growth": "2022年4季度营收增长",
     "total_2022_rev_growth": "2022年全年营收增长",
-    "q1_2021_rev": "2021年1季度营收",
-    "q2_2021_rev": "2021年2季度营收",
-    "q3_2021_rev": "2021年3季度营收",
-    "q4_2021_rev": "2021年4季度营收",
-    "total_2021_rev": "2021年全年营收",
-    "q1_2021_rev_growth": "2021年1季度营收增长",
-    "q2_2021_rev_growth": "2021年2季度营收增长",
-    "q3_2021_rev_growth": "2021年3季度营收增长",
-    "q4_2021_rev_growth": "2021年4季度营收增长",
-    "total_2021_rev_growth": "2021年全年营收增长",
+    "rev_q1_2021": "2021年1季度营收",
+    "rev_q2_2021": "2021年2季度营收",
+    "rev_q3_2021": "2021年3季度营收",
+    "rev_q4_2021": "2021年4季度营收",
+    "rev_total_2021": "2021年全年营收",
+    "rev_growth_q1_2021": "2021年1季度营收增长",
+    "rev_growth_q2_2021": "2021年2季度营收增长",
+    "rev_growth_q3_2021": "2021年3季度营收增长",
+    "rev_growth_q4_2021": "2021年4季度营收增长",
+    "rev_growth_total_2021": "2021年全年营收增长",
 
     # =========== 销量信息
     "q1_2022_sales": "2022年1季度销售额",
@@ -244,16 +245,16 @@ CLASSIFICATION_COLUMN_2_COMMENT = {
     "q3_2022_sales_growth": "2022年3季度销售额增长",
     "q4_2022_sales_growth": "2022年4季度销售额增长",
     "total_2022_sales_growth": "2022年全年销售额增长",
-    "q1_2021_sales": "2021年1季度销售额",
-    "q2_2021_sales": "2021年2季度销售额",
-    "q3_2021_sales": "2021年3季度销售额",
-    "q4_2021_sales": "2021年4季度销售额",
-    "total_2021_sales": "2021年全年销售额",
-    "q1_2021_sales_growth": "2021年1季度销售额增长",
-    "q2_2021_sales_growth": "2021年2季度销售额增长",
-    "q3_2021_sales_growth": "2021年3季度销售额增长",
-    "q4_2021_sales_growth": "2021年4季度销售额增长",
-    "total_2021_sales_growth": "2021年全年销售额增长",
+    "2021_q1_sales": "2021年1季度销售额",
+    "2021_q2_sales": "2021年2季度销售额",
+    "2021_q3_sales": "2021年3季度销售额",
+    "2021_q4_sales": "2021年4季度销售额",
+    "2021_total_sales": "2021年全年销售额",
+    "2021_q1_sales_growth": "2021年1季度销售额增长",
+    "2021_q2_sales_growth": "2021年2季度销售额增长",
+    "2021_q3_sales_growth": "2021年3季度销售额增长",
+    "2021_q4_sales_growth": "2021年4季度销售额增长",
+    "2021_total_sales_growth": "2021年全年销售额增长",
 
     # =========== 联系信息
     # 居住地址
@@ -265,4 +266,7 @@ CLASSIFICATION_COLUMN_2_COMMENT = {
     "work_add": "工作地址",
     "gongzuo_dizhi": "工作地址",
     "work_postal_code": "工作地邮编",
+
+    # 邮寄地址
+    "mail_add": "邮寄地址",
 }

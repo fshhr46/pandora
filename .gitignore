@@ -1,5 +1,6 @@
 *__pycache__*
 *.DS_Store
+.vscode*
 pandora/CLUEdatasets*
 pandora/datasets*
 pandora/prev_trained_model*

@@ -50,16 +50,16 @@ class FinanceReport(object):
     q3_2022_sales_growth: str
     q4_2022_sales_growth: str
     total_2022_sales_growth: str
-    q1_2021_sales: str
-    q2_2021_sales: str
-    q3_2021_sales: str
-    q4_2021_sales: str
-    total_2021_sales: str
-    q1_2021_sales_growth: str
-    q2_2021_sales_growth: str
-    q3_2021_sales_growth: str
-    q4_2021_sales_growth: str
-    total_2021_sales_growth: str
+    _2021_q1_sales: str
+    _2021_q2_sales: str
+    _2021_q3_sales: str
+    _2021_q4_sales: str
+    _2021_total_sales: str
+    _2021_q1_sales_growth: str
+    _2021_q2_sales_growth: str
+    _2021_q3_sales_growth: str
+    _2021_q4_sales_growth: str
+    _2021_total_sales_growth: str
     q1_2022_rev: str
     q2_2022_rev: str
     q3_2022_rev: str
@@ -70,16 +70,16 @@ class FinanceReport(object):
     q3_2022_rev_growth: str
     q4_2022_rev_growth: str
     total_2022_rev_growth: str
-    q1_2021_rev: str
-    q2_2021_rev: str
-    q3_2021_rev: str
-    q4_2021_rev: str
-    total_2021_rev: str
-    q1_2021_rev_growth: str
-    q2_2021_rev_growth: str
-    q3_2021_rev_growth: str
-    q4_2021_rev_growth: str
-    total_2021_rev_growth: str
+    rev_q1_2021: str
+    rev_q2_2021: str
+    rev_q3_2021: str
+    rev_q4_2021: str
+    rev_total_2021: str
+    rev_growth_q1_2021: str
+    rev_growth_q2_2021: str
+    rev_growth_q3_2021: str
+    rev_growth_q4_2021: str
+    rev_growth_total_2021: str
 
 
 class FinanceReportGenerator(DataGeneratorBase):
@@ -95,16 +95,16 @@ class FinanceReportGenerator(DataGeneratorBase):
             q3_2022_sales_growth=random.randint(100000, 999999),
             q4_2022_sales_growth=random.randint(100000, 999999),
             total_2022_sales_growth=random.randint(1000000, 9999999),
-            q1_2021_sales=random.randint(1000000, 9999999),
-            q2_2021_sales=random.randint(1000000, 9999999),
-            q3_2021_sales=random.randint(1000000, 9999999),
-            q4_2021_sales=random.randint(1000000, 9999999),
-            total_2021_sales=random.randint(1000000, 9999999),
-            q1_2021_sales_growth=random.randint(100000, 999999),
-            q2_2021_sales_growth=random.randint(100000, 999999),
-            q3_2021_sales_growth=random.randint(100000, 999999),
-            q4_2021_sales_growth=random.randint(100000, 999999),
-            total_2021_sales_growth=random.randint(1000000, 9999999),
+            _2021_q1_sales=random.randint(1000000, 9999999),
+            _2021_q2_sales=random.randint(1000000, 9999999),
+            _2021_q3_sales=random.randint(1000000, 9999999),
+            _2021_q4_sales=random.randint(1000000, 9999999),
+            _2021_total_sales=random.randint(1000000, 9999999),
+            _2021_q1_sales_growth=random.randint(100000, 999999),
+            _2021_q2_sales_growth=random.randint(100000, 999999),
+            _2021_q3_sales_growth=random.randint(100000, 999999),
+            _2021_q4_sales_growth=random.randint(100000, 999999),
+            _2021_total_sales_growth=random.randint(1000000, 9999999),
             q1_2022_rev=random.randint(1000000, 9999999),
             q2_2022_rev=random.randint(1000000, 9999999),
             q3_2022_rev=random.randint(1000000, 9999999),
@@ -115,15 +115,14 @@ class FinanceReportGenerator(DataGeneratorBase):
             q3_2022_rev_growth=random.randint(100000, 999999),
             q4_2022_rev_growth=random.randint(100000, 999999),
             total_2022_rev_growth=random.randint(1000000, 9999999),
-            q1_2021_rev=random.randint(1000000, 9999999),
-            q2_2021_rev=random.randint(1000000, 9999999),
-            q3_2021_rev=random.randint(1000000, 9999999),
-            q4_2021_rev=random.randint(1000000, 9999999),
-            total_2021_rev=random.randint(1000000, 9999999),
-            q1_2021_rev_growth=random.randint(100000, 999999),
-            q2_2021_rev_growth=random.randint(100000, 999999),
-            q3_2021_rev_growth=random.randint(100000, 999999),
-            q4_2021_rev_growth=random.randint(100000, 999999),
-            total_2021_rev_growth=random.randint(1000000, 9999999),
-
+            rev_q1_2021=random.randint(1000000, 9999999),
+            rev_q2_2021=random.randint(1000000, 9999999),
+            rev_q3_2021=random.randint(1000000, 9999999),
+            rev_q4_2021=random.randint(1000000, 9999999),
+            rev_total_2021=random.randint(1000000, 9999999),
+            rev_growth_q1_2021=random.randint(100000, 999999),
+            rev_growth_q2_2021=random.randint(100000, 999999),
+            rev_growth_q3_2021=random.randint(100000, 999999),
+            rev_growth_q4_2021=random.randint(100000, 999999),
+            rev_growth_total_2021=random.randint(1000000, 9999999),
         )

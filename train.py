@@ -21,7 +21,7 @@ def main():
 
     # Build dataset
     num_data_entry_train = 100
-    num_data_entry_test = 100
+    num_data_entry_test = 10
 
     # Training args
     training_type = TrainingType.column_data
@@ -29,10 +29,10 @@ def main():
     training_type = TrainingType.meta_data
 
     # Setting num_epochs means choosing the default number based on training_type
-    num_epochs = 40
+    num_epochs = 0
 
     # dataset_name_prefix = "synthetic_data"
-    dataset_name_prefix = f"pandora_demo_meta_fix_meta"
+    dataset_name_prefix = f"pandora_demo_1019_fix"
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
 
     import build_synthetic_datasets as dataset_builder

@@ -60,10 +60,14 @@ def get_training_args(
 
     # if num_epochs is not passed, set num_epochs by training type
     if num_epochs == 0:
-        if training_type == TrainingType.meta_data:
+        if training_type == TrainingType.column_data:
+            num_epochs = 4
+        elif training_type == TrainingType.mixed_data:
+            num_epochs = 2
+        elif training_type == TrainingType.meta_data:
             num_epochs = 40
         else:
-            num_epochs = 4
+            raise ValueError
 
     arg_list = [f"--model_type={mode_type}",
                 f"--model_name_or_path={bert_base_model_name}",

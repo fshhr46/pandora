@@ -12,7 +12,7 @@ class AddressInfo(object):
     work_add: str
     gongzuo_dizhi: str
     work_postal_code: str
-
+    mail_add: str
 
 
 class AddressInfoGenerator(DataGeneratorBase):
@@ -24,4 +24,5 @@ class AddressInfoGenerator(DataGeneratorBase):
             work_add=self.faker.address(),
             gongzuo_dizhi=self.faker.address(),
             work_postal_code=self.faker.postcode(),
+            mail_add=self.faker.address(),
         )

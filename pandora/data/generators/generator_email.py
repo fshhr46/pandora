@@ -10,7 +10,7 @@ import pandora.data.mask_utils as mask_utils
 class EmailAddress(object):
     email_add: str
     email_add_masked: str
-    col_1: str
+    data: str
 
 
 def mask_email(email: str, positions=range(3, 6), mask_char="*"):
@@ -30,7 +30,7 @@ class EmailAddressGenerator(DataGeneratorBase):
         return EmailAddress(
             email_add=email,
             email_add_masked=mask_email(email),
-            col_1=email,
+            data=email,
         )
 
     def _generate_test(self):
@@ -44,5 +44,5 @@ class EmailAddressGenerator(DataGeneratorBase):
             email_add=email,
             email_add_masked=mask_email(
                 email, positions=random_positions, mask_char=mask_char),
-            col_1=email,
+            data=email,
         )
