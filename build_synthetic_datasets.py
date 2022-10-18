@@ -21,6 +21,7 @@ def generate_data(
         generators,
         labels,
         column_name_2_label,
+        column_name_2_comment,
         is_test_data=False):
 
     column_names_to_include = sorted(column_name_2_label.keys())
@@ -82,6 +83,7 @@ def generate_data(
             host=host,
             port=port,
             column_names=column_names_to_include,
+            column_name_2_comment=column_name_2_comment,
             dataset=dataset)
     return data_file
 
@@ -137,6 +139,7 @@ def create_table(
 def ingest_to_mysql(
     table_name,
     column_names,
+    column_name_2_comment,
     dataset,
     database_name,
     host="10.0.1.178",
@@ -156,7 +159,7 @@ def ingest_to_mysql(
         # create table
         cursor.execute(f"use {database_name}")
         columns_query = ", \n".join(
-            [f"{col} VARCHAR(50)" for col in column_names])
+            [f"{col} VARCHAR(50) COMMENT '{column_name_2_comment[col]}'" for col in column_names])
         sql = f'''CREATE TABLE {table_name} (
                 {columns_query}
             )'''
@@ -206,27 +209,42 @@ def build_dataset(
         num_data_entry=num_data_entry_train, output_dir=output_dir,
         generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
         is_test_data=False,
-        column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TRAIN)
+        column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TRAIN,
+        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
     data_ratios_train = {"train": 0.8, "dev": 0.2, "test": 0.0}
     data_partitions_train_dev = partition_data(output_dir, data_file=data_file_train,
                                                data_ratios=data_ratios_train, seed=seed)
 
     # Create test data
     data_file_test = generate_data(
-        dataset_name=f"{dataset_name}_test",
+        dataset_name=f"{dataset_name}_test_1",
         database_name=database_name,
         num_data_entry=num_data_entry_test, output_dir=output_dir,
         generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
         is_test_data=True,
-        column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST)
+        column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST,
+        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
-    data_partitions_test = partition_data(output_dir, data_file=data_file_test,
-                                          data_ratios=data_ratios_test, seed=seed)
+    data_partitions_test_1 = partition_data(output_dir, data_file=data_file_test,
+                                            data_ratios=data_ratios_test, seed=seed)
+
+    # Create 2nd test data
+    data_file_test = generate_data(
+        dataset_name=f"{dataset_name}_test_2",
+        database_name=database_name,
+        num_data_entry=num_data_entry_test, output_dir=output_dir,
+        generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
+        is_test_data=True,
+        column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST,
+        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
+    data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
+    data_partitions_test_2 = partition_data(output_dir, data_file=data_file_test,
+                                            data_ratios=data_ratios_test, seed=seed)
 
     data_partitions = {
         "train": data_partitions_train_dev["train"],
         "dev": data_partitions_train_dev["dev"],
-        "test": data_partitions_test["test"]
+        "test": data_partitions_test_1["test"]
     }
     # dump output
     dataset_utils.write_partitions(
@@ -234,7 +252,7 @@ def build_dataset(
 
 
 if __name__ == '__main__':
-    dataset_name_prefix = f"pandora_demo_meta"
+    dataset_name_prefix = f"pandora_demo_meta_comment_2"
     num_data_entry_train = 100
     num_data_entry_test = 100
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"

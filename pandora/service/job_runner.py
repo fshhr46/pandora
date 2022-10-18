@@ -63,7 +63,7 @@ def get_training_args(
         if training_type == TrainingType.meta_data:
             num_epochs = 20
         else:
-            num_epochs = 2
+            num_epochs = 4
 
     arg_list = [f"--model_type={mode_type}",
                 f"--model_name_or_path={bert_base_model_name}",
