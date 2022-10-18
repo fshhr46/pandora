@@ -11,9 +11,11 @@ from dataclasses import fields
 from pandora.data.encoder import DataJSONEncoder
 
 import pandora.dataset.dataset_utils as dataset_utils
+from pandora.packaging.feature import TrainingType
 
 
 def generate_data(
+        training_type,
         dataset_name,
         database_name,
         num_data_entry,
@@ -28,6 +30,7 @@ def generate_data(
     print(f"column_names_to_include is {column_names_to_include}")
     data_file = os.path.join(output_dir, f"{dataset_name}.json")
     dataset = []
+
     with open(os.path.join(output_dir, f"{dataset_name}_data_table.json"), "w") as table_fr:
         with open(data_file, "w") as raw_data_fr:
             for _ in range(num_data_entry):
@@ -45,13 +48,17 @@ def generate_data(
                             raise
                         data_entry[f.name] = val
 
-                        # Write training data
-                        out_line = {
-                            "text": val,
-                            "label": column_name_2_label[f.name]}
-                        out_line["column_name"] = f.name
-                        json.dump(out_line, raw_data_fr, ensure_ascii=False)
-                        raw_data_fr.write("\n")
+                        # Handle non-meta_data use case. Write data entries
+                        if training_type != TrainingType.meta_data:
+                            # Write training data
+                            out_line = {
+                                "text": val,
+                                "label": column_name_2_label[f.name]}
+                            out_line["column_name"] = f.name
+                            json.dump(out_line, raw_data_fr,
+                                      ensure_ascii=False)
+                            raw_data_fr.write("\n")
+
                 # Sort data_entry so it aligns with column name's order
                 mysql_data_row = sorted(
                     data_entry.items(), key=lambda k_v: k_v[0])
@@ -62,38 +69,62 @@ def generate_data(
                     f"{len(mysql_data_row)} != {len(column_names_to_include)}"
                 dataset.append(mysql_data_row)
                 table_fr.write("\n")
+
+    # Handle meta_data case
+    if training_type == TrainingType.meta_data:
+        with open(data_file, "w") as raw_data_fr:
+            for col_tags in column_name_2_label.items():
+                # Write training data
+                out_line = {
+                    "text": "",
+                    "label": col_tags[1],
+                    "column_name": col_tags[0]}
+                json.dump(out_line, raw_data_fr,
+                          ensure_ascii=False)
+                raw_data_fr.write("\n")
+
     dataset_utils.write_labels(output_dir=output_dir, labels=labels)
 
     # Check if mysql is available
-    host = "10.0.1.178"
-    port = "7733"
-    response = os.system("ping -c 1 " + host)
-    # and then check the response...
-    if response == 0:
-        print("ingesting data to mysql")
-        create_table(
-            table_name=dataset_name,
-            database_name=database_name,
-            host=host,
-            port=port,
-        )
-        ingest_to_mysql(
-            table_name=dataset_name,
-            database_name=database_name,
-            host=host,
-            port=port,
-            column_names=column_names_to_include,
-            column_name_2_comment=column_name_2_comment,
-            dataset=dataset)
+    # host = "10.0.1.178"
+    # port = "7733"
+    # response = os.system("ping -c 1 " + host)
+    # # and then check the response...
+    # if response == 0:
+    #     print("ingesting data to mysql")
+    #     create_table(
+    #         table_name=dataset_name,
+    #         database_name=database_name,
+    #         host=host,
+    #         port=port,
+    #     )
+    #     ingest_to_mysql(
+    #         table_name=dataset_name,
+    #         database_name=database_name,
+    #         host=host,
+    #         port=port,
+    #         column_names=column_names_to_include,
+    #         column_name_2_comment=column_name_2_comment,
+    #         dataset=dataset)
     return data_file
 
 
-def partition_data(output_dir, data_file, data_ratios, seed):
+def partition_data(training_type, output_dir, data_file, data_ratios, seed):
     all_samples = []
     with open(data_file, 'r') as fr:
         for _, line in enumerate(fr):
             data_entry = dataset_utils.DataEntry(**json.loads(line))
             all_samples.append(data_entry)
+
+    # TODO: get a better strategy for meta_data training
+    if training_type == TrainingType.meta_data:
+        data_partitions = {
+            "train": all_samples,
+            "dev": all_samples,
+            "test": all_samples
+        }
+        return data_partitions
+
     data_partitions = dataset_utils.split_dataset(
         all_samples=all_samples, data_ratios=data_ratios, seed=seed)
     return data_partitions
@@ -184,6 +215,7 @@ def ingest_to_mysql(
 
 
 def build_dataset(
+    training_type,
     dataset_name="demo_dataset",
     num_data_entry_train=10,
     num_data_entry_test=10,
@@ -204,6 +236,7 @@ def build_dataset(
     import pandora.dataset.configs_demo_2 as configs
 
     data_file_train = generate_data(
+        training_type,
         dataset_name=f"{dataset_name}_train",
         database_name=database_name,
         num_data_entry=num_data_entry_train, output_dir=output_dir,
@@ -212,11 +245,13 @@ def build_dataset(
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TRAIN,
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
     data_ratios_train = {"train": 0.8, "dev": 0.2, "test": 0.0}
-    data_partitions_train_dev = partition_data(output_dir, data_file=data_file_train,
+    data_partitions_train_dev = partition_data(training_type,
+                                               output_dir, data_file=data_file_train,
                                                data_ratios=data_ratios_train, seed=seed)
 
     # Create test data
-    data_file_test = generate_data(
+    data_file_test_1 = generate_data(
+        training_type,
         dataset_name=f"{dataset_name}_test_1",
         database_name=database_name,
         num_data_entry=num_data_entry_test, output_dir=output_dir,
@@ -225,11 +260,13 @@ def build_dataset(
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST,
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
-    data_partitions_test_1 = partition_data(output_dir, data_file=data_file_test,
+    data_partitions_test_1 = partition_data(training_type,
+                                            output_dir, data_file=data_file_test_1,
                                             data_ratios=data_ratios_test, seed=seed)
 
     # Create 2nd test data
-    data_file_test = generate_data(
+    data_file_test_2 = generate_data(
+        training_type,
         dataset_name=f"{dataset_name}_test_2",
         database_name=database_name,
         num_data_entry=num_data_entry_test, output_dir=output_dir,
@@ -238,7 +275,8 @@ def build_dataset(
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST,
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
-    data_partitions_test_2 = partition_data(output_dir, data_file=data_file_test,
+    data_partitions_test_2 = partition_data(training_type,
+                                            output_dir, data_file=data_file_test_2,
                                             data_ratios=data_ratios_test, seed=seed)
 
     data_partitions = {

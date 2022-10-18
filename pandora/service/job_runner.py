@@ -61,7 +61,7 @@ def get_training_args(
     # if num_epochs is not passed, set num_epochs by training type
     if num_epochs == 0:
         if training_type == TrainingType.meta_data:
-            num_epochs = 20
+            num_epochs = 40
         else:
             num_epochs = 4
 

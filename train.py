@@ -21,16 +21,18 @@ def main():
 
     # Build dataset
     num_data_entry_train = 100
-    num_data_entry_test = 10
+    num_data_entry_test = 100
 
     # Training args
     training_type = TrainingType.column_data
-    training_type = TrainingType.meta_data
     training_type = TrainingType.mixed_data
-    num_epochs = 2
+    training_type = TrainingType.meta_data
+
+    # Setting num_epochs means choosing the default number based on training_type
+    num_epochs = 40
 
     # dataset_name_prefix = "synthetic_data"
-    dataset_name_prefix = f"pandora_demo_meta"
+    dataset_name_prefix = f"pandora_demo_meta_fix_meta"
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
 
     import build_synthetic_datasets as dataset_builder
@@ -43,8 +45,7 @@ def main():
         resource_dir,
         "outputs",
         bert_base_model_name,
-        "_".join(dataset_names),
-        training_type
+        "_".join(dataset_names)
     )
 
     default_datasets = [e.value for e in Dataset]
@@ -52,6 +53,7 @@ def main():
         if dataset_name in default_datasets:
             continue
         dataset_builder.build_dataset(
+            training_type=training_type,
             dataset_name=dataset_name,
             num_data_entry_train=num_data_entry_train,
             num_data_entry_test=num_data_entry_test,

@@ -25,7 +25,7 @@ class TrainingType(str, Enum):
 class InputExample(object):
     """A single training/test example for token classification."""
 
-    def __init__(self, id, labels, sentence, column_name):
+    def __init__(self, id, training_type, labels, sentence, column_name):
         """Constructs a InputExample.
         Args:
             guid: Unique id for the example.
@@ -37,6 +37,20 @@ class InputExample(object):
         self.labels = labels
         self.sentence = sentence
         self.column_name = column_name
+
+        if training_type == TrainingType.column_data:
+            assert sentence, "text data is required for column_data model"
+            self.text = sentence
+        elif training_type == TrainingType.meta_data:
+            assert column_name, "column_name data is required for column_data model"
+            self.text = column_name
+        elif training_type == TrainingType.mixed_data:
+            assert sentence, "text data is required for mixed_data training"
+            assert column_name, "column_name data is required for mixed_data model"
+            combined_text = f"{column_name}|{sentence}"
+            self.text = combined_text
+        else:
+            raise ValueError(f"invalid training_type {training_type}")
 
     def __repr__(self):
         return str(self.to_json_string())
@@ -133,15 +147,16 @@ def convert_example_to_feature(
     sentence_labels = [label2id[x] for x in example.labels]
 
     # Extract tokens
-    tokens = extract_tokens_from_example(
-        example=example,
-        training_type=training_type,
-        tokenizer=tokenizer,
-    )
+    # Input token IDs from tokenizer
+    # TODO: Remove duplicate
+    # tokens_words = tokenizer.tokenize(example.words)
+    tokens = tokenizer.tokenize(example.text)
+    # assert tokens_words == tokens_sentence
+    # tokens = tokens_sentence
 
     # TODO: Remove duplicate
     input_ids = tokenizer.convert_tokens_to_ids(tokens)
-    # encodings = tokenizer.encode(example.sentence, add_special_tokens=False)
+    # encodings = tokenizer.encode(example.text, add_special_tokens=False)
     # assert encodings == input_ids
 
     # TODO: Fix this. Currently special token is removed.
@@ -199,43 +214,13 @@ def convert_example_to_feature(
     return feature
 
 
-def extract_tokens_from_example(
-        example,
-        training_type: TrainingType,
-        tokenizer):
-
-    if training_type == TrainingType.column_data:
-        assert example.sentence, "text data is required for column_data model"
-        # Input token IDs from tokenizer
-        # TODO: Remove duplicate
-        # tokens_words = tokenizer.tokenize(example.words)
-        tokens = tokenizer.tokenize(example.sentence)
-        # assert tokens_words == tokens_sentence
-        # tokens = tokens_sentence
-
-    elif training_type == TrainingType.meta_data:
-        assert example.column_name, "column_name data is required for column_data model"
-        tokens = tokenizer.tokenize(example.column_name)
-
-    elif training_type == TrainingType.mixed_data:
-        assert example.sentence, "text data is required for mixed_data training"
-        assert example.column_name, "column_name data is required for mixed_data model"
-        # TODO: find better way to combine text
-        combined_text = f"{example.column_name}|{example.sentence}"
-        tokens = tokenizer.tokenize(combined_text)
-
-    else:
-        raise ValueError(f"invalid training_type {training_type}")
-
-    return tokens
-
-
-def create_example(id, line):
+def create_example(id, training_type, line):
     labels = line['labels']
     sentence = str(line['sentence'])
     column_name = str(line['column_name'])
     return InputExample(
         id=id,
+        training_type=training_type,
         labels=labels,
         sentence=sentence,
         column_name=column_name)
@@ -318,13 +303,13 @@ class SentenceProcessor(DataProcessor):
             all_labels.extend(json.load(label_file))
         return all_labels
 
-    @classmethod
-    def create_examples(cls, lines, dataset_type) -> List[InputExample]:
+    def create_examples(self, lines, dataset_type) -> List[InputExample]:
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
             guid = "%s-%s" % (dataset_type, i)
-            example = create_example(id=guid, line=line)
+            example = create_example(
+                id=guid, training_type=self.training_type, line=line)
             examples.append(example)
         return examples
 
@@ -421,7 +406,7 @@ def extract_feature_from_request(
     line = read_json_line(
         line_obj={"text": input_text, "column_name": column_name})
     # TODO: fix this hack: id=""
-    example = create_example(id="", line=line)
+    example = create_example(id="", training_type=training_type, line=line)
     feat = convert_example_to_feature(
         example,
         training_type,
