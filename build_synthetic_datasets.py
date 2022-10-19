@@ -219,13 +219,14 @@ def ingest_to_mysql(
 
 def build_dataset(
     training_type,
+    database_name='pandora',
     dataset_name="demo_dataset",
     num_data_entry_train=10,
     num_data_entry_test=10,
 ):
     # output_dir = os.path.join(
     #     pathlib.Path.home(), "workspace", "resource", "outputs", "bert-base-chinese", "synthetic_data", "datasets", "synthetic_data")
-    database_name = 'pandora'
+
     output_dir = os.path.join(
         pathlib.Path.home(), "workspace", "resource", "datasets", dataset_name)
     print(f"dataset output_dir is {output_dir}")
@@ -295,11 +296,13 @@ def build_dataset(
 if __name__ == '__main__':
     dataset_name_prefix = f"pandora_demo_1019"
     num_data_entry_train = 100
-    num_data_entry_test = 10
+    num_data_entry_test = 100
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
+    database_name = 'pandora'
 
     build_dataset(
         TrainingType.meta_data,
+        database_name=database_name,
         dataset_name=dataset_name,
         num_data_entry_train=num_data_entry_train,
         num_data_entry_test=num_data_entry_test,
