@@ -14,6 +14,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class ModelType(str, Enum):
+    def __str__(self):
+        return str(self.value)
+    tag = "tag"  # tagging model
+    classification = "classification"  # classification_ratings model
+
+
 class TrainingType(str, Enum):
     def __str__(self):
         return str(self.value)

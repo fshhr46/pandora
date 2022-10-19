@@ -7,7 +7,8 @@ import os
 import json
 
 import pandora.dataset.dataset_utils as dataset_utils
-from pandora.packaging.feature import TrainingType
+from pandora.packaging.feature import TrainingType, ModelType
+from pandora.tools.common import logger
 
 
 class DatasetJSONEncoder(json.JSONEncoder):
@@ -61,14 +62,26 @@ class PartitionResult(object):
 
 def partition_poseidon_dataset(
         dataset_path: str,
-        training_type: TrainingType,
         output_dir: str,
         min_samples: int,
-        data_ratios: Dict, seed: int):
+        data_ratios: Dict,
+        seed: int):
 
     with open(dataset_path, "r", encoding='utf-8') as dataset_f:
         dataset = json.load(dataset_f)
     config = dataset["dataset_config"]
+
+    # get training type
+    training_type = TrainingType(dataset["data_type"])
+    logger.info(f"training_type is {training_type}")
+
+    # get model_type type
+    model_type = ModelType(dataset["model_type"])
+    logger.info(f"model_type is {model_type}")
+
+    # get metadata types
+    metadata_types = dataset["metadata_type"]
+    logger.info(f"metadata_types are {metadata_types}")
 
     # check tag_ids in dataset definition
     tag_ids = config["tag_ids"]

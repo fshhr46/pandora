@@ -141,7 +141,6 @@ def stop_training_job(job_id: str) -> Tuple[bool, str]:
 def partition_dataset(
         server_dir: str,
         job_id: str,
-        training_type: TrainingType,
         min_samples: int,
         data_ratios: List,
         seed: int = 42) -> Tuple[bool, Dict, str]:
@@ -156,10 +155,10 @@ def partition_dataset(
 
         result = poseidon_data.partition_poseidon_dataset(
             dataset_path=dataset_path,
-            training_type=training_type,
             output_dir=partition_dir,
             min_samples=min_samples,
-            data_ratios=data_ratios, seed=seed)
+            data_ratios=data_ratios,
+            seed=seed)
     except ValueError as e:
         return False, {}, e
     return True, result, ""

@@ -65,12 +65,12 @@ def _get_job_id(args) -> str:
 def _get_training_type(args) -> str:
     # TODO: use training_type instead of model name
     training_type = args.get("training_type", type=str)
-    if training_type:
-        logger.info("training_type is passed")
-    else:
-        model_name = args.get("name", type=str)
-        logger.info(f"model name is {model_name}")
-        training_type = f'{model_name.split("_")[-1]}_data'
+    # if training_type:
+    #     logger.info("training_type is passed")
+    # else:
+    #     model_name = args.get("name", type=str)
+    #     logger.info(f"model name is {model_name}")
+    #     training_type = f'{model_name.split("_")[-1]}_data'
     logging.info(f"training_type is {training_type}")
     return TrainingType(training_type)
 
@@ -127,8 +127,6 @@ def partition_dataset():
     logging.info(f"min_samples is {min_samples}")
     logging.info(f"data_ratios is {data_ratios}")
 
-    training_type = _get_training_type(args=request.args)
-
     # Validations
     error_msg = dataset_utils.validate_ratios(data_ratios)
     if error_msg:
@@ -148,7 +146,6 @@ def partition_dataset():
     success, result, message = training_job.partition_dataset(
         server_dir=server.output_dir,
         job_id=job_id,
-        training_type=training_type,
         min_samples=min_samples,
         data_ratios=data_ratios,
     )
