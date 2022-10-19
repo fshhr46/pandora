@@ -65,7 +65,7 @@ def get_training_args(
         elif training_type == TrainingType.mixed_data:
             num_epochs = 2
         elif training_type == TrainingType.meta_data:
-            num_epochs = 40
+            num_epochs = 50
         else:
             raise ValueError
 
