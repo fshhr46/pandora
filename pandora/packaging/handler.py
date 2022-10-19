@@ -161,16 +161,6 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             if "data" in request_data and "body" in request_data:
                 raise ValueError(
                     "Expect one of field in [data, body] to be set, but got both")
-            elif "data" in request_data:
-                # Get request expects every reqeusts has one input string
-                input_ids_batch, attention_mask_batch, segment_ids_batch = self.add_input_text_to_batch(
-                    input_ids_batch,
-                    attention_mask_batch,
-                    segment_ids_batch,
-                    max_seq_length=self.setup_config["max_length"],
-                    request_data=request_data)
-                num_texts += 1
-                indexes.append(num_texts)
             elif "body" in request_data:
                 # Post request expects a list of text from the same column and predict the most likely class for the batch.
                 # [
@@ -187,9 +177,23 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                         request_seq_data=json_obj)
                     num_texts += 1
                 indexes.append(num_texts)
+            # Handle single request
+            # {
+            #   "data": "sentence 1",
+            #   "column_name": "col_1",
+            #   "column_comment": "com_1",
+            #   "column_description": "des_1"
+            # }
             else:
-                # empty request, continue
-                continue
+                # Get request expects every reqeusts has one input string
+                input_ids_batch, attention_mask_batch, segment_ids_batch = self.add_input_text_to_batch(
+                    input_ids_batch,
+                    attention_mask_batch,
+                    segment_ids_batch,
+                    max_seq_length=self.setup_config["max_length"],
+                    request_data=request_data)
+                num_texts += 1
+                indexes.append(num_texts)
         # Batch definition
         # input_ids_batch, attention_mask_batch, segment_ids_batch, indexes
         return (input_ids_batch, attention_mask_batch, segment_ids_batch, indexes)
