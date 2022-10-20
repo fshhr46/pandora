@@ -84,10 +84,10 @@ def generate_data(
     # Handle meta_data case
     if training_type == TrainingType.meta_data:
         with open(data_file, "w") as raw_data_fr:
-            column_name = col_tags[0]
-            column_comment = column_name_2_comment[column_name]
-            column_description = column_comment
             for col_tags in column_name_2_label.items():
+                column_name = col_tags[0]
+                column_comment = column_name_2_comment[column_name]
+                column_description = column_comment
                 # Write training data
                 out_line = {
                     "text": "",
