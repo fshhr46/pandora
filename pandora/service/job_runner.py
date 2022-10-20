@@ -15,7 +15,7 @@ from torch.utils.data.distributed import DistributedSampler
 from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
 from pandora.callback.optimizater.adamw import AdamW
 from pandora.callback.progressbar import ProgressBar
-from pandora.packaging.feature import TrainingType
+from pandora.packaging.feature import MetadataType, TrainingType
 from pandora.service.job_utils import get_all_checkpoints, create_setup_config_file
 from pandora.packaging.feature import (
     batch_collate_fn,
@@ -48,6 +48,7 @@ def get_training_args(
     mode_type,
     bert_base_model_name,
     training_type: TrainingType,
+    meta_data_types: List[str],
     # optional parameters
     sample_size: int = 0,
     num_epochs: int = 0,
@@ -95,7 +96,7 @@ def get_training_args(
                 "--eval_all_checkpoints",
                 # "--predict_all_checkpoints",
                 "--overwrite_cache",
-                # "--overwrite_output_dir",
+                "--overwrite_output_dir",
                 ]
 
     if sample_size:
@@ -103,6 +104,8 @@ def get_training_args(
             f"--sample_size={sample_size}",
         )
     arg_list.append(f"--training_type={training_type}")
+    for meta_data_type in meta_data_types:
+        arg_list.append(f"--meta_data_type={meta_data_type}")
     return arg_list
 
 
@@ -161,9 +164,11 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     parser = get_args_parser()
     args = parser.parse_args(arg_list)
     training_type = args.training_type
+    meta_data_types = args.meta_data_type
 
     processor = runner_utils.get_data_processor(
         training_type=training_type,
+        meta_data_types=meta_data_types,
         resource_dir=resource_dir,
         datasets=datasets)
 
@@ -565,11 +570,19 @@ def get_args_parser():
     parser.add_argument("--sample_size", type=int, default=0,
                         help="number of samples for each class")
     parser.add_argument("--training_type", type=str, required=True,
-                        choices=[TrainingType.meta_data,
-                                 TrainingType.column_data,
-                                 TrainingType.mixed_data
-                                 ],
+                        choices=[
+                            TrainingType.meta_data,
+                            TrainingType.column_data,
+                            TrainingType.mixed_data
+                        ],
                         help="Training type selected in TrainingType")
+    parser.add_argument("--meta_data_type", action="append", type=str, required=True,
+                        choices=[
+                            MetadataType.column_name,
+                            MetadataType.column_comment,
+                            MetadataType.column_descripition,
+                        ],
+                        help="Meta data types selected")
 
     # Other parameters
     parser.add_argument('--markup', default='bios',

@@ -24,7 +24,8 @@ def generate_data(
         labels,
         column_name_2_label,
         column_name_2_comment,
-        is_test_data=False):
+        is_test_data=False,
+        ingest_data=False):
 
     column_names_to_include = sorted(column_name_2_label.keys())
     print(f"column_names_to_include is {column_names_to_include}")
@@ -53,11 +54,18 @@ def generate_data(
 
                         # Handle non-meta_data use case. Write data entries
                         if training_type != TrainingType.meta_data:
+                            column_comment = column_name_2_comment[column_name]
+                            column_description = column_comment
                             # Write training data
                             out_line = {
                                 "text": val,
-                                "label": column_name_2_label[column_name]}
-                            out_line["column_name"] = column_name
+                                "label": column_name_2_label[column_name],
+                                "meta_data": {
+                                    "column_name": column_name,
+                                    "column_comment": column_comment,
+                                    "column_description": column_description,
+                                }
+                            }
                             json.dump(out_line, raw_data_fr,
                                       ensure_ascii=False)
                             raw_data_fr.write("\n")
@@ -76,12 +84,20 @@ def generate_data(
     # Handle meta_data case
     if training_type == TrainingType.meta_data:
         with open(data_file, "w") as raw_data_fr:
+            column_name = col_tags[0]
+            column_comment = column_name_2_comment[column_name]
+            column_description = column_comment
             for col_tags in column_name_2_label.items():
                 # Write training data
                 out_line = {
                     "text": "",
                     "label": col_tags[1],
-                    "column_name": col_tags[0]}
+                    "meta_data": {
+                        "column_name": column_name,
+                        "column_comment": column_comment,
+                        "column_description": column_description,
+                    }
+                }
                 json.dump(out_line, raw_data_fr,
                           ensure_ascii=False)
                 raw_data_fr.write("\n")
@@ -91,9 +107,8 @@ def generate_data(
     # Check if mysql is available
     host = "10.0.1.178"
     port = "7733"
-    response = os.system("ping -c 1 " + host)
     # and then check the response...
-    if response == 0:
+    if ingest_data and os.system("ping -c 1 " + host) == 0:
         print("ingesting data to mysql")
         create_table(
             table_name=dataset_name,
@@ -223,6 +238,7 @@ def build_dataset(
     dataset_name="demo_dataset",
     num_data_entry_train=10,
     num_data_entry_test=10,
+    ingest_data=False,
 ):
     # output_dir = os.path.join(
     #     pathlib.Path.home(), "workspace", "resource", "outputs", "bert-base-chinese", "synthetic_data", "datasets", "synthetic_data")
@@ -245,9 +261,10 @@ def build_dataset(
         database_name=database_name,
         num_data_entry=num_data_entry_train, output_dir=output_dir,
         generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
-        is_test_data=False,
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TRAIN,
-        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
+        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
+        is_test_data=False,
+        ingest_data=ingest_data)
     data_ratios_train = {"train": 0.8, "dev": 0.2, "test": 0.0}
     data_partitions_train_dev = partition_data(training_type,
                                                output_dir, data_file=data_file_train,
@@ -260,9 +277,10 @@ def build_dataset(
         database_name=database_name,
         num_data_entry=num_data_entry_test, output_dir=output_dir,
         generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
-        is_test_data=True,
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST,
-        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
+        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
+        is_test_data=False,
+        ingest_data=ingest_data)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
     data_partitions_test_1 = partition_data(training_type,
                                             output_dir, data_file=data_file_test_1,
@@ -275,9 +293,10 @@ def build_dataset(
         database_name=database_name,
         num_data_entry=num_data_entry_test, output_dir=output_dir,
         generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
-        is_test_data=True,
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST,
-        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT)
+        column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
+        is_test_data=False,
+        ingest_data=ingest_data)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
     data_partitions_test_2 = partition_data(training_type,
                                             output_dir, data_file=data_file_test_2,
@@ -306,4 +325,5 @@ if __name__ == '__main__':
         dataset_name=dataset_name,
         num_data_entry_train=num_data_entry_train,
         num_data_entry_test=num_data_entry_test,
+        ingest_data=True,
     )

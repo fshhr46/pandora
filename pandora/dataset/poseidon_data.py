@@ -213,7 +213,7 @@ def _create_data_entries_by_training_type(
         label_ids: List[str],
         tag_name: str,
         column_data: dict):
-    column_name = column_data["column_name"]
+    meta_data = column_data["metadata"]
     if training_type == TrainingType.column_data or \
             training_type == TrainingType.mixed_data:
         # Add data entry
@@ -224,14 +224,14 @@ def _create_data_entries_by_training_type(
             data_entries.append(dataset_utils.DataEntry(
                 text=data_entry["content"],
                 label=label_ids,
-                column_name=column_name,
+                meta_data=meta_data,
             ))
         return data_entries
     elif training_type == TrainingType.meta_data:
         return [dataset_utils.DataEntry(
             text="",
             label=label_ids,
-            column_name=column_name,
+            meta_data=meta_data,
         )]
     else:
         raise ValueError

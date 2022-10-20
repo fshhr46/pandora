@@ -14,6 +14,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class MetadataType(str, Enum):
+    def __str__(self):
+        return str(self.value)
+    column_name = "column_name"
+    column_comment = "column_comment"
+    column_descripition = "column_descripition"
+
+
 class ModelType(str, Enum):
     def __str__(self):
         return str(self.value)
@@ -32,7 +40,7 @@ class TrainingType(str, Enum):
 class InputExample(object):
     """A single training/test example for token classification."""
 
-    def __init__(self, id, training_type, labels, sentence, column_name):
+    def __init__(self, id, training_type, labels, sentence, meta_data_text):
         """Constructs a InputExample.
         Args:
             guid: Unique id for the example.
@@ -43,18 +51,18 @@ class InputExample(object):
         self.id = id
         self.labels = labels
         self.sentence = sentence
-        self.column_name = column_name
+        self.meta_data_text = meta_data_text
 
         if training_type == TrainingType.column_data:
             assert sentence, "text data is required for column_data model"
             self.text = sentence
         elif training_type == TrainingType.meta_data:
-            assert column_name, "column_name data is required for column_data model"
-            self.text = column_name
+            assert meta_data_text, "meta_data_text data is required for meta_data model"
+            self.text = meta_data_text
         elif training_type == TrainingType.mixed_data:
             assert sentence, "text data is required for mixed_data training"
-            assert column_name, "column_name data is required for mixed_data model"
-            combined_text = f"{column_name}|{sentence}"
+            assert meta_data_text, "column_name data is required for mixed_data model"
+            combined_text = f"{meta_data_text}|{sentence}"
             self.text = combined_text
         else:
             raise ValueError(f"invalid training_type {training_type}")
@@ -221,16 +229,23 @@ def convert_example_to_feature(
     return feature
 
 
-def create_example(id, training_type, line):
+def create_example(id, training_type, meta_data_types: list, line):
     labels = line['labels']
     sentence = str(line['sentence'])
-    column_name = str(line['column_name'])
+    meta_data = line['meta_data']
+    meta_data_types = sorted(meta_data_types)
+
+    meta_data_vals = []
+    for meta_data_type in meta_data_types:
+        meta_data_vals.append(meta_data.get(meta_data_type, ''))
+    meta_data_text = "|".join(meta_data_vals)
+
     return InputExample(
         id=id,
         training_type=training_type,
         labels=labels,
         sentence=sentence,
-        column_name=column_name)
+        meta_data_text=meta_data_text)
 
 
 class DataProcessor(object):
@@ -269,9 +284,15 @@ class DataProcessor(object):
 class SentenceProcessor(DataProcessor):
     """Processor for the chinese ner data set."""
 
-    def __init__(self, training_type: TrainingType, resource_dir, datasets: List[str]) -> None:
+    def __init__(
+            self,
+            training_type: TrainingType,
+            meta_data_types: List[MetadataType],
+            resource_dir,
+            datasets: List[str]) -> None:
         super().__init__()
         self.training_type = training_type
+        self.meta_data_types = meta_data_types
         self.resource_dir = resource_dir
         self.datasets = datasets
 
@@ -316,7 +337,11 @@ class SentenceProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             guid = "%s-%s" % (dataset_type, i)
             example = create_example(
-                id=guid, training_type=self.training_type, line=line)
+                id=guid,
+                training_type=self.training_type,
+                meta_data_types=self.meta_data_types,
+                line=line
+            )
             examples.append(example)
         return examples
 
@@ -346,12 +371,12 @@ def read_json_line(line_obj: Dict):
     # >> >
     # TODO: Fix this column name concat
     sentence = line_obj['text']
-    column_name = line_obj.get('column_name')
+    meta_data = line_obj['meta_data']
     labels = _create_labels(line_obj)
     return {
         "labels": labels,
         "sentence": sentence,
-        "column_name": column_name}
+        "meta_data": meta_data}
 
 
 def _create_labels(line_obj):

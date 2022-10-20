@@ -15,14 +15,14 @@ class DataEntry(object):
     def __init__(self,
                  text: str,
                  label: str,
-                 column_name: str = None,
+                 meta_data: Dict = None,
                  ) -> None:
         self.text = text
         self.label = label
-        self.column_name = column_name
+        self.meta_data = meta_data
     text: str
     label: List
-    column_name: str
+    meta_data: Dict
 
 
 def split_dataset(all_samples, data_ratios, seed) -> Dict:

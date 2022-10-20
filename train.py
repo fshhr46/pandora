@@ -6,7 +6,7 @@ import pandora.service.job_runner as job_runner
 import pandora.packaging.packager as packager
 
 from pandora.dataset.sentence_data import Dataset
-from pandora.packaging.feature import TrainingType
+from pandora.packaging.feature import MetadataType, TrainingType
 
 
 def main():
@@ -20,13 +20,18 @@ def main():
     bert_base_model_name = "bert-base-chinese"
 
     # Build dataset
-    num_data_entry_train = 100
+    num_data_entry_train = 10
     num_data_entry_test = 10
 
     # Training args
     training_type = TrainingType.column_data
-    training_type = TrainingType.mixed_data
     training_type = TrainingType.meta_data
+    training_type = TrainingType.mixed_data
+    meta_data_types = [
+        # MetadataType.column_name,
+        MetadataType.column_comment,
+        # MetadataType.column_descripition,
+    ]
 
     # Setting num_epochs means choosing the default number based on training_type
     num_epochs = 0
@@ -57,6 +62,7 @@ def main():
             dataset_name=dataset_name,
             num_data_entry_train=num_data_entry_train,
             num_data_entry_test=num_data_entry_test,
+            ingest_data=False,
         )
 
     # Set args
@@ -65,6 +71,7 @@ def main():
         mode_type=model_type,
         bert_base_model_name=bert_base_model_name,
         training_type=training_type,
+        meta_data_types=meta_data_types,
         num_epochs=num_epochs,
     )
 

@@ -79,7 +79,8 @@ def convert_multi_labels(data_partition, resource_dir, output_folder, merge_labe
                 with open(output_file, 'w') as f:
                     json.dump(column_data, f, ensure_ascii=False)
                 for word in column_data:
-                    out_line = {"text": word, "label": [label_name]}
+                    out_line = {"meta_data": {},
+                                "text": word, "label": [label_name]}
                     json.dump(out_line, fr_out, ensure_ascii=False)
                     fr_out.write("\n")
     dataset_utils.write_labels(output_dir=output_dir, labels=labels)
@@ -157,7 +158,8 @@ def convert_long_sentence(data_partition, resource_dir, output_folder):
                 assert label in labels, f"label {label} is not in labels.\n{labels}"
                 if label not in columns_data:
                     columns_data[label] = []
-                out_line = {"text": obj["sentence"], "label": [label]}
+                out_line = {"meta_data": {},
+                            "text": obj["sentence"], "label": [label]}
                 json.dump(out_line, fr_out, ensure_ascii=False)
                 fr_out.write("\n")
                 columns_data[label].append(obj["sentence"])
@@ -197,7 +199,8 @@ def convert_short_sentence(data_partition, resource_dir, output_folder):
                 assert label in labels, f"label {label} is not in labels.\n{labels}"
                 if label not in columns_data:
                     columns_data[label] = []
-                out_line = {"text": obj["sentence"], "label": [label]}
+                out_line = {"meta_data": {},
+                            "text": obj["sentence"], "label": [label]}
                 json.dump(out_line, fr_out, ensure_ascii=False)
                 fr_out.write("\n")
                 columns_data[label].append(obj["sentence"])

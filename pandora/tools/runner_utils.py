@@ -1,6 +1,7 @@
 import os
 import json
-from pandora.packaging.feature import TrainingType
+from typing import List
+from pandora.packaging.feature import MetadataType, TrainingType
 import pandora.tools.report as report
 from pandora.tools.common import json_to_text
 
@@ -45,9 +46,14 @@ def build_train_report(examples, predictions, report_dir, processor):
                         report_dir=report_dir)
 
 
-def get_data_processor(datasets, training_type: TrainingType, resource_dir: str):
+def get_data_processor(
+        datasets,
+        training_type: TrainingType,
+        meta_data_types: List[MetadataType],
+        resource_dir: str):
     return SentenceProcessor(
         training_type=training_type,
+        meta_data_types=meta_data_types,
         resource_dir=resource_dir,
         datasets=datasets)
 
