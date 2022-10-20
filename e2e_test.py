@@ -55,14 +55,14 @@ def get_url():
     return f"http://{TEST_HOST}:{TEST_PORT}"
 
 
-def test_training_failed():
+def test_training_failed(training_type):
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
 
     # start job witout data
     assert not make_request(
-        f"{get_url()}/start?id={job_id}", post=True)["success"]
+        f"{get_url()}/start?id={job_id}&training_type={training_type}", post=True)["success"]
 
     # prepare datadir
     prepare_job_data(job_id=job_id)
@@ -71,7 +71,7 @@ def test_training_failed():
 
     # start job
     assert make_request(
-        f"{get_url()}/start?id={job_id}", post=True)["success"]
+        f"{get_url()}/start?id={job_id}&training_type={training_type}", post=True)["success"]
 
     # ensure training job is running
     assert f"PANDORA_TRAINING_{job_id}" in make_request(
@@ -83,7 +83,7 @@ def test_training_failed():
 
     # ensure job can be stated when server has enough resource.
     assert not make_request(
-        f"{get_url()}/start?id={job_id}", post=True)["success"]
+        f"{get_url()}/start?id={job_id}&training_type={training_type}", post=True)["success"]
     print("waiting for job to be started")
     time.sleep(10)
 
@@ -115,7 +115,7 @@ def test_training_failed():
 
     # start training the same job but failed.
     assert not make_request(
-        f"{get_url()}/start?id={job_id}", post=True)["success"]
+        f"{get_url()}/start?id={job_id}&training_type={training_type}", post=True)["success"]
 
     # get report should return nothing
     output = make_request(
@@ -146,7 +146,7 @@ def test_training_success(training_type: str):
 
     # start job
     assert make_request(
-        f"{get_url()}/start?id={job_id}&sample_size={sample_size}&training_type={training_type}", post=True)["success"]
+        f"{get_url()}/start?id={job_id}&training_type={training_type}&sample_size={sample_size}", post=True)["success"]
     print("waiting for job to be started")
 
     # Check job status changed from running to completed.
@@ -218,9 +218,7 @@ if __name__ == '__main__':
                 server_process.start()
                 print("waiting for server to be ready")
                 time.sleep(3)
-            test_training_failed()
-            test_training_success(training_type="meta_data")
-            test_training_success(training_type="column_data")
+            test_training_failed(training_type="mixed_data")
             test_training_success(training_type="mixed_data")
         finally:
             print("start killing processes")
