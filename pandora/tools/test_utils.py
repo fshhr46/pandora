@@ -12,10 +12,8 @@ import pandora.tools.runner_utils as runner_utils
 import pandora.service.job_runner as job_runner
 
 from pandora.tools.common import logger
-from pandora.dataset.sentence_data import Dataset
 from pandora.packaging.feature import (
     batch_collate_fn,
-    TrainingType
 )
 
 
@@ -85,7 +83,7 @@ def get_test_data():
     return [json.dumps(line, ensure_ascii=False) for line in data]
 
 
-def load_model(device):
+def load_model(device, datasets, model_package_dir, training_type, meta_data_types):
 
     home = str(pathlib.Path.home())
     resource_dir = os.path.join(home, "workspace", "resource")
@@ -98,15 +96,9 @@ def load_model(device):
         task_name=task_name,
         mode_type=mode_type,
         bert_base_model_name=bert_base_model_name,
-        training_type=TrainingType.column_data,
+        training_type=training_type,
+        meta_data_types=meta_data_types,
     )
-
-    TEST_DATASETS = [
-        Dataset.short_sentence
-        # "pandora_demo_meta_100_10"
-    ]
-
-    datasets = TEST_DATASETS
 
     arg_list.extend(
         job_runner.get_default_dirs(
@@ -127,12 +119,14 @@ def load_model(device):
     args = parser.parse_args(arg_list)
 
     processor = runner_utils.get_data_processor(
-        resource_dir=resource_dir, datasets=datasets)
+        datasets=datasets,
+        training_type=training_type,
+        meta_data_types=meta_data_types,
+        resource_dir=resource_dir)
 
     model_classes = job_runner.MODEL_CLASSES[args.model_type]
 
     # load trained model and tokenizer
-    model_package_dir = os.path.join(args.output_dir, "torchserve_package")
     config_class, model_class, tokenizer_class = model_classes
     tokenizer = tokenizer_class.from_pretrained(
         model_package_dir, do_lower_case=args.do_lower_case)
@@ -159,7 +153,12 @@ def load_dataset(local_rank, tokenizer, processor, lines, batch_size):
         id2label[i] = label
         label2id[label] = i
     features = feature.convert_examples_to_features(
-        examples, label_list, max_seq_length=MAX_SEQ_LENGTH, tokenizer=tokenizer)
+        examples,
+        training_type=processor.training_type,
+        meta_data_types=processor.meta_data_types,
+        label_list=label_list,
+        max_seq_length=MAX_SEQ_LENGTH,
+        tokenizer=tokenizer)
     dataset = runner_utils.convert_features_to_dataset(
         local_rank, features, True)
 

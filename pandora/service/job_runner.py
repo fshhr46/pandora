@@ -96,7 +96,7 @@ def get_training_args(
                 "--eval_all_checkpoints",
                 # "--predict_all_checkpoints",
                 "--overwrite_cache",
-                "--overwrite_output_dir",
+                # "--overwrite_output_dir",
                 ]
 
     if sample_size:

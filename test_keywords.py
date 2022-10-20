@@ -7,6 +7,7 @@ import pathlib
 import jieba.posseg as pseg
 
 from captum.attr import visualization
+from pandora.dataset.sentence_data import Dataset
 
 import pandora.packaging.inference as inference
 import pandora.tools.test_utils as test_utils
@@ -14,17 +15,30 @@ import pandora.tools.test_utils as test_utils
 from pandora.tools.common import logger
 from pandora.callback.progressbar import ProgressBar
 from pandora.tools.common import init_logger
+from pandora.packaging.feature import TrainingType, MetadataType
 
 device = test_utils.get_device()
 
 
 def test_get_insights(
         lines,
+        datasets,
+        model_package_dir,
+        training_type,
+        meta_data_types,
         batch_size=40,
         n_steps=50,
         output_dir=None,
         visualize_output=False):
-    _, local_rank, tokenizer, model, processor = test_utils.load_model(device)
+
+    _, local_rank, tokenizer, model, processor = test_utils.load_model(
+        device,
+        datasets,
+        model_package_dir,
+        training_type,
+        meta_data_types,
+    )
+
     _, dataloader, id2label, label2id = test_utils.load_dataset(
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
     total = 0
@@ -238,13 +252,31 @@ def run_test():
     # =========== test
     test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/short_sentence/predict/test_submit.json"
     # test_file = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_meta_100_10/predict/test_submit.json"
+    base_folder = "/Users/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_1019_fix_100_10_meta_comment"
+    # test_file = os.path.join(base_folder, "predict", "test_submit.json")
+    test_file = "/Users/haoranhuang/workspace/resource/datasets/pandora_demo_1019_fix_100_10/pandora_demo_1019_fix_100_10_test_1.json"
+    model_package_dir = os.path.join(base_folder, "torchserve_package")
 
     lines = open(test_file).readlines()
     output_dir = f"{home}/workspace/resource/attribution/"
 
+    training_type = TrainingType.meta_data
+    meta_data_types = [
+        MetadataType.column_comment
+    ]
+
+    datasets = [
+        # Dataset.short_sentence
+        "pandora_demo_1019_fix_100_10"
+    ]
+
     # Run get insights
     test_get_insights(
         lines=lines,
+        datasets=datasets,
+        model_package_dir=model_package_dir,
+        training_type=training_type,
+        meta_data_types=meta_data_types,
         batch_size=2,
         n_steps=50,
         output_dir=output_dir,
