@@ -7,7 +7,6 @@ from pandora.tools.common import json_to_text
 
 
 from pandora.packaging.feature import SentenceProcessor
-from pandora.packaging.feature import convert_examples_to_features
 from pandora.packaging.feature import (
     convert_examples_to_features,
     RandomDataSampler,
@@ -132,6 +131,7 @@ def load_and_cache_examples(args,
             examples = sampler.sample(examples=examples)
         features = convert_examples_to_features(examples=examples,
                                                 training_type=processor.training_type,
+                                                meta_data_types=processor.meta_data_types,
                                                 tokenizer=tokenizer,
                                                 label_list=label_list,
                                                 max_seq_length=args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length,

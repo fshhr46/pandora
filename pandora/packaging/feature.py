@@ -120,6 +120,7 @@ def batch_collate_fn(batch):
 
 def convert_examples_to_features(examples,
                                  training_type,
+                                 meta_data_types,
                                  label_list,
                                  max_seq_length, tokenizer,
                                  *args, **kwargs):
@@ -137,6 +138,7 @@ def convert_examples_to_features(examples,
         feature = convert_example_to_feature(
             example,
             training_type,
+            meta_data_types,
             label2id,
             ex_index < 5,
             max_seq_length,
@@ -150,6 +152,7 @@ def convert_examples_to_features(examples,
 def convert_example_to_feature(
         example,
         training_type: TrainingType,
+        meta_data_types: List[MetadataType],
         label2id,
         log_data: bool,
         max_seq_length,
@@ -232,12 +235,13 @@ def convert_example_to_feature(
 def create_example(id, training_type, meta_data_types: list, line):
     labels = line['labels']
     sentence = str(line['sentence'])
+
+    # create meta_data_text
     meta_data = line['meta_data']
     meta_data_types = sorted(meta_data_types)
-
     meta_data_vals = []
     for meta_data_type in meta_data_types:
-        meta_data_vals.append(meta_data.get(meta_data_type, ''))
+        meta_data_vals.append(meta_data[meta_data_type])
     meta_data_text = "|".join(meta_data_vals)
 
     return InputExample(
@@ -413,6 +417,7 @@ class RandomDataSampler(object):
 def extract_feature_from_request(
         request_data,
         training_type: TrainingType,
+        meta_data_types: List[MetadataType],
         label2id,
         max_seq_length,
         tokenizer):
@@ -435,13 +440,34 @@ def extract_feature_from_request(
         column_name = column_name.decode("utf-8")
     logger.debug(f"column_name is {column_name}")
 
+    column_comment = request_data.get("column_comment")
+    if isinstance(column_comment, (bytes, bytearray)):
+        column_comment = column_name.decode("utf-8")
+    logger.debug(f"column_comment is {column_comment}")
+
+    column_description = request_data.get("column_description")
+    if isinstance(column_description, (bytes, bytearray)):
+        column_description = column_name.decode("utf-8")
+    logger.debug(f"column_description is {column_description}")
+
+    meta_data = {
+        "column_name": column_name,
+        "column_comment": column_comment,
+        "column_description": column_description,
+    }
     line = read_json_line(
-        line_obj={"text": input_text, "column_name": column_name})
+        line_obj={"text": input_text, "meta_data": meta_data})
     # TODO: fix this hack: id=""
-    example = create_example(id="", training_type=training_type, line=line)
+    example = create_example(
+        id="",
+        training_type=training_type,
+        meta_data_types=meta_data_types,
+        line=line
+    )
     feat = convert_example_to_feature(
         example,
         training_type,
+        meta_data_types,
         label2id,
         log_data=False,
         max_seq_length=int(max_seq_length),

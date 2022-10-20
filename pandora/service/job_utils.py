@@ -19,12 +19,14 @@ def create_setup_config_file(
         package_dir,
         setup_config_file_name,
         training_type,
+        meta_data_types,
         eval_max_seq_length,
         num_labels: str):
     setup_conf = {
         "model_name": "bert-base-chinese",
         "mode": "sequence_classification",
         "training_type": training_type,
+        "meta_data_types": meta_data_types,
         "do_lower_case": True,
         "num_labels": num_labels,
         "save_mode": "pretrained",

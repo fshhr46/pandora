@@ -84,6 +84,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
 
         # set model training type
         self.training_type = self.setup_config["training_type"]
+        self.meta_data_types = self.setup_config["meta_data_types"]
 
         self.model.eval()
         logger.info(
@@ -114,6 +115,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         feat = feature.extract_feature_from_request(
             request_data,
             self.training_type,
+            self.meta_data_types,
             self.label2id,
             max_seq_length,
             self.tokenizer,

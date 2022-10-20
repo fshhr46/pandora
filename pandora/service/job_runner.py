@@ -181,6 +181,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
         args.output_dir,
         packager.SERUP_CONF_FILE_NAME,
         args.training_type,
+        args.meta_data_type,
         args.eval_max_seq_length,
         len(args.id2label))
 
