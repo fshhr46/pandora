@@ -25,10 +25,10 @@ def main():
 
     # Training args
     training_type = TrainingType.column_data
-    training_type = TrainingType.meta_data
     training_type = TrainingType.mixed_data
+    training_type = TrainingType.meta_data
     meta_data_types = [
-        # MetadataType.column_name,
+        MetadataType.column_name,
         MetadataType.column_comment,
         # MetadataType.column_descripition,
     ]

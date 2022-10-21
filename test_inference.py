@@ -63,7 +63,7 @@ def test_online(lines):
 def test_offline_train(lines, batch_size=100):
     model_type, local_rank, tokenizer, model, processor = test_utils.load_model(
         device)
-    dataset, _, id2label, _ = test_utils.load_dataset(
+    dataset, _, _, id2label, _ = test_utils.load_dataset(
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
 
     predictions = job_runner.predict(
@@ -104,7 +104,7 @@ def test_offline_train(lines, batch_size=100):
 
 def test_offline(lines, batch_size=20):
     _, local_rank, tokenizer, model, processor = test_utils.load_model(device)
-    _, dataloader, id2label, _ = test_utils.load_dataset(
+    _, _, dataloader, id2label, _ = test_utils.load_dataset(
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
     incorrect = 0
     total = 0

@@ -39,7 +39,7 @@ def test_get_insights(
         meta_data_types,
     )
 
-    _, dataloader, id2label, label2id = test_utils.load_dataset(
+    _, examples, dataloader, id2label, label2id = test_utils.load_dataset(
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
     total = 0
     pbar = ProgressBar(n_total=len(lines), desc='Attributing')
@@ -53,13 +53,14 @@ def test_get_insights(
             input_batch=input_batch_with_index,
             mode=test_utils.HANDLER_MODE,
             model=model)
-        results = inference.format_outputs(
+        pred_results = inference.format_outputs(
             inferences=inferences, id2label=id2label)
 
-        sub_lines = lines[step * batch_size: (step+1) * batch_size]
-        assert len(results) == len(sub_lines)
+        sub_examples = examples[step * batch_size: (step+1) * batch_size]
+        assert len(pred_results) == len(sub_examples)
 
-        targets = [label2id[res["class"]] for res in results]
+        targets = [label2id[res["class"]] for res in pred_results]
+
         # TODO: Fix hard coded "sequence_classification"
         insights = inference.run_get_insights(
             # configs
@@ -75,24 +76,18 @@ def test_get_insights(
             target=targets,
             n_steps=n_steps)
         torch.cuda.empty_cache()
-        for res, insight, line in zip(results, insights, sub_lines):
+        for pred_result, insight, example in zip(pred_results, insights, sub_examples):
 
             # Read baseline file data
-            obj = json.loads(line)
-            label = obj["label"][0]
-            sentence = obj["text"]
+            label = example.labels[0]
+            text = example.text
 
-            pred_online = res["class"]
-            probability = res["probability"]
+            pred_online = pred_result["class"]
+            probability = pred_result["probability"]
 
-            request_data = {
-                "data": obj["text"],
-                "column_name": obj.get("column_name")
-            }
             logger.info("")
             logger.info(
                 "======================================================")
-            # logger.info(f"request_data is {request_data}")
             # logger.info(f"pred_online: {pred_online}")
             # logger.info(f"label: {label}")
 
@@ -106,7 +101,7 @@ def test_get_insights(
                 combined, key=lambda tp: tp[2], reverse=True)
 
             obj = {
-                "sentence": sentence,
+                "text": text,
                 "probability": probability,
                 "pred_online": pred_online,
                 "label": label,
@@ -115,9 +110,11 @@ def test_get_insights(
                 "sorted_attributions": sorted_attributions,
             }
             json_objs.append(obj)
-            # logger.info(json.dumps(obj,
-            #                        ensure_ascii=False,
-            #                        indent=4))
+            import time
+            # time.sleep(1)
+            logger.info(json.dumps(obj,
+                                   ensure_ascii=False,
+                                   indent=4))
             pbar(total)
             total += 1
 
@@ -126,6 +123,7 @@ def test_get_insights(
         with open(os.path.join(output_dir, "attributions.json"), 'w') as f:
             for json_obj in json_objs:
                 json.dump(json_obj, f, ensure_ascii=False)
+                f.write("\n")
         with open(os.path.join(output_dir, "keywords.json"), 'w') as f:
             json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
     if visualize_output:
@@ -146,9 +144,9 @@ def filter_by_word_type(segment_type: str):
     # c	    连词	    u	    助词	    xc	   其他虚词	    w	    标点符号
     # PER	人名	    LOC	    地名	    ORG     机构名	    TIME	时间
     return segment_type in [
-        "n", "ns", "s", "t"
-        "nr", "v", "nt", "nw"
-        "nz", "vn"
+        # "n", "ns", "s", "t"
+        # "nr", "v", "nt", "nw"
+        # "nz", "vn"
     ]
 
 
@@ -173,7 +171,7 @@ def build_keyword_dict(json_objs, use_jieba=True, do_average=False):
         per_label_counts = label_to_keyword_count[label]
         # 词粒度
         if use_jieba:
-            sentence = obj["sentence"][:test_utils.MAX_SEQ_LENGTH - 2]
+            sentence = obj["text"][:test_utils.MAX_SEQ_LENGTH - 2]
             segs = list(pseg.cut(sentence, use_paddle=True))
             # tokens = [entry[0] for entry in attributions_sorted_by_index]
             assert sum([len(seg.word) for seg in segs]) == len(sentence)
@@ -227,7 +225,7 @@ def visualize_insights(json_objs):
             sorted_attributions, key=lambda tp: tp[1])
         attributions = torch.tensor(
             [item[2] for item in sorted_attributions], dtype=torch.float32)
-        sentence = obj["sentence"][:test_utils.MAX_SEQ_LENGTH-2]
+        sentence = obj["text"][:test_utils.MAX_SEQ_LENGTH-2]
         assert len(sentence) == len(
             attributions), f"{len(sentence)} == {len(attributions)}"
 
@@ -250,15 +248,13 @@ def run_test():
     home = str(pathlib.Path.home())
 
     # =========== test
-    test_file = f"{home}/workspace/resource/outputs/bert-base-chinese/short_sentence/predict/test_submit.json"
-    # test_file = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_meta_100_10/predict/test_submit.json"
-    base_folder = "/Users/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_1019_fix_100_10_meta_comment"
-    # test_file = os.path.join(base_folder, "predict", "test_submit.json")
-    test_file = "/Users/haoranhuang/workspace/resource/datasets/pandora_demo_1019_fix_100_10/pandora_demo_1019_fix_100_10_test_1.json"
+    base_folder = "/home/haoranhuang/workspace/resource/outputs/bert-base-chinese/pandora_demo_1019_fix_10_10_meta_comment/"
+    data_file = "/home/haoranhuang/workspace/resource/datasets/pandora_demo_1019_fix_10_10/test.json"
     model_package_dir = os.path.join(base_folder, "torchserve_package")
 
-    lines = open(test_file).readlines()
-    output_dir = f"{home}/workspace/resource/attribution/"
+    lines = open(data_file).readlines()
+    attribution_output_dir = os.path.join(base_folder, "attribution")
+    pathlib.Path(attribution_output_dir).mkdir(parents=True, exist_ok=True)
 
     training_type = TrainingType.meta_data
     meta_data_types = [
@@ -267,7 +263,7 @@ def run_test():
 
     datasets = [
         # Dataset.short_sentence
-        "pandora_demo_1019_fix_100_10"
+        "pandora_demo_1019_fix_10_10"
     ]
 
     # Run get insights
@@ -277,14 +273,15 @@ def run_test():
         model_package_dir=model_package_dir,
         training_type=training_type,
         meta_data_types=meta_data_types,
-        batch_size=2,
+        batch_size=1,
         n_steps=50,
-        output_dir=output_dir,
+        output_dir=attribution_output_dir,
         visualize_output=False)
 
     # Test merge attributions
-    test_file = f"{home}/attributions.json"
-    lines = open(test_file).readlines()
+    attribution_file = os.path.join(
+        attribution_output_dir, "attributions.json")
+    lines = open(attribution_file).readlines()
     json_objs = [json.loads(line) for line in lines]
 
     # with open(f"{home}/workspace/resource/attribution/keywords_char_averaged.json", 'w') as f:
@@ -296,14 +293,14 @@ def run_test():
     #         json_objs, use_jieba=True, do_average=True)
     #     json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
 
-    with open(f"{home}/workspace/resource/attribution/keywords_char.json", 'w') as f:
-        label_2_keywords = build_keyword_dict(
-            json_objs, use_jieba=False, do_average=False)
-        json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
-    with open(f"{home}/workspace/resource/attribution/keywords_word.json", 'w') as f:
-        label_2_keywords = build_keyword_dict(
-            json_objs, use_jieba=True, do_average=False)
-        json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
+    # with open(os.path.join(attribution_output_dir, f"keywords_char.json"), 'w') as f:
+    #     label_2_keywords = build_keyword_dict(
+    #         json_objs, use_jieba=False, do_average=False)
+    #     json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
+    # with open(os.path.join(attribution_output_dir, f"keywords_word.json"), 'w') as f:
+    #     label_2_keywords = build_keyword_dict(
+    #         json_objs, use_jieba=True, do_average=False)
+    #     json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":

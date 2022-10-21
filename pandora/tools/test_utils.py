@@ -166,7 +166,7 @@ def load_dataset(local_rank, tokenizer, processor, lines, batch_size):
     dataloader = DataLoader(dataset, sampler=sampler, batch_size=batch_size,
                             collate_fn=batch_collate_fn)
     logger.info("========================= Done loading dataset")
-    return dataset, dataloader, id2label, label2id
+    return dataset, examples, dataloader, id2label, label2id
 
 
 def make_request(url: str, post: bool = False, data=None, headers=None):
