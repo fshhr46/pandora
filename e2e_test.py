@@ -11,7 +11,7 @@ import argparse
 import tempfile
 import shutil
 
-from pandora.service.training_job import JobStatus, get_job_output_dir
+from pandora.service.training_job import JobStatus
 
 TEST_HOST = "127.0.0.1"
 TEST_PORT = "36666"

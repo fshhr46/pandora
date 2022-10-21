@@ -335,7 +335,7 @@ class SentenceProcessor(DataProcessor):
             all_labels.extend(json.load(label_file))
         return all_labels
 
-    def create_examples(self, lines, dataset_type) -> List[InputExample]:
+    def create_examples(self, lines, dataset_type: str) -> List[InputExample]:
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
@@ -442,12 +442,12 @@ def extract_feature_from_request(
 
     column_comment = request_data.get("column_comment")
     if isinstance(column_comment, (bytes, bytearray)):
-        column_comment = column_name.decode("utf-8")
+        column_comment = column_comment.decode("utf-8")
     logger.debug(f"column_comment is {column_comment}")
 
     column_description = request_data.get("column_description")
     if isinstance(column_description, (bytes, bytearray)):
-        column_description = column_name.decode("utf-8")
+        column_description = column_description.decode("utf-8")
     logger.debug(f"column_description is {column_description}")
 
     meta_data = {

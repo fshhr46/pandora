@@ -60,12 +60,8 @@ class PartitionResult(object):
         self.partition_distribution = partition_distribution
 
 
-def partition_poseidon_dataset(
-        dataset_path: str,
-        output_dir: str,
-        min_samples: int,
-        data_ratios: Dict,
-        seed: int):
+def load_poseidon_dataset_file(
+        dataset_path: str):
 
     with open(dataset_path, "r", encoding='utf-8') as dataset_f:
         dataset = json.load(dataset_f)
@@ -80,8 +76,17 @@ def partition_poseidon_dataset(
     logger.info(f"model_type is {model_type}")
 
     # get metadata types
-    metadata_types = dataset["metadata_type"]
-    logger.info(f"metadata_types are {metadata_types}")
+    meta_data_types = dataset["metadata_type"]
+    logger.info(f"metadata_types are {meta_data_types}")
+
+    return dataset, config, training_type, model_type, meta_data_types
+
+
+def load_poseidon_dataset(
+        dataset_path: str):
+
+    dataset, config, training_type, _, _ = load_poseidon_dataset_file(
+        dataset_path)
 
     # check tag_ids in dataset definition
     tag_ids = config["tag_ids"]
@@ -89,21 +94,18 @@ def partition_poseidon_dataset(
         raise ValueError(
             f"tag_ids in dataset config have duplicated ids. ids: {tag_ids}")
 
-    # outputs
-    valid_tags = []
-    invalid_tags = []
-
     # JSON limitation: convert tag_id to from string to int
     tags_by_id = {int(tag_id_str): tag
                   for tag_id_str, tag in dataset["tags"].items()}
+
     valid_tag_ids = []
+    invalid_tag_ids = []
     for config_tag_id in tag_ids:
         # ensure that tag_id found in dataset_config.tag_ids are also found in dataset.tags
         if config_tag_id in tags_by_id:
             valid_tag_ids.append(config_tag_id)
         else:
-            invalid_tags.append(
-                PartitionResult(config_tag_id, "", TagValidationResultType.tag_not_found))
+            invalid_tag_ids.append(config_tag_id)
 
     # group data by tag_ids and column_ids
     col_data = dataset["column_data"]
@@ -126,23 +128,45 @@ def partition_poseidon_dataset(
             if col_id not in tag_data:
                 tag_data[col_id] = []
             col_text = tag_data[col_id]
+
             tag_name = tags_by_id[col_tag_id]["name"]
-            label_ids = [_create_unique_label_name(
+            label_ids = [create_unique_label_name(
                 tag_name=tag_name, tag_id=col_tag_id)]
 
-            data_entries = _create_data_entries_by_training_type(
+            data_entries = create_data_entries_by_training_type(
                 training_type=training_type,
                 label_ids=label_ids,
                 tag_name=tag_name,
                 column_data=column_data,
             )
             col_text.extend(data_entries)
+    return valid_tag_ids, invalid_tag_ids, tags_by_id, data_by_tag_ids, dataset
+
+
+def partition_poseidon_dataset(
+        dataset_path: str,
+        output_dir: str,
+        min_samples: int,
+        data_ratios: Dict,
+        seed: int):
+
+    # load dataset file
+    valid_tag_ids, invalid_tag_ids, tags_by_id, data_by_tag_ids, dataset = load_poseidon_dataset(
+        dataset_path)
+
+    # get training type
+    training_type = TrainingType(dataset["data_type"])
+    logger.info(f"training_type is {training_type}")
 
     # added up partitions for all tags and columns
     partitions_train = []
     partitions_dev = []
     partitions_test = []
 
+    # outputs
+    valid_tags = []
+    invalid_tags = [PartitionResult(invalid_tag_id, "", TagValidationResultType.tag_not_found)
+                    for invalid_tag_id in invalid_tag_ids]
     # check tags
     final_labels = []
     for valid_tag_id in valid_tag_ids:
@@ -178,7 +202,7 @@ def partition_poseidon_dataset(
 
                 # add label
                 final_labels.append(
-                    _create_unique_label_name(tag_name=tag_name, tag_id=valid_tag_id))
+                    create_unique_label_name(tag_name=tag_name, tag_id=valid_tag_id))
             else:
                 result = PartitionResult(
                     valid_tag_id,
@@ -208,12 +232,14 @@ def partition_poseidon_dataset(
     return summary
 
 
-def _create_data_entries_by_training_type(
+def create_data_entries_by_training_type(
         training_type: TrainingType,
         label_ids: List[str],
         tag_name: str,
         column_data: dict):
+
     meta_data = column_data["metadata"]
+
     if training_type == TrainingType.column_data or \
             training_type == TrainingType.mixed_data:
         # Add data entry
@@ -237,7 +263,7 @@ def _create_data_entries_by_training_type(
         raise ValueError
 
 
-def _create_unique_label_name(tag_name, tag_id):
+def create_unique_label_name(tag_name, tag_id):
     # return f"{tag_name}_{tag_id}"
     return f"{tag_name}"
 

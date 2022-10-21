@@ -5,12 +5,16 @@ import shutil
 import json
 import pathlib
 import traceback
+
 from pandora.packaging.feature import TrainingType
+from pandora.service.job_utils import DATASET_FILE_NAME
 
 from pandora.tools.common import logger
 import pandora.service.training_job as training_job
+import pandora.service.keywords_job as keywords_job
 import pandora.service.server as server
 import pandora.dataset.dataset_utils as dataset_utils
+import pandora.service.job_utils as job_utils
 
 
 from flask import (
@@ -45,8 +49,7 @@ def start_training():
         job_id=job_id,
         server_dir=server.output_dir,
         cache_dir=server.cache_dir,
-        sample_size=sample_size,
-        training_type=training_type)
+        sample_size=sample_size)
     output = {
         "success": success,
         "message": message
@@ -215,13 +218,12 @@ def download_package():
 def get_output_path():
     job_id = _get_job_id(args=request.args)
     try:
-        job_output_dir = training_job.get_job_output_dir(
+        job_output_dir = job_utils.get_job_output_dir(
             server.output_dir, job_id)
         os.mkdir(job_output_dir)
-        dataset_file_name = "dataset.json"
         shutil.copyfile(
-            os.path.join("test_data", dataset_file_name),
-            os.path.join(job_output_dir, dataset_file_name))
+            os.path.join("test_data", DATASET_FILE_NAME),
+            os.path.join(job_output_dir, DATASET_FILE_NAME))
     except Exception as e:
         return {
             "success": False,
@@ -237,13 +239,12 @@ def get_output_path():
 def ingest_dataset():
     job_id = _get_job_id(args=request.args)
     try:
-        job_output_dir = training_job.get_job_output_dir(
+        job_output_dir = job_utils.get_job_output_dir(
             server.output_dir, job_id)
         file_dir = pathlib.Path(job_output_dir)
         file_dir.mkdir(parents=True, exist_ok=True)
         dataset_json = request.get_json()
-        dataset_file_name = "dataset.json"
-        dataset_path = os.path.join(job_output_dir, dataset_file_name)
+        dataset_path = os.path.join(job_output_dir, DATASET_FILE_NAME)
         if not dataset_json:
             raise ValueError("invalid input json")
         with open(dataset_path, 'w') as f:
@@ -258,6 +259,19 @@ def ingest_dataset():
         "success": True,
         "message": f"ingested dataset to {dataset_path}",
         "dataset_path": dataset_path
+    }
+
+
+@flaskApp.route('/extract-keywords', methods=['POST'])
+def extract_keywords():
+    job_id = _get_job_id(args=request.args)
+    success, message = keywords_job.extract_keyword(
+        job_id=job_id,
+        server_dir=server.output_dir,
+    )
+    return {
+        "success": success,
+        "message": message
     }
 
 

@@ -23,6 +23,7 @@ def _format_output(logits, id2label):
         named_sigmoid[name] = y_sigmoid[idx]
     return {
         "class": id2label[predicted_idx],
+        "target": predicted_idx,
         "probability": named_softmax[id2label[predicted_idx]],
         "softmax": named_softmax,
         "sigmoid": named_sigmoid,

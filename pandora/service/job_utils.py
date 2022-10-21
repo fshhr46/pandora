@@ -5,6 +5,10 @@ import json
 
 from transformers import WEIGHTS_NAME
 
+DATASET_FILE_NAME = "dataset.json"
+REPORT_DIR_NAME = "predict"
+JOB_PREFIX = "PANDORA_JOB"
+
 
 def get_all_checkpoints(output_dir):
     checkpoints = list(
@@ -12,9 +16,27 @@ def get_all_checkpoints(output_dir):
     )
     return checkpoints
 
+
+def get_job_output_dir(output_dir: str, job_id: str) -> str:
+    folder_name = get_job_folder_name_by_id(job_id)
+    return os.path.join(output_dir, folder_name)
+
+
+def get_job_folder_name_by_id(job_id: str) -> str:
+    return f"{JOB_PREFIX}_{job_id}"
+
+
+def get_report_output_dir(server_dir: str, job_id: str) -> str:
+    output_dir = get_job_output_dir(server_dir, job_id)
+    return os.path.join(output_dir, REPORT_DIR_NAME)
+
+
+def get_dataset_file_path(server_dir: str, job_id: str) -> str:
+    output_dir = get_job_output_dir(server_dir, job_id)
+    return os.path.join(output_dir, DATASET_FILE_NAME)
+
+
 # TODO: Unify this setup config with model config
-
-
 def create_setup_config_file(
         package_dir,
         setup_config_file_name,
