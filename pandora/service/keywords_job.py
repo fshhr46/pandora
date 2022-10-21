@@ -1,12 +1,16 @@
 import os
 import json
 import requests
+import jieba
+import jieba.posseg as pseg
+
+
 from typing import Dict, Tuple, List
 
 import torch
 
 from pandora.tools.common import logger
-from pandora.packaging.feature import TrainingType, ModelType
+from pandora.packaging.feature import create_example
 
 import pandora.dataset.poseidon_data as poseidon_data
 import pandora.dataset.dataset_utils as dataset_utils
@@ -15,7 +19,11 @@ import pandora.service.job_utils as job_utils
 
 def extract_keyword(
         server_dir: str,
-        job_id: str) -> Tuple[bool, Dict, str]:
+        job_id: str,
+        host: str,
+        port: str,
+        model_name: str,
+        model_version: str = None) -> Tuple[bool, Dict, str]:
     dataset_path = job_utils.get_dataset_file_path(server_dir, job_id)
     if not os.path.isfile(dataset_path):
         return False, f"dataset file {dataset_path} not exists"
@@ -25,12 +33,13 @@ def extract_keyword(
             dataset_path)
 
         # get training type
-        training_type = TrainingType(dataset["data_type"])
-        logger.info(f"training_type is {training_type}")
+        _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
+            dataset_path)
 
         # outputs
         keywords = []
 
+        json_objs = []
         for tag_id, data_by_col_id in data_by_tag_ids.items():
             logger.info("====")
             logger.info(tag_id)
@@ -42,35 +51,43 @@ def extract_keyword(
                     # json.dump(obj, ensure_ascii=False,
                     #     cls=dataset_utils.DataEntryEncoder)
 
-                    request_data = {
-                        "data": data_entry.text,
-                        "meta_data": data_entry.meta_data,
+                    request_data = data_entry.meta_data
+                    request_data["data"] = data_entry.text
+                    line = {
+                        "labels": data_entry.label,
+                        "sentence": data_entry.text,
+                        "meta_data": data_entry.meta_data
                     }
+                    example = create_example(
+                        id="",
+                        training_type=training_type,
+                        meta_data_types=meta_data_types,
+                        line=line
+                    )
                     pred_result = inference_online(
-                        host="5y72098x40.zicp.fun",
-                        port="38080",
+                        host=host,
+                        port=port,
                         data_obj=request_data,
-                        model_name="39",
+                        model_name=model_name,
+                        model_version=model_version,
                     )
                     logger.info(pred_result)
 
                     pred_online = pred_result["class"]
                     probability = pred_result["probability"]
 
-                    logger.info("")
-                    logger.info(
-                        "======================================================")
-                    # logger.info(f"pred_online: {pred_online}")
-                    # logger.info(f"label: {label}")
-
-                    request_data["target"] = 0
+                    label = data_entry.label[0]
+                    label2id = {label: int(i)
+                                for i, label in enumerate(pred_result["softmax"].keys())}
+                    request_data["target"] = label2id[label]
                     insight = explanations_online(
-                        host="5y72098x40.zicp.fun",
-                        port="38080",
+                        host=host,
+                        port=port,
                         data_obj=request_data,
-                        model_name="39",
+                        model_name=model_name,
+                        model_version=model_version,
                     )
-                    logger.info(pred_result)
+                    logger.info(insight)
                     words = insight["words"]
                     attributions = insight["importances"]
                     delta = insight["delta"]
@@ -81,21 +98,22 @@ def extract_keyword(
                         combined, key=lambda tp: tp[2], reverse=True)
 
                     obj = {
-                        "text": data_entry.text,
+                        "text": example.text,
                         "probability": probability,
                         "pred_online": pred_online,
-                        "label": data_entry.label[0],
+                        "label": label,
                         "attributions_sum": torch.tensor(attributions).sum().item(),
                         "delta": delta,
                         "sorted_attributions": sorted_attributions,
                     }
                     logger.info(obj)
-                    # json_objs.append(obj)
-            continue
+                    json_objs.append(obj)
+
+        label_2_keywords = build_keyword_dict(json_objs)
 
     except ValueError as e:
-        return False, e
-    return True, ""
+        return False, e, {}
+    return True, "", label_2_keywords
 
 
 def make_request(url: str, post: bool = False, data=None, headers=None):
@@ -136,3 +154,89 @@ def explanations_online(
                           data=data_obj,
                           headers={'content-type': "application/x-www-form-urlencoded"})
     return result
+
+
+def filter_by_word_type(segment_type: str):
+    # paddle模式词性标注对应表如下：
+
+    # paddle模式词性和专名类别标签集合如下表，其中词性标签 24 个（小写字母），专名类别标签 4 个（大写字母）。
+
+    # 标签	 含义	    标签	含义	    标签	含义	    标签	含义
+    # n	    普通名词	f	    方位名词	  s	   处所名词     t	    时间
+    # nr    人名	   ns	    地名	    nt	  机构名	   nw	  作品名
+    # nz	其他专名	v	    普通动词	 vd	   动副词	    vn	    名动词
+    # a	    形容词	    ad	    副形词	    an	   名形词	    d	    副词
+    # m	    数量词	    q	    量词	    r	   代词	        p	    介词
+    # c	    连词	    u	    助词	    xc	   其他虚词	    w	    标点符号
+    # PER	人名	    LOC	    地名	    ORG     机构名	    TIME	时间
+    return segment_type in [
+        # "n", "ns", "s", "t"
+        # "nr", "v", "nt", "nw"
+        # "nz", "vn"
+    ]
+
+
+def build_keyword_dict(json_objs, use_jieba=True, do_average=False):
+    if use_jieba:
+        jieba.enable_paddle()
+
+    label_to_keyword_attrs = {}
+    label_to_keyword_count = {}
+    for obj in json_objs:
+        label = obj["label"]
+        if label not in label_to_keyword_attrs:
+            label_to_keyword_attrs[label] = {}
+            label_to_keyword_count[label] = {}
+
+        index = 0
+        attributions_sorted_by_index = sorted(
+            obj["sorted_attributions"], key=lambda k_v: k_v[1])
+
+        per_label_attributions = label_to_keyword_attrs[label]
+        per_label_counts = label_to_keyword_count[label]
+        # 词粒度
+        if use_jieba:
+            sentence = obj["text"]
+            segs = list(pseg.cut(sentence, use_paddle=True))
+            # tokens = [entry[0] for entry in attributions_sorted_by_index]
+            assert sum([len(seg.word) for seg in segs]) == len(sentence)
+            index = 0
+            for seg in segs:
+                # Filter word types that doesn't matter
+                if filter_by_word_type(seg.flag):
+                    index += len(seg.word)
+                    continue
+                seg_attribution = 0
+                # logger.info(seg)
+                # logger.info(attributions_sorted_by_index[index])
+                for i in range(len(seg.word)):
+                    seg_attribution += attributions_sorted_by_index[index][2]
+                    index += 1
+                per_label_attributions[seg.word] = per_label_attributions.get(
+                    seg.word, 0) + seg_attribution
+                per_label_counts[seg.word] = per_label_counts.get(
+                    seg.word, 0) + 1
+        else:
+            # 字粒度
+            for entry in obj["sorted_attributions"]:
+                word, _, attribution = entry
+                per_label_attributions[word] = per_label_attributions.get(
+                    word, 0) + attribution
+                per_label_counts[word] = per_label_counts.get(word, 0) + 1
+
+    label_to_keyword_attrs_sorted = {}
+    for label, keywords in label_to_keyword_attrs.items():
+        keyword_attributions = keywords.items()
+        if do_average:
+            keyword_counts = label_to_keyword_count[label]
+            averaged_keyword_attributions = []
+            for k, v in keyword_attributions:
+                if keyword_counts[k] != 1:
+                    logger.info(f"label: {label}, k {k}: {keyword_counts[k]}")
+                averaged_v = 0 if v == 0 else 1.0 * v / keyword_counts[k]
+                averaged_keyword_attributions.append([k, averaged_v])
+            keyword_attributions = averaged_keyword_attributions
+        keywords_sorted = sorted(
+            keyword_attributions, key=lambda k_v: k_v[1], reverse=True)
+        label_to_keyword_attrs_sorted[label] = keywords_sorted
+    return label_to_keyword_attrs_sorted

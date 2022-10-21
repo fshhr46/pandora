@@ -11,6 +11,7 @@ from pandora.dataset.sentence_data import Dataset
 
 import pandora.packaging.inference as inference
 import pandora.tools.test_utils as test_utils
+import pandora.service.keywords_job as keywords_job
 
 from pandora.tools.common import logger
 from pandora.callback.progressbar import ProgressBar
@@ -118,7 +119,7 @@ def test_get_insights(
             pbar(total)
             total += 1
 
-    label_2_keywords = build_keyword_dict(json_objs)
+    label_2_keywords = keywords_job.build_keyword_dict(json_objs)
     if output_dir:
         with open(os.path.join(output_dir, "attributions.json"), 'w') as f:
             for json_obj in json_objs:
@@ -128,93 +129,6 @@ def test_get_insights(
             json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
     if visualize_output:
         return visualize_insights(json_objs=json_objs)
-
-
-def filter_by_word_type(segment_type: str):
-    # paddle模式词性标注对应表如下：
-
-    # paddle模式词性和专名类别标签集合如下表，其中词性标签 24 个（小写字母），专名类别标签 4 个（大写字母）。
-
-    # 标签	 含义	    标签	含义	    标签	含义	    标签	含义
-    # n	    普通名词	f	    方位名词	  s	   处所名词     t	    时间
-    # nr    人名	   ns	    地名	    nt	  机构名	   nw	  作品名
-    # nz	其他专名	v	    普通动词	 vd	   动副词	    vn	    名动词
-    # a	    形容词	    ad	    副形词	    an	   名形词	    d	    副词
-    # m	    数量词	    q	    量词	    r	   代词	        p	    介词
-    # c	    连词	    u	    助词	    xc	   其他虚词	    w	    标点符号
-    # PER	人名	    LOC	    地名	    ORG     机构名	    TIME	时间
-    return segment_type in [
-        # "n", "ns", "s", "t"
-        # "nr", "v", "nt", "nw"
-        # "nz", "vn"
-    ]
-
-
-def build_keyword_dict(json_objs, use_jieba=True, do_average=False):
-    if use_jieba:
-        jieba.enable_paddle()
-        # jieba.enable_parallel(4)
-
-    label_to_keyword_attrs = {}
-    label_to_keyword_count = {}
-    for obj in json_objs:
-        label = obj["label"]
-        if label not in label_to_keyword_attrs:
-            label_to_keyword_attrs[label] = {}
-            label_to_keyword_count[label] = {}
-
-        index = 0
-        attributions_sorted_by_index = sorted(
-            obj["sorted_attributions"], key=lambda k_v: k_v[1])
-
-        per_label_attributions = label_to_keyword_attrs[label]
-        per_label_counts = label_to_keyword_count[label]
-        # 词粒度
-        if use_jieba:
-            sentence = obj["text"][:test_utils.MAX_SEQ_LENGTH - 2]
-            segs = list(pseg.cut(sentence, use_paddle=True))
-            # tokens = [entry[0] for entry in attributions_sorted_by_index]
-            assert sum([len(seg.word) for seg in segs]) == len(sentence)
-            index = 0
-            for seg in segs:
-                # Filter word types that doesn't matter
-                if filter_by_word_type(seg.flag):
-                    index += len(seg.word)
-                    continue
-                seg_attribution = 0
-                # logger.info(seg)
-                # logger.info(attributions_sorted_by_index[index])
-                for i in range(len(seg.word)):
-                    seg_attribution += attributions_sorted_by_index[index][2]
-                    index += 1
-                per_label_attributions[seg.word] = per_label_attributions.get(
-                    seg.word, 0) + seg_attribution
-                per_label_counts[seg.word] = per_label_counts.get(
-                    seg.word, 0) + 1
-        else:
-            # 字粒度
-            for entry in obj["sorted_attributions"]:
-                word, _, attribution = entry
-                per_label_attributions[word] = per_label_attributions.get(
-                    word, 0) + attribution
-                per_label_counts[word] = per_label_counts.get(word, 0) + 1
-
-    label_to_keyword_attrs_sorted = {}
-    for label, keywords in label_to_keyword_attrs.items():
-        keyword_attributions = keywords.items()
-        if do_average:
-            keyword_counts = label_to_keyword_count[label]
-            averaged_keyword_attributions = []
-            for k, v in keyword_attributions:
-                if keyword_counts[k] != 1:
-                    logger.info(f"label: {label}, k {k}: {keyword_counts[k]}")
-                averaged_v = 0 if v == 0 else 1.0 * v / keyword_counts[k]
-                averaged_keyword_attributions.append([k, averaged_v])
-            keyword_attributions = averaged_keyword_attributions
-        keywords_sorted = sorted(
-            keyword_attributions, key=lambda k_v: k_v[1], reverse=True)
-        label_to_keyword_attrs_sorted[label] = keywords_sorted
-    return label_to_keyword_attrs_sorted
 
 
 def visualize_insights(json_objs):
@@ -285,20 +199,20 @@ def run_test():
     json_objs = [json.loads(line) for line in lines]
 
     # with open(f"{home}/workspace/resource/attribution/keywords_char_averaged.json", 'w') as f:
-    #     label_2_keywords = build_keyword_dict(
+    #     label_2_keywords = keywords_job.build_keyword_dict(
     #         json_objs, use_jieba=False, do_average=True)
     #     json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
     # with open(f"{home}/workspace/resource/attribution/keywords_word_averaged.json", 'w') as f:
-    #     label_2_keywords = build_keyword_dict(
+    #     label_2_keywords = keywords_job.build_keyword_dict(
     #         json_objs, use_jieba=True, do_average=True)
     #     json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
 
     # with open(os.path.join(attribution_output_dir, f"keywords_char.json"), 'w') as f:
-    #     label_2_keywords = build_keyword_dict(
+    #     label_2_keywords = keywords_job.build_keyword_dict(
     #         json_objs, use_jieba=False, do_average=False)
     #     json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
     # with open(os.path.join(attribution_output_dir, f"keywords_word.json"), 'w') as f:
-    #     label_2_keywords = build_keyword_dict(
+    #     label_2_keywords = keywords_job.build_keyword_dict(
     #         json_objs, use_jieba=True, do_average=False)
     #     json.dump(label_2_keywords, f, ensure_ascii=False, indent=4)
 

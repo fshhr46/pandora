@@ -46,7 +46,7 @@
             "column_id": 22201,
             "column_name": "acc_open_date",
             "metadata": {
-                "comment": "开户日期",
+                "column_comment": "开户日期",
                 "column_name": "acc_open_date",
                 "table_name": "column"
             },
@@ -360,7 +360,7 @@
             "column_id": 22202,
             "column_name": "age",
             "metadata": {
-                "comment": "年龄",
+                "column_comment": "年龄",
                 "column_name": "age",
                 "table_name": "column"
             },
@@ -674,7 +674,7 @@
             "column_id": 22203,
             "column_name": "birthday",
             "metadata": {
-                "comment": "出生日期",
+                "column_comment": "出生日期",
                 "column_name": "birthday",
                 "table_name": "column"
             },
@@ -988,7 +988,7 @@
             "column_id": 22204,
             "column_name": "cert_type",
             "metadata": {
-                "comment": "证件类型",
+                "column_comment": "证件类型",
                 "column_name": "cert_type",
                 "table_name": "column"
             },
@@ -1302,7 +1302,7 @@
             "column_id": 22205,
             "column_name": "email_add",
             "metadata": {
-                "comment": "邮箱地址",
+                "column_comment": "邮箱地址",
                 "column_name": "email_add",
                 "table_name": "column"
             },
@@ -1616,7 +1616,7 @@
             "column_id": 22206,
             "column_name": "gender",
             "metadata": {
-                "comment": "性别",
+                "column_comment": "性别",
                 "column_name": "gender",
                 "table_name": "column"
             },
@@ -1930,7 +1930,7 @@
             "column_id": 22207,
             "column_name": "gender_digit",
             "metadata": {
-                "comment": "性别",
+                "column_comment": "性别",
                 "column_name": "gender_digit",
                 "table_name": "column"
             },
@@ -2244,7 +2244,7 @@
             "column_id": 22208,
             "column_name": "home_add",
             "metadata": {
-                "comment": "居住地址",
+                "column_comment": "居住地址",
                 "column_name": "home_add",
                 "table_name": "column"
             },
@@ -2558,7 +2558,7 @@
             "column_id": 22209,
             "column_name": "id",
             "metadata": {
-                "comment": "证件号码",
+                "column_comment": "证件号码",
                 "column_name": "id",
                 "table_name": "column"
             },
@@ -2872,7 +2872,7 @@
             "column_id": 22210,
             "column_name": "id_head_6",
             "metadata": {
-                "comment": "证件号码前六位",
+                "column_comment": "证件号码前六位",
                 "column_name": "id_head_6",
                 "table_name": "column"
             },
@@ -3186,7 +3186,7 @@
             "column_id": 22211,
             "column_name": "is_active_acc",
             "metadata": {
-                "comment": "活跃账户",
+                "column_comment": "活跃账户",
                 "column_name": "is_active_acc",
                 "table_name": "column"
             },
@@ -3500,7 +3500,7 @@
             "column_id": 22212,
             "column_name": "name_cn",
             "metadata": {
-                "comment": "中文姓名",
+                "column_comment": "中文姓名",
                 "column_name": "name_cn",
                 "table_name": "column"
             },
@@ -3814,7 +3814,7 @@
             "column_id": 22213,
             "column_name": "phone_number",
             "metadata": {
-                "comment": "电话号码",
+                "column_comment": "电话号码",
                 "column_name": "phone_number",
                 "table_name": "column"
             },
@@ -4128,7 +4128,7 @@
             "column_id": 22214,
             "column_name": "q1_2022_rev",
             "metadata": {
-                "comment": "2022年1季度营收",
+                "column_comment": "2022年1季度营收",
                 "column_name": "q1_2022_rev",
                 "table_name": "column"
             },
@@ -4442,7 +4442,7 @@
             "column_id": 22215,
             "column_name": "q1_2022_rev_growth",
             "metadata": {
-                "comment": "2022年1季度营收增长",
+                "column_comment": "2022年1季度营收增长",
                 "column_name": "q1_2022_rev_growth",
                 "table_name": "column"
             },
@@ -4756,7 +4756,7 @@
             "column_id": 22216,
             "column_name": "q1_2022_sales",
             "metadata": {
-                "comment": "2022年1季度销售额",
+                "column_comment": "2022年1季度销售额",
                 "column_name": "q1_2022_sales",
                 "table_name": "column"
             },
@@ -5070,7 +5070,7 @@
             "column_id": 22217,
             "column_name": "q1_2022_sales_growth",
             "metadata": {
-                "comment": "2022年1季度销售额增长",
+                "column_comment": "2022年1季度销售额增长",
                 "column_name": "q1_2022_sales_growth",
                 "table_name": "column"
             },
@@ -5384,7 +5384,7 @@
             "column_id": 22218,
             "column_name": "service_type",
             "metadata": {
-                "comment": "套餐类型",
+                "column_comment": "套餐类型",
                 "column_name": "service_type",
                 "table_name": "column"
             },
@@ -5698,7 +5698,7 @@
             "column_id": 22219,
             "column_name": "total_2022_rev_growth",
             "metadata": {
-                "comment": "2022年全年营收增长",
+                "column_comment": "2022年全年营收增长",
                 "column_name": "total_2022_rev_growth",
                 "table_name": "column"
             },
@@ -6012,7 +6012,7 @@
             "column_id": 22220,
             "column_name": "total_2022_sales_growth",
             "metadata": {
-                "comment": "2022年全年销售额增长",
+                "column_comment": "2022年全年销售额增长",
                 "column_name": "total_2022_sales_growth",
                 "table_name": "column"
             },
@@ -6326,7 +6326,7 @@
             "column_id": 22221,
             "column_name": "work_postal_code",
             "metadata": {
-                "comment": "工作地邮编",
+                "column_comment": "工作地邮编",
                 "column_name": "work_postal_code",
                 "table_name": "column"
             },
