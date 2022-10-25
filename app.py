@@ -7,7 +7,7 @@ import pathlib
 import traceback
 
 from pandora.packaging.feature import TrainingType
-from pandora.service.job_utils import DATASET_FILE_NAME
+from pandora.service.job_utils import DATASET_FILE_NAME, JobType
 
 from pandora.tools.common import logger
 import pandora.service.training_job as training_job
@@ -29,14 +29,151 @@ flaskApp.config['JSON_AS_ASCII'] = False
 server = server.Server(flaskApp)
 
 
+def _get_job_id(args) -> str:
+    job_id = args.get('id')
+    if job_id:
+        logger.info(f"job id is {job_id}")
+        return job_id
+    raise ValueError(f"invalid Job ID: {job_id}")
+
+
+def _get_job_type(args) -> str:
+    # TODO: remove default value
+    job_type = request.args.get("job_type", default=JobType.training, type=str)
+    if job_type and hasattr(JobType, job_type):
+        logger.info(f"job_type is {job_type}")
+        return job_type
+    raise ValueError(f"invalid job_type {job_type}")
+
+
+def _get_job_module(job_type: str):
+    if job_type == JobType.training:
+        return training_job
+    elif job_type == JobType.keywords:
+        return keywords_job
+    else:
+        raise ValueError(f"invalid job_type {job_type}")
+
+
+# ================== shared APIs ==================
+
+
+@flaskApp.route('/ingest-dataset', methods=['POST'])
+def ingest_dataset():
+    job_type = _get_job_type(request.args)
+    job_id = _get_job_id(args=request.args)
+    prefix = JobType.get_job_prefix(job_type=job_type)
+    try:
+        job_output_dir = job_utils.get_job_output_dir(
+            server.output_dir, prefix=prefix, job_id=job_id)
+        file_dir = pathlib.Path(job_output_dir)
+        file_dir.mkdir(parents=True, exist_ok=True)
+        dataset_json = request.get_json()
+        dataset_path = os.path.join(job_output_dir, DATASET_FILE_NAME)
+        if not dataset_json:
+            raise ValueError("invalid input json")
+        with open(dataset_path, 'w') as f:
+            json.dump(dataset_json, f, ensure_ascii=False)
+    except Exception as e:
+        return {
+            "success": False,
+            "message": traceback.format_exc(),
+            "dataset_path": None
+        }
+    return {
+        "success": True,
+        "message": f"ingested dataset to {dataset_path}",
+        "dataset_path": dataset_path
+    }
+
+
+@flaskApp.route('/list', methods=['GET'])
+def list_jobs():
+    job_type = _get_job_type(request.args)
+    jobs = {}
+    job_prefix = JobType.get_job_prefix(job_type)
+    running = request.args.get("running", default="", type=str)
+    if running:
+        if running.lower() == "true":
+            jobs = job_utils.list_running_jobs(prefix=job_prefix)
+        elif running.lower() == "false":
+            jobs = job_utils.list_all_jobs(
+                server.output_dir, prefix=job_prefix)
+    return jsonify([job_name for job_name in jobs.keys()])
+
+
+@flaskApp.route('/testdata', methods=['POST'])
+def get_output_path():
+    job_type = _get_job_type(request.args)
+    job_id = _get_job_id(args=request.args)
+    job_prefix = JobType.get_job_prefix(job_type)
+    try:
+        job_output_dir = job_utils.get_job_output_dir(
+            server.output_dir, job_prefix, job_id)
+        os.mkdir(job_output_dir)
+        shutil.copyfile(
+            os.path.join("test_data", DATASET_FILE_NAME),
+            os.path.join(job_output_dir, DATASET_FILE_NAME))
+    except Exception as e:
+        return {
+            "success": False,
+            "message": traceback.format_exc()
+        }
+    return {
+        "success": True,
+        "message": ""
+    }
+
+
+@flaskApp.route('/stop', methods=['POST'])
+def stop_job():
+    job_type = _get_job_type(request.args)
+    job_id = _get_job_id(args=request.args)
+    success, message = _get_job_module(job_type).stop_job(job_id=job_id)
+    output = {
+        "success": success,
+        "message": message
+    }
+    return jsonify(output)
+
+
+@flaskApp.route('/cleanup', methods=['POST'])
+def cleanup_artifacts():
+    job_type = _get_job_type(request.args)
+    job_id = _get_job_id(args=request.args)
+    success, message = _get_job_module(job_type).cleanup_artifacts(
+        server_dir=server.output_dir,
+        job_id=job_id,
+    )
+    output = {
+        "success": success,
+        "message": message
+    }
+    return jsonify(output)
+
+
+@flaskApp.route('/status', methods=['GET'])
+def get_status():
+    job_type = _get_job_type(request.args)
+    job_id = _get_job_id(args=request.args)
+    status = _get_job_module(job_type).get_training_status(
+        server_dir=server.output_dir,
+        job_id=job_id,
+    )
+    output = {
+        "status": status
+    }
+    return jsonify(output)
+
+# ================== training job related ==================
+
+
 @flaskApp.route('/start', methods=['POST'])
 def start_training():
     job_id = _get_job_id(args=request.args)
 
     sample_size = request.args.get("sample_size", default=0, type=int)
     logging.info(f"sample_size is {sample_size}")
-
-    training_type = _get_training_type(args=request.args)
 
     active_training_jobs = training_job.list_training_jobs()
     has_resource, msg = server.has_enough_resource(len(active_training_jobs))
@@ -53,65 +190,6 @@ def start_training():
     output = {
         "success": success,
         "message": message
-    }
-    return jsonify(output)
-
-
-def _get_job_id(args) -> str:
-    job_id = args.get('id')
-    if job_id:
-        logger.info(f"job id is {job_id}")
-        return job_id
-    raise ValueError(f"invalid Job ID: {job_id}")
-
-
-def _get_training_type(args) -> str:
-    # TODO: use training_type instead of model name
-    training_type = args.get("training_type", type=str)
-    # if training_type:
-    #     logger.info("training_type is passed")
-    # else:
-    #     model_name = args.get("name", type=str)
-    #     logger.info(f"model name is {model_name}")
-    #     training_type = f'{model_name.split("_")[-1]}_data'
-    logging.info(f"training_type is {training_type}")
-    return TrainingType(training_type)
-
-
-@flaskApp.route('/stop', methods=['POST'])
-def stop_training():
-    job_id = _get_job_id(args=request.args)
-    success, message = training_job.stop_training_job(job_id=job_id)
-    output = {
-        "success": success,
-        "message": message
-    }
-    return jsonify(output)
-
-
-@flaskApp.route('/cleanup', methods=['POST'])
-def cleanup_artifacts():
-    job_id = _get_job_id(args=request.args)
-    success, message = training_job.cleanup_artifacts(
-        server_dir=server.output_dir,
-        job_id=job_id,
-    )
-    output = {
-        "success": success,
-        "message": message
-    }
-    return jsonify(output)
-
-
-@flaskApp.route('/status', methods=['GET'])
-def get_training_status():
-    job_id = _get_job_id(args=request.args)
-    status = training_job.get_training_status(
-        server_dir=server.output_dir,
-        job_id=job_id,
-    )
-    output = {
-        "status": status
     }
     return jsonify(output)
 
@@ -177,18 +255,6 @@ def get_model_report():
     return jsonify(output)
 
 
-@flaskApp.route('/list', methods=['GET'])
-def list_training_jobs():
-    running = request.args.get("running", default="", type=str)
-    jobs = {}
-    if running:
-        if running.lower() == "true":
-            jobs = training_job.list_training_jobs()
-        elif running.lower() == "false":
-            jobs = training_job.list_all_jobs(server.output_dir)
-    return jsonify([job_name for job_name in jobs.keys()])
-
-
 @flaskApp.route('/package', methods=['POST'])
 def start_packaging():
     job_id = _get_job_id(args=request.args)
@@ -214,52 +280,7 @@ def download_package():
     return send_file(package_zip_path)
 
 
-@flaskApp.route('/testdata', methods=['POST'])
-def get_output_path():
-    job_id = _get_job_id(args=request.args)
-    try:
-        job_output_dir = job_utils.get_job_output_dir(
-            server.output_dir, job_id)
-        os.mkdir(job_output_dir)
-        shutil.copyfile(
-            os.path.join("test_data", DATASET_FILE_NAME),
-            os.path.join(job_output_dir, DATASET_FILE_NAME))
-    except Exception as e:
-        return {
-            "success": False,
-            "message": traceback.format_exc()
-        }
-    return {
-        "success": True,
-        "message": ""
-    }
-
-
-@flaskApp.route('/ingest-dataset', methods=['POST'])
-def ingest_dataset():
-    job_id = _get_job_id(args=request.args)
-    try:
-        job_output_dir = job_utils.get_job_output_dir(
-            server.output_dir, job_id)
-        file_dir = pathlib.Path(job_output_dir)
-        file_dir.mkdir(parents=True, exist_ok=True)
-        dataset_json = request.get_json()
-        dataset_path = os.path.join(job_output_dir, DATASET_FILE_NAME)
-        if not dataset_json:
-            raise ValueError("invalid input json")
-        with open(dataset_path, 'w') as f:
-            json.dump(dataset_json, f, ensure_ascii=False)
-    except Exception as e:
-        return {
-            "success": False,
-            "message": traceback.format_exc(),
-            "dataset_path": None
-        }
-    return {
-        "success": True,
-        "message": f"ingested dataset to {dataset_path}",
-        "dataset_path": dataset_path
-    }
+# ================== Keyword extraction APIs ==================
 
 
 @flaskApp.route('/extract-keywords', methods=['POST'])
@@ -270,9 +291,9 @@ def extract_keywords():
     model_name = request.args.get('model_name')
     model_version = request.args.get('model_version')
 
-    success, message, result = keywords_job.extract_keyword(
+    success, message, result = keywords_job.start_keyword_extraction_job(
+        server=server.output_dir,
         job_id=job_id,
-        server_dir=server.output_dir,
         host=host,
         port=port,
         model_name=model_name,

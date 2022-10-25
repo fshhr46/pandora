@@ -10,6 +10,7 @@ import os
 import argparse
 import tempfile
 import shutil
+from pandora.service.job_utils import JobType
 
 from pandora.service.training_job import JobStatus
 
@@ -56,6 +57,8 @@ def get_url():
 
 
 def test_training_failed(training_type):
+
+    job_type = JobType.training
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
@@ -65,7 +68,7 @@ def test_training_failed(training_type):
         f"{get_url()}/start?id={job_id}&training_type={training_type}", post=True)["success"]
 
     # prepare datadir
-    prepare_job_data(job_id=job_id)
+    prepare_job_data(job_id=job_id, job_type=job_type)
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
@@ -75,11 +78,11 @@ def test_training_failed(training_type):
 
     # ensure training job is running
     assert f"PANDORA_TRAINING_{job_id}" in make_request(
-        f"{get_url()}/list?running=true")
+        f"{get_url()}/list?running=true&job_type={job_type}")
 
     # delete artifacts will fail when job is running
     assert not make_request(
-        f"{get_url()}/cleanup?id={job_id}", post=True)["success"]
+        f"{get_url()}/cleanup?id={job_id}&job_type={job_type}", post=True)["success"]
 
     # ensure job can be stated when server has enough resource.
     assert not make_request(
@@ -89,29 +92,29 @@ def test_training_failed(training_type):
 
     # check job status
     assert make_request(
-        f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.running
+        f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.running
 
     # stop running job
     assert make_request(
-        f"{get_url()}/stop?id={job_id}", post=True)["success"]
+        f"{get_url()}/stop?id={job_id}&job_type={job_type}", post=True)["success"]
 
     # Check job status changed from running to terminated.
     fails = 0
     while make_request(
-            f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.running:
+            f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.running:
         time.sleep(1)
         fails += 1
         assert fails < 10
     assert make_request(
-        f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.terminated
+        f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.terminated
 
     # Check job is successfully stopped
     assert not make_request(
-        f"{get_url()}/stop?id={job_id}", post=True)["success"]
+        f"{get_url()}/stop?id={job_id}&job_type={job_type}", post=True)["success"]
 
     # list jobs, make sure the job is in the list
     assert f"PANDORA_TRAINING_{job_id}" in make_request(
-        f"{get_url()}/list?running=false")
+        f"{get_url()}/list?running=false&job_type={job_type}")
 
     # start training the same job but failed.
     assert not make_request(
@@ -125,11 +128,11 @@ def test_training_failed(training_type):
 
     # delete artifacts
     assert make_request(
-        f"{get_url()}/cleanup?id={job_id}", post=True)["success"]
+        f"{get_url()}/cleanup?id={job_id}&job_type={job_type}", post=True)["success"]
 
     # check job status and should be changed to not_started
     assert make_request(
-        f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
+        f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.not_started
 
 
 def test_training_success(training_type: str):
@@ -137,9 +140,10 @@ def test_training_success(training_type: str):
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
+    job_type = JobType.training
 
     # prepare datadir
-    prepare_job_data(job_id=job_id, file_path=os.path.join(
+    prepare_job_data(job_id=job_id, job_type=job_type, file_path=os.path.join(
         "test_data",  "dataset.json"))
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
@@ -154,13 +158,15 @@ def test_training_success(training_type: str):
     interval = 5
     max_checks = 12 * 10
     while make_request(
-            f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.running:
+            f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.running:
         time.sleep(interval)
         checks += 1
         assert checks < max_checks, "timeout, job is not completed"
+
     assert make_request(
-        f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.completed,\
+        f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.completed,\
         "job did not complete successfully"
+
     output = make_request(
         f"{get_url()}/report?id={job_id}&data=True", post=False)
     paths = output.get("paths")
@@ -172,26 +178,26 @@ def test_training_success(training_type: str):
     assert make_request(
         f"{get_url()}/package?id={job_id}", post=True)["success"]
     assert make_request(
-        f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.packaged
+        f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.packaged
 
     # delete artifacts
     assert make_request(
-        f"{get_url()}/cleanup?id={job_id}", post=True)["success"]
+        f"{get_url()}/cleanup?id={job_id}&job_type={job_type}", post=True)["success"]
 
     # check job status and should be changed to not_started
     assert make_request(
-        f"{get_url()}/status?id={job_id}", post=False)["status"] == JobStatus.not_started
+        f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.not_started
 
 
-def prepare_job_data(job_id, file_path=None):
+def prepare_job_data(job_id, job_type, file_path=None):
     if file_path:
         with open(file_path) as f:
             dataset = json.load(f)
             assert make_request(
-                f"{get_url()}/ingest-dataset?id={job_id}", post=True, json_data=dataset)["success"]
+                f"{get_url()}/ingest-dataset?id={job_id}&job_type={job_type}", post=True, json_data=dataset)["success"]
     else:
         assert make_request(
-            f"{get_url()}/testdata?id={job_id}", post=True)["success"]
+            f"{get_url()}/testdata?id={job_id}&job_type={job_type}", post=True)["success"]
 
 
 # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers

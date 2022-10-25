@@ -168,7 +168,3 @@ def convert_features_to_dataset(local_rank, features, evaluate):
     dataset = TensorDataset(
         all_input_ids, all_input_mask, all_segment_ids, all_lens, all_label_ids)
     return dataset
-
-
-def get_training_log_path(output_dir):
-    return os.path.join(output_dir, 'training_job.log')

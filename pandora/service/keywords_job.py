@@ -1,30 +1,160 @@
+from genericpath import isfile
 import os
 import json
 import requests
 import jieba
 import jieba.posseg as pseg
+from pandora.tools.common import init_logger, logger
 
 
 from typing import Dict, Tuple, List
 
 import torch
+import torch.multiprocessing as mp
 
 from pandora.tools.common import logger
 from pandora.packaging.feature import create_example
+from pandora.service.job_utils import JobStatus, JobType
 
 import pandora.dataset.poseidon_data as poseidon_data
-import pandora.dataset.dataset_utils as dataset_utils
 import pandora.service.job_utils as job_utils
 
+KEYWORD_FILE_NAME = "keywords.json"
 
-def extract_keyword(
+
+class KeywordExtractionJob(object):
+
+    def __init__(
+            self,
+            output_dir: str,
+            job_id: str,
+            host: str,
+            port: str,
+            model_name: str,
+            model_version: str = None):
+
+        self.output_dir = output_dir
+        self.job_id = job_id
+        self.host = host
+        self.port = port
+        self.model_name = model_name
+        self.model_version = model_version
+
+    def __call__(self, *args, **kwds) -> None:
+        extract_keyword()
+
+
+def start_keyword_extraction_job(
         server_dir: str,
         job_id: str,
         host: str,
         port: str,
         model_name: str,
+        model_version: str = None):
+    status = get_keyword_status(server_dir=server_dir, job_id=job_id)
+    if status != JobStatus.not_started:
+        message = f"You can only start a job with {JobStatus.not_started} status. current status {status}."
+        logger.info(message)
+        return False, message
+
+    dataset_path = job_utils.get_dataset_file_path(
+        server_dir, job_utils.KEYWORD_JOB_PREFIX, job_id)
+    if not os.path.isfile(dataset_path):
+        return False, {}, f"dataset file {dataset_path} not exists"
+    _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
+        dataset_path)
+
+    job = KeywordExtractionJob(
+        job_id=job_id,
+        server_dir=server_dir,
+        host=host,
+        port=port,
+        model_name=model_name,
+        model_version=model_version
+    )
+    mp.set_start_method("spawn", force=True)
+    job_process = mp.Process(
+        name=job_utils.get_job_folder_name_by_id(
+            prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id), target=job)
+    job_process.daemon = True
+    job_process.start()
+    message = f'Started keyword extraction job with ID {job_id}'
+    logger.info(message)
+    return True, ""
+
+
+def stop_job(job_id: str) -> Tuple[bool, str]:
+    active_jobs = list_keyword_jobs()
+    job_name = job_utils.get_job_folder_name_by_id(
+        prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
+    for name, job in active_jobs.items():
+        if job_name == name:
+            logger.info(f"Found active training job with ID {job_id}")
+            job.terminate()
+            return True, f"Successfully stopped training job with ID  {job_id}"
+    return False, f"Failed to find active training job with ID {job_id}"
+
+
+def cleanup_artifacts(server_dir: str, job_id: str) -> Tuple[bool, str]:
+    if is_job_running(job_id=job_id):
+        return False, f"can no delete a running job_id {job_id}."
+    return job_utils.cleanup_artifacts(
+        server_dir, prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id)
+
+
+def get_keyword_status(server_dir: str, job_id: str) -> JobStatus:
+    if is_job_running(job_id=job_id):
+        return JobStatus.running
+    else:
+        output_dir = job_utils.get_job_output_dir(
+            server_dir, prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id)
+        log_path = job_utils.get_log_path(output_dir, JobType.keywords)
+        if os.path.exists(output_dir) and os.path.isfile(log_path):
+            # keyword file generation marks job is completed
+            keyword_file_path = get_keyword_file_path(server_dir, job_id)
+            if os.path.isfile(keyword_file_path):
+                return JobStatus.completed
+            else:
+                return JobStatus.terminated
+        else:
+            return JobStatus.not_started
+
+
+def get_keyword_file_path(server_dir: str, job_id: str) -> str:
+    output_dir = job_utils.get_job_output_dir(
+        server_dir, prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id)
+    return os.path.join(output_dir, KEYWORD_FILE_NAME)
+
+
+def is_job_running(job_id: str) -> bool:
+    job_name = job_utils.get_job_folder_name_by_id(
+        prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id)
+    return job_name in list_keyword_jobs().keys()
+
+
+def list_keyword_jobs() -> Dict[str, mp.Process]:
+    return job_utils.list_running_jobs(job_utils.KEYWORD_JOB_PREFIX)
+
+
+def list_all_keyword_jobs(server_dir: str) -> Dict[str, str]:
+    return job_utils.list_all_jobs(server_dir, job_utils.KEYWORD_JOB_PREFIX)
+
+
+def extract_keyword(
+        output_dir: str,
+        job_id: str,
+        host: str,
+        port: str,
+        model_name: str,
         model_version: str = None) -> Tuple[bool, Dict, str]:
-    dataset_path = job_utils.get_dataset_file_path(server_dir, job_id)
+
+    # check if output dir already exists and override is not set
+    log_path = job_utils.get_log_path(output_dir, JobType.keywords)
+
+    init_logger(log_file=log_path)
+
+    dataset_path = job_utils.get_dataset_file_path(
+        output_dir, job_utils.KEYWORD_JOB_PREFIX, job_id)
     if not os.path.isfile(dataset_path):
         return False, f"dataset file {dataset_path} not exists"
     try:
@@ -110,10 +240,11 @@ def extract_keyword(
                     json_objs.append(obj)
 
         label_2_keywords = build_keyword_dict(json_objs)
+        output_file = os.path.join(output_dir, "keywords.json")
 
     except ValueError as e:
-        return False, e, {}
-    return True, "", label_2_keywords
+        return False, e
+    return True, ""
 
 
 def make_request(url: str, post: bool = False, data=None, headers=None):

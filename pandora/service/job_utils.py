@@ -1,13 +1,47 @@
+from enum import Enum
+
+import logging
 
 import os
 import glob
 import json
+import shutil
+import traceback
+from typing import Dict, Tuple, List
 
+import torch.multiprocessing as mp
 from transformers import WEIGHTS_NAME
 
+from pandora.tools.common import logger
+
 DATASET_FILE_NAME = "dataset.json"
-REPORT_DIR_NAME = "predict"
-JOB_PREFIX = "PANDORA_JOB"
+TRAINING_JOB_PREFIX = "PANDORA_TRAINING"
+KEYWORD_JOB_PREFIX = "PANDORA_KEYWORD"
+
+
+logger = logging.getLogger(__name__)
+
+
+class JobStatus(str, Enum):
+    not_started = "not_started"
+    running = "running"
+    terminated = "terminated"
+    completed = "completed"
+    packaged = "packaged"
+
+
+class JobType(str, Enum):
+    training = "training"
+    keywords = "keywords"
+
+    @classmethod
+    def get_job_prefix(cls, job_type):
+        if job_type == cls.training:
+            return TRAINING_JOB_PREFIX
+        elif job_type == cls.keywords:
+            return KEYWORD_JOB_PREFIX
+        else:
+            return None
 
 
 def get_all_checkpoints(output_dir):
@@ -17,23 +51,59 @@ def get_all_checkpoints(output_dir):
     return checkpoints
 
 
-def get_job_output_dir(output_dir: str, job_id: str) -> str:
-    folder_name = get_job_folder_name_by_id(job_id)
+def get_job_output_dir(output_dir: str, prefix: str, job_id: str) -> str:
+    folder_name = get_job_folder_name_by_id(prefix=prefix, job_id=job_id)
     return os.path.join(output_dir, folder_name)
 
 
-def get_job_folder_name_by_id(job_id: str) -> str:
-    return f"{JOB_PREFIX}_{job_id}"
+def get_job_folder_name_by_id(prefix: str, job_id: str) -> str:
+    return f"{prefix}_{job_id}"
 
 
-def get_report_output_dir(server_dir: str, job_id: str) -> str:
-    output_dir = get_job_output_dir(server_dir, job_id)
-    return os.path.join(output_dir, REPORT_DIR_NAME)
-
-
-def get_dataset_file_path(server_dir: str, job_id: str) -> str:
-    output_dir = get_job_output_dir(server_dir, job_id)
+def get_dataset_file_path(server_dir: str, prefix: str, job_id: str) -> str:
+    output_dir = get_job_output_dir(server_dir, prefix=prefix, job_id=job_id)
     return os.path.join(output_dir, DATASET_FILE_NAME)
+
+
+def list_running_jobs(prefix: str = None) -> Dict[str, mp.Process]:
+    all_processes = mp.active_children()
+
+    training_jobs = all_processes
+    if prefix:
+        training_jobs = list(filter(lambda process: process.name.startswith(
+            prefix), training_jobs))
+        logger.info(
+            f"Found {len(all_processes)} running processes, {training_jobs} are training jobs")
+    else:
+        logger.info(
+            f"Found {len(all_processes)} running processes.")
+    output_dic = {job.name: job for job in training_jobs}
+    return output_dic
+
+
+def list_all_jobs(server_dir: str, prefix: str) -> Dict[str, str]:
+    if prefix:
+        search_key = f"{prefix}*"
+    else:
+        search_key = "*"
+    jobs_full_path = glob.glob(os.path.join(
+        server_dir, search_key))
+    output_dic = {os.path.basename(path): path for path in jobs_full_path}
+    return output_dic
+
+
+def cleanup_artifacts(server_dir: str, prefix: str, job_id: str) -> Tuple[bool, str]:
+    output_dir = get_job_output_dir(
+        server_dir, prefix=prefix, job_id=job_id)
+    try:
+        shutil.rmtree(output_dir)
+        return True, ""
+    except Exception as e:
+        return False, traceback.format_exc()
+
+
+def get_log_path(output_dir, job_type):
+    return os.path.join(output_dir, f'{job_type}_job.log')
 
 
 # TODO: Unify this setup config with model config

@@ -1,3 +1,17 @@
+import pandora.packaging.inference as inference
+import pandora.dataset.dataset_utils as dataset_utils
+import pandora.tools.mps_utils as mps_utils
+import pandora.tools.runner_utils as runner_utils
+import pandora.tools.common as common_utils
+import pandora.packaging.packager as packager
+from pandora.tools.common import init_logger, logger
+from pandora.packaging.tokenizer import SentenceTokenizer
+from pandora.packaging.feature import cls_processors
+from pandora.packaging.cache_configs import BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
+from pandora.packaging.model import BertForSentence
+from pandora.packaging.feature import (
+    batch_collate_fn,
+)
 import errno
 import argparse
 import json
@@ -16,23 +30,7 @@ from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
 from pandora.callback.optimizater.adamw import AdamW
 from pandora.callback.progressbar import ProgressBar
 from pandora.packaging.feature import MetadataType, TrainingType
-from pandora.service.job_utils import get_all_checkpoints, create_setup_config_file
-from pandora.packaging.feature import (
-    batch_collate_fn,
-)
-
-
-from pandora.packaging.model import BertForSentence
-from pandora.packaging.cache_configs import BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
-from pandora.packaging.feature import cls_processors
-from pandora.packaging.tokenizer import SentenceTokenizer
-from pandora.tools.common import init_logger, logger
-import pandora.packaging.packager as packager
-import pandora.tools.common as common_utils
-import pandora.tools.runner_utils as runner_utils
-import pandora.tools.mps_utils as mps_utils
-import pandora.dataset.dataset_utils as dataset_utils
-import pandora.packaging.inference as inference
+from pandora.service.job_utils import JobType, get_log_path, get_all_checkpoints, create_setup_config_file
 
 
 ALL_MODELS = tuple(BERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys())
@@ -670,13 +668,13 @@ def get_args_parser():
 
 def setup(args, processor):
     # check if output dir already exists and override is not set
-    log_path = runner_utils.get_training_log_path(args.output_dir)
+    log_path = get_log_path(args.output_dir, job_type=JobType.training)
     if os.path.exists(log_path) and args.do_train and not args.overwrite_output_dir:
         raise ValueError(
             "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
                 args.output_dir))
 
-    init_logger(log_file=runner_utils.get_training_log_path(args.output_dir))
+    init_logger(log_file=log_path)
     # create output dirs
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
