@@ -16,9 +16,9 @@ from pandora.service.job_utils import JobType
 from pandora.service.training_job import JobStatus
 
 TEST_HOST = "127.0.0.1"
-TEST_PORT = "38888"
-MANAGEMENT_PORT = "38081"
-COMMAND_PORT = "38083"
+TEST_PORT = "8888"
+MANAGEMENT_PORT = "8081"
+COMMAND_PORT = "8083"
 MODEL_STORE = "/home/model-server/model-store"
 
 
@@ -285,6 +285,10 @@ if __name__ == '__main__':
                         help="Whether to start a .")
     parser.add_argument("--model_store", type=str,
                         default=None, required=False)
+    parser.add_argument("--management_port", type=str,
+                        default=None, required=False)
+    parser.add_argument("--command_port", type=str,
+                        default=None, required=False)
     args = parser.parse_args()
 
     if args.host:
@@ -293,6 +297,10 @@ if __name__ == '__main__':
         TEST_PORT = args.port
     if args.model_store:
         MODEL_STORE = args.model_store
+    if args.management_port:
+        MANAGEMENT_PORT = args.management_port
+    if args.command_port:
+        COMMAND_PORT = args.command_port
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         try:
