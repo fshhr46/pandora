@@ -105,6 +105,7 @@ def list_jobs():
 
 @flaskApp.route('/testdata', methods=['POST'])
 def get_output_path():
+    file_name = request.args.get('file_name')
     job_type = _get_job_type(request.args)
     job_id = _get_job_id(args=request.args)
     job_prefix = JobType.get_job_prefix(job_type)
@@ -113,7 +114,7 @@ def get_output_path():
             server.output_dir, job_prefix, job_id)
         os.mkdir(job_output_dir)
         shutil.copyfile(
-            os.path.join("test_data", DATASET_FILE_NAME),
+            os.path.join("test_data", file_name),
             os.path.join(job_output_dir, DATASET_FILE_NAME))
     except Exception as e:
         return {

@@ -10,12 +10,16 @@ import os
 import argparse
 import tempfile
 import shutil
+from pandora.packaging.feature import TrainingType
 from pandora.service.job_utils import JobType
 
 from pandora.service.training_job import JobStatus
 
 TEST_HOST = "127.0.0.1"
-TEST_PORT = "36666"
+TEST_PORT = "38888"
+MANAGEMENT_PORT = "38081"
+COMMAND_PORT = "38083"
+MODEL_STORE = "/home/model-server/model-store"
 
 
 def kill_proc_tree(pid):
@@ -41,9 +45,14 @@ def start_test_server(host, port, output_dir):
     app.server.run(args)
 
 
-def make_request(url: str, post: bool = False, json_data=None):
+def make_request(url: str, post: bool = False, json_data=None, data=None):
     if post:
-        url_obj = requests.post(url, json=json_data)
+        if json_data:
+            url_obj = requests.post(url, json=json_data)
+        elif data:
+            url_obj = requests.post(url, data=data)
+        else:
+            url_obj = requests.post(url)
     else:
         url_obj = requests.get(url)
     text = url_obj.text
@@ -56,7 +65,15 @@ def get_url():
     return f"http://{TEST_HOST}:{TEST_PORT}"
 
 
-def prepare_job_data(job_id, job_type, file_path=None):
+def get_command_url():
+    return f"http://{TEST_HOST}:{COMMAND_PORT}"
+
+
+def get_management_url():
+    return f"http://{TEST_HOST}:{MANAGEMENT_PORT}"
+
+
+def prepare_job_data(training_type: str, job_id, job_type, file_path=None):
     if file_path:
         with open(file_path) as f:
             dataset = json.load(f)
@@ -64,7 +81,7 @@ def prepare_job_data(job_id, job_type, file_path=None):
                 f"{get_url()}/ingest-dataset?id={job_id}&job_type={job_type}", post=True, json_data=dataset)["success"]
     else:
         assert make_request(
-            f"{get_url()}/testdata?id={job_id}&job_type={job_type}", post=True)["success"]
+            f"{get_url()}/testdata?id={job_id}&job_type={job_type}&file_name={training_type}.json", post=True)["success"]
 
 
 def test_training_failed(training_type):
@@ -79,7 +96,8 @@ def test_training_failed(training_type):
         f"{get_url()}/start?id={job_id}&training_type={training_type}", post=True)["success"]
 
     # prepare datadir
-    prepare_job_data(job_id=job_id, job_type=job_type)
+    prepare_job_data(training_type=training_type,
+                     job_id=job_id, job_type=job_type)
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
@@ -146,16 +164,19 @@ def test_training_failed(training_type):
         f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.not_started
 
 
-def test_training_success(training_type: str):
+def test_training_success(training_type: str, test_keyword: bool = False):
     sample_size = 10
+    if training_type == TrainingType.meta_data:
+        sample_size = 0
+
     # generate job ID
     job_id = time.time_ns()
     print(f"test Job ID is {job_id}")
     job_type = JobType.training
 
     # prepare datadir
-    prepare_job_data(job_id=job_id, job_type=job_type, file_path=os.path.join(
-        "test_data",  "dataset.json"))
+    prepare_job_data(training_type=training_type, job_id=job_id, job_type=job_type, file_path=os.path.join(
+        "test_data",  f"{training_type}.json"))
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
@@ -186,10 +207,32 @@ def test_training_success(training_type: str):
     assert len(data) == 2
 
     # run packaging
-    assert make_request(
-        f"{get_url()}/package?id={job_id}", post=True)["success"]
+    package_output = make_request(
+        f"{get_url()}/package?id={job_id}", post=True)
+    assert package_output["success"]
+
     assert make_request(
         f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.packaged
+
+    if test_keyword:
+
+        # publish model
+        package_path = package_output["package_dir"]
+        command = f"cd {package_path} && sh register.sh {job_id} 0 {MODEL_STORE}"
+        print(f"command is {command}")
+        make_request(
+            f"{get_command_url()}/command", post=True, data=command)
+
+        # assign worker
+        requests.put(
+            f"{get_management_url()}/models/{job_id}?&min_worker=1&synchronous=true")
+
+        # Run test
+        test_keywords(training_type, job_id)
+
+        # Delete
+        requests.delete(
+            f"{get_management_url()}/models/{job_id}")
 
     # delete artifacts
     assert make_request(
@@ -200,7 +243,7 @@ def test_training_success(training_type: str):
         f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.not_started
 
 
-def test_keywords():
+def test_keywords(training_type: str, model_name: str):
     sample_size = 10
     # generate job ID
     job_id = time.time_ns()
@@ -212,12 +255,12 @@ def test_keywords():
         f"{get_url()}/extract-keywords?id={job_id}", post=True)["success"]
 
     # prepare datadir
-    prepare_job_data(job_id=job_id, job_type=job_type, file_path=os.path.join(
-        "test_data",  "dataset_meta.json"))
+    prepare_job_data(training_type=training_type, job_id=job_id, job_type=job_type, file_path=os.path.join(
+        "test_data",  f"{training_type}.json"))
 
     # start job
     assert make_request(
-        f"{get_url()}/extract-keywords?id={job_id}&model_name=53", post=True)["success"]
+        f"{get_url()}/extract-keywords?id={job_id}&model_name={model_name}", post=True)["success"]
 
     # Check job status changed from running to completed.
     checks = 0
@@ -231,7 +274,6 @@ def test_keywords():
 
     output = make_request(
         f"{get_url()}/get-keywords?id={job_id}", post=False)
-    print(output)
 
 
 # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers
@@ -241,12 +283,16 @@ if __name__ == '__main__':
     parser.add_argument("--port", type=str, default=None, required=False)
     parser.add_argument("--local_server", action="store_true",
                         help="Whether to start a .")
+    parser.add_argument("--model_store", type=str,
+                        default=None, required=False)
     args = parser.parse_args()
 
     if args.host:
         TEST_HOST = args.host
     if args.port:
         TEST_PORT = args.port
+    if args.model_store:
+        MODEL_STORE = args.model_store
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         try:
@@ -258,9 +304,11 @@ if __name__ == '__main__':
                 server_process.start()
                 print("waiting for server to be ready")
                 time.sleep(3)
-            test_training_failed(training_type="mixed_data")
-            test_training_success(training_type="mixed_data")
-            # test_keywords()
+            test_training_failed(training_type=TrainingType.mixed_data)
+            test_training_success(training_type=TrainingType.mixed_data)
+            test_training_success(
+                training_type=TrainingType.meta_data, test_keyword=True)
+            # test_keywords(training_type=TrainingType.meta_data)
         finally:
             print("start killing processes")
             kill_proc_tree(os.getpid())
