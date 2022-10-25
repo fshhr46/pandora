@@ -95,7 +95,7 @@ def start_training_job(
     if not os.path.isdir(partition_dir):
         return False, f"no dataset found in {partition_dir}"
 
-    status = get_training_status(server_dir=server_dir, job_id=job_id)
+    status = get_status(server_dir=server_dir, job_id=job_id)
     if status != JobStatus.not_started:
         message = f"You can only start a job with {JobStatus.not_started} status. current status {status}."
         logger.info(message)
@@ -202,7 +202,7 @@ def cleanup_artifacts(server_dir: str, job_id: str) -> Tuple[bool, str]:
         server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
 
 
-def get_training_status(server_dir: str, job_id: str) -> JobStatus:
+def get_status(server_dir: str, job_id: str) -> JobStatus:
     if is_job_running(job_id=job_id):
         return JobStatus.running
     else:
@@ -248,7 +248,7 @@ def list_all_training_jobs(server_dir: str) -> Dict[str, str]:
 def build_model_package(
         job_id: str,
         server_dir: str) -> Tuple[bool, str]:
-    status = get_training_status(server_dir=server_dir, job_id=job_id)
+    status = get_status(server_dir=server_dir, job_id=job_id)
     output_dir = job_utils.get_job_output_dir(server_dir,
                                               prefix=job_utils.TRAINING_JOB_PREFIX,
                                               job_id=job_id)
@@ -271,7 +271,7 @@ def build_model_package(
 def download_model_package(
         job_id: str,
         server_dir: str) -> Tuple[bool, str]:
-    status = get_training_status(server_dir=server_dir, job_id=job_id)
+    status = get_status(server_dir=server_dir, job_id=job_id)
     output_dir = job_utils.get_job_output_dir(
         server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
     if status != JobStatus.packaged:

@@ -1,3 +1,4 @@
+from importlib.resources import path
 import logging
 import argparse
 import os
@@ -156,7 +157,7 @@ def cleanup_artifacts():
 def get_status():
     job_type = _get_job_type(request.args)
     job_id = _get_job_id(args=request.args)
-    status = _get_job_module(job_type).get_training_status(
+    status = _get_job_module(job_type).get_status(
         server_dir=server.output_dir,
         job_id=job_id,
     )
@@ -286,24 +287,43 @@ def download_package():
 @flaskApp.route('/extract-keywords', methods=['POST'])
 def extract_keywords():
     job_id = _get_job_id(args=request.args)
-    host = request.args.get('host')
-    port = request.args.get('port')
     model_name = request.args.get('model_name')
     model_version = request.args.get('model_version')
 
-    success, message, result = keywords_job.start_keyword_extraction_job(
-        server=server.output_dir,
+    if server.torch_serve_host and server.torch_serve_port:
+        logger.info(f"torch_serve_host is {server.torch_serve_host}")
+        logger.info(f"torch_serve_port is {server.torch_serve_port}")
+    else:
+        if not server.torch_serve_host:
+            logger.error(
+                f"server.torch_serve_host is missing. Please restart server with --torch_serve_host")
+        if not server.torch_serve_port:
+            logger.error(
+                f"server.torch_serve_port is missing. Please restart server with --torch_serve_port")
+        raise ValueError("failed to run extract keyword.")
+
+    success, message, path = keywords_job.start_keyword_extraction_job(
+        server_dir=server.output_dir,
         job_id=job_id,
-        host=host,
-        port=port,
+        host=server.torch_serve_host,
+        port=server.torch_serve_port,
         model_name=model_name,
         model_version=model_version
     )
     return {
         "success": success,
         "message": message,
-        "result": result,
+        "path": path
     }
+
+
+@flaskApp.route('/get-keywords', methods=['GET'])
+def get_keywords():
+    job_id = _get_job_id(args=request.args)
+    output = keywords_job.get_keywords(
+        server_dir=server.output_dir,
+        job_id=job_id)
+    return jsonify(output)
 
 
 def get_arg_parser():
@@ -318,6 +338,10 @@ def get_arg_parser():
     parser.add_argument("--data_dir", type=str,
                         default=None, required=False)
     parser.add_argument("--cache_dir", type=str,
+                        default=None, required=False)
+    parser.add_argument("--torch_serve_host", type=str,
+                        default=None, required=False)
+    parser.add_argument("--torch_serve_port", type=str,
                         default=None, required=False)
     return parser
 

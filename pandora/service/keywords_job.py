@@ -13,7 +13,7 @@ import torch
 import torch.multiprocessing as mp
 
 from pandora.tools.common import logger
-from pandora.packaging.feature import create_example
+from pandora.packaging.feature import TrainingType, create_example
 from pandora.service.job_utils import JobStatus, JobType
 
 import pandora.dataset.poseidon_data as poseidon_data
@@ -41,7 +41,13 @@ class KeywordExtractionJob(object):
         self.model_version = model_version
 
     def __call__(self, *args, **kwds) -> None:
-        extract_keyword()
+        extract_keywords(
+            output_dir=self.output_dir,
+            job_id=self.job_id,
+            host=self.host,
+            port=self.port,
+            model_name=self.model_name,
+            model_version=self.model_version)
 
 
 def start_keyword_extraction_job(
@@ -51,22 +57,26 @@ def start_keyword_extraction_job(
         port: str,
         model_name: str,
         model_version: str = None):
-    status = get_keyword_status(server_dir=server_dir, job_id=job_id)
+    status = get_status(server_dir=server_dir, job_id=job_id)
     if status != JobStatus.not_started:
         message = f"You can only start a job with {JobStatus.not_started} status. current status {status}."
         logger.info(message)
-        return False, message
+        return False, message, ""
 
     dataset_path = job_utils.get_dataset_file_path(
         server_dir, job_utils.KEYWORD_JOB_PREFIX, job_id)
     if not os.path.isfile(dataset_path):
-        return False, {}, f"dataset file {dataset_path} not exists"
+        return False, f"dataset file {dataset_path} not exists", ""
     _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
         dataset_path)
+    if training_type != TrainingType.meta_data:
+        return False, f"training_type {training_type} is not supported", ""
+    if len(meta_data_types) != 1:
+        return False, f"multiple meta data types {meta_data_types} are not supported", ""
 
     job = KeywordExtractionJob(
+        output_dir=server_dir,
         job_id=job_id,
-        server_dir=server_dir,
         host=host,
         port=port,
         model_name=model_name,
@@ -80,7 +90,8 @@ def start_keyword_extraction_job(
     job_process.start()
     message = f'Started keyword extraction job with ID {job_id}'
     logger.info(message)
-    return True, ""
+    keyword_file_path = get_keyword_file_path(server_dir, job_id)
+    return True, "", keyword_file_path
 
 
 def stop_job(job_id: str) -> Tuple[bool, str]:
@@ -102,7 +113,7 @@ def cleanup_artifacts(server_dir: str, job_id: str) -> Tuple[bool, str]:
         server_dir, prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id)
 
 
-def get_keyword_status(server_dir: str, job_id: str) -> JobStatus:
+def get_status(server_dir: str, job_id: str) -> JobStatus:
     if is_job_running(job_id=job_id):
         return JobStatus.running
     else:
@@ -118,6 +129,15 @@ def get_keyword_status(server_dir: str, job_id: str) -> JobStatus:
                 return JobStatus.terminated
         else:
             return JobStatus.not_started
+
+
+def get_keywords(server_dir: str, job_id: str):
+    keyword_file_path = get_keyword_file_path(server_dir, job_id)
+    if os.path.isfile(keyword_file_path):
+        with open(keyword_file_path, encoding="utf-8") as f:
+            return json.load(f)
+    else:
+        raise ValueError(f"keyword_file_path not exists. {keyword_file_path}")
 
 
 def get_keyword_file_path(server_dir: str, job_id: str) -> str:
@@ -140,7 +160,7 @@ def list_all_keyword_jobs(server_dir: str) -> Dict[str, str]:
     return job_utils.list_all_jobs(server_dir, job_utils.KEYWORD_JOB_PREFIX)
 
 
-def extract_keyword(
+def extract_keywords(
         output_dir: str,
         job_id: str,
         host: str,
@@ -240,11 +260,14 @@ def extract_keyword(
                     json_objs.append(obj)
 
         label_2_keywords = build_keyword_dict(json_objs)
-        output_file = os.path.join(output_dir, "keywords.json")
+        # output_file = os.path.join(output_dir, "keywords.json")
+        keyword_file_path = get_keyword_file_path(output_dir, job_id)
+        with open(keyword_file_path, 'w') as f:
+            json.dump(label_2_keywords, f, ensure_ascii=False)
 
     except ValueError as e:
         return False, e
-    return True, ""
+    return True, keyword_file_path
 
 
 def make_request(url: str, post: bool = False, data=None, headers=None):

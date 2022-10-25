@@ -56,5 +56,9 @@ class Server(object):
             log_level = logging.getLevelName(args.log_level)
         init_logger(log_file=self.log_path, log_file_level=log_level)
 
+        # torch serve host and port
+        self.torch_serve_host = args.torch_serve_host if args.torch_serve_host else ""
+        self.torch_serve_port = args.torch_serve_port if args.torch_serve_port else ""
+
         # run
         self.flaskApp.run(host=args.host, port=args.port)

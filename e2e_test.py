@@ -56,6 +56,17 @@ def get_url():
     return f"http://{TEST_HOST}:{TEST_PORT}"
 
 
+def prepare_job_data(job_id, job_type, file_path=None):
+    if file_path:
+        with open(file_path) as f:
+            dataset = json.load(f)
+            assert make_request(
+                f"{get_url()}/ingest-dataset?id={job_id}&job_type={job_type}", post=True, json_data=dataset)["success"]
+    else:
+        assert make_request(
+            f"{get_url()}/testdata?id={job_id}&job_type={job_type}", post=True)["success"]
+
+
 def test_training_failed(training_type):
 
     job_type = JobType.training
@@ -189,15 +200,38 @@ def test_training_success(training_type: str):
         f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.not_started
 
 
-def prepare_job_data(job_id, job_type, file_path=None):
-    if file_path:
-        with open(file_path) as f:
-            dataset = json.load(f)
-            assert make_request(
-                f"{get_url()}/ingest-dataset?id={job_id}&job_type={job_type}", post=True, json_data=dataset)["success"]
-    else:
-        assert make_request(
-            f"{get_url()}/testdata?id={job_id}&job_type={job_type}", post=True)["success"]
+def test_keywords():
+    sample_size = 10
+    # generate job ID
+    job_id = time.time_ns()
+    print(f"test Job ID is {job_id}")
+    job_type = JobType.keywords
+
+    # start job witout data
+    assert not make_request(
+        f"{get_url()}/extract-keywords?id={job_id}", post=True)["success"]
+
+    # prepare datadir
+    prepare_job_data(job_id=job_id, job_type=job_type, file_path=os.path.join(
+        "test_data",  "dataset_meta.json"))
+
+    # start job
+    assert make_request(
+        f"{get_url()}/extract-keywords?id={job_id}&model_name=53", post=True)["success"]
+
+    # Check job status changed from running to completed.
+    checks = 0
+    interval = 5
+    max_checks = 12 * 10
+    while make_request(
+            f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.running:
+        time.sleep(interval)
+        checks += 1
+        assert checks < max_checks, "timeout, job is not completed"
+
+    output = make_request(
+        f"{get_url()}/get-keywords?id={job_id}", post=False)
+    print(output)
 
 
 # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers
@@ -226,6 +260,7 @@ if __name__ == '__main__':
                 time.sleep(3)
             test_training_failed(training_type="mixed_data")
             test_training_success(training_type="mixed_data")
+            # test_keywords()
         finally:
             print("start killing processes")
             kill_proc_tree(os.getpid())
