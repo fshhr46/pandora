@@ -86,6 +86,10 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         self.training_type = self.setup_config["training_type"]
         self.meta_data_types = self.setup_config["meta_data_types"]
 
+        # get insights setup
+        # TODO: remove this hard coded number
+        self.n_steps = 1
+
         self.model.eval()
         logger.info(
             "Transformer model from path %s loaded successfully", model_dir)
@@ -241,4 +245,5 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 device=self.device,
                 # input related
                 input_batch=input_batch,
-                target=target_id)
+                target=target_id,
+                n_steps=self.n_steps)

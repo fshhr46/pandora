@@ -2,6 +2,7 @@ import multiprocessing
 import os
 import time
 import requests
+import logging
 
 import app
 import json
@@ -59,8 +60,8 @@ def make_request(url: str, post: bool = False, json_data=None, data=None, json_o
     else:
         url_obj = requests.get(url)
 
-    print(f"status code: {url_obj.status_code}")
-    print(f"content: {url_obj.text}")
+    logging.info(f"status code: {url_obj.status_code}")
+    logging.info(f"content: {url_obj.text}")
     if json_output:
         data = url_obj.text
         data = json.loads(data)
@@ -99,7 +100,7 @@ def test_training_failed(training_type):
     job_type = JobType.training
     # generate job ID
     job_id = time.time_ns()
-    print(f"test Job ID is {job_id}")
+    logging.info(f"test Job ID is {job_id}")
 
     # start job witout data
     assert not make_request(
@@ -126,7 +127,7 @@ def test_training_failed(training_type):
     # ensure job can be stated when server has enough resource.
     assert not make_request(
         f"{get_url()}/start?id={job_id}&training_type={training_type}", post=True)["success"]
-    print("waiting for job to be started")
+    logging.info("waiting for job to be started")
     time.sleep(10)
 
     # check job status
@@ -181,7 +182,7 @@ def test_training_success(training_type: str, test_keyword: bool = False):
 
     # generate job ID
     job_id = time.time_ns()
-    print(f"test Job ID is {job_id}")
+    logging.info(f"test Job ID is {job_id}")
     job_type = JobType.training
 
     # prepare datadir
@@ -193,7 +194,7 @@ def test_training_success(training_type: str, test_keyword: bool = False):
     # start job
     assert make_request(
         f"{get_url()}/start?id={job_id}&training_type={training_type}&sample_size={sample_size}", post=True)["success"]
-    print("waiting for job to be started")
+    logging.info("waiting for job to be started")
 
     # Check job status changed from running to completed.
     checks = 0
@@ -229,11 +230,11 @@ def test_training_success(training_type: str, test_keyword: bool = False):
         # publish model
         package_path = package_output["package_dir"]
         command = f"cd {package_path} && sh register.sh {job_id} 0 {MODEL_STORE}"
-        print(f"command is {command}")
+        logging.info(f"command is {command}")
         make_request(
             f"{get_command_url()}/command", post=True, data=command, json_output=False)
 
-        print(f"scaling up worker")
+        logging.info(f"scaling up worker")
         # assign worker
         scale_up_response = requests.put(
             f"{get_management_url()}/models/{job_id}?&min_worker=1&synchronous=true")
@@ -249,7 +250,7 @@ def test_training_success(training_type: str, test_keyword: bool = False):
             model_response = make_request(
                 f"{get_management_url()}/models/{job_id}", post=False)
             num_workers = len(model_response[0]["workers"])
-            print(f"num_workers is {num_workers}")
+            logging.info(f"num_workers is {num_workers}")
             time.sleep(interval)
             checks += 1
             assert checks < max_checks, "timeout, job is not completed"
@@ -276,7 +277,7 @@ def test_keywords(training_type: str, model_name: str):
     sample_size = 10
     # generate job ID
     job_id = time.time_ns()
-    print(f"test Job ID is {job_id}")
+    logging.info(f"test Job ID is {job_id}")
     job_type = JobType.keywords
 
     # start job witout data
@@ -347,7 +348,7 @@ if __name__ == '__main__':
                 server_process = multiprocessing.Process(
                     target=start_test_server, args=(TEST_HOST, TEST_PORT, output_dir))
                 server_process.start()
-                print("waiting for server to be ready")
+                logging.info("waiting for server to be ready")
                 time.sleep(3)
             # test_training_failed(training_type=TrainingType.mixed_data)
             # test_training_success(training_type=TrainingType.mixed_data)
@@ -355,6 +356,6 @@ if __name__ == '__main__':
                 training_type=TrainingType.meta_data, test_keyword=True)
             # test_keywords(training_type=TrainingType.meta_data)
         finally:
-            print("start killing processes")
+            logging.info("start killing processes")
             kill_proc_tree(os.getpid())
-            print("done killing processes")
+            logging.info("done killing processes")
