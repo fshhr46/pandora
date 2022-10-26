@@ -350,8 +350,8 @@ if __name__ == '__main__':
                 server_process.start()
                 logging.info("waiting for server to be ready")
                 time.sleep(3)
-            # test_training_failed(training_type=TrainingType.mixed_data)
-            # test_training_success(training_type=TrainingType.mixed_data)
+            test_training_failed(training_type=TrainingType.mixed_data)
+            test_training_success(training_type=TrainingType.mixed_data)
             test_training_success(
                 training_type=TrainingType.meta_data, test_keyword=True)
             # test_keywords(training_type=TrainingType.meta_data)
