@@ -48,7 +48,7 @@ def start_test_server(host, port, output_dir):
     app.server.run(args)
 
 
-def make_request(url: str, post: bool = False, json_data=None, data=None):
+def make_request(url: str, post: bool = False, json_data=None, data=None, json_output=True):
     if post:
         if json_data:
             url_obj = requests.post(url, json=json_data)
@@ -58,9 +58,16 @@ def make_request(url: str, post: bool = False, json_data=None, data=None):
             url_obj = requests.post(url)
     else:
         url_obj = requests.get(url)
-    text = url_obj.text
-    print(text)
-    data = json.loads(text)
+
+    print(f"status code: {url_obj.status_code}")
+    print(f"content: {url_obj.text}")
+    if json_output:
+        data = url_obj.text
+        data = json.loads(data)
+    else:
+        data = url_obj
+        if url_obj.status_code != 200:
+            raise ValueError(url_obj)
     return data
 
 
@@ -224,18 +231,37 @@ def test_training_success(training_type: str, test_keyword: bool = False):
         command = f"cd {package_path} && sh register.sh {job_id} 0 {MODEL_STORE}"
         print(f"command is {command}")
         make_request(
-            f"{get_command_url()}/command", post=True, data=command)
+            f"{get_command_url()}/command", post=True, data=command, json_output=False)
 
+        print(f"scaling up worker")
         # assign worker
-        requests.put(
+        scale_up_response = requests.put(
             f"{get_management_url()}/models/{job_id}?&min_worker=1&synchronous=true")
+        if scale_up_response.status_code != 200:
+            raise ValueError(scale_up_response.text)
+
+        # Check job status changed from running to completed.
+        checks = 0
+        interval = 5
+        max_checks = 12 * 10
+        num_workers = 0
+        while num_workers == 0:
+            model_response = make_request(
+                f"{get_management_url()}/models/{job_id}", post=False)
+            num_workers = len(model_response[0]["workers"])
+            print(f"num_workers is {num_workers}")
+            time.sleep(interval)
+            checks += 1
+            assert checks < max_checks, "timeout, job is not completed"
 
         # Run test
         test_keywords(training_type, job_id)
 
         # Delete
-        requests.delete(
+        delete_resp = requests.delete(
             f"{get_management_url()}/models/{job_id}")
+        if delete_resp.status_code != 200:
+            raise ValueError(delete_resp.text)
 
     # delete artifacts
     assert make_request(
@@ -275,7 +301,7 @@ def test_keywords(training_type: str, model_name: str):
         checks += 1
         assert checks < max_checks, "timeout, job is not completed"
 
-    output = make_request(
+    make_request(
         f"{get_url()}/get-keywords?id={job_id}", post=False)
 
 
@@ -323,8 +349,8 @@ if __name__ == '__main__':
                 server_process.start()
                 print("waiting for server to be ready")
                 time.sleep(3)
-            test_training_failed(training_type=TrainingType.mixed_data)
-            test_training_success(training_type=TrainingType.mixed_data)
+            # test_training_failed(training_type=TrainingType.mixed_data)
+            # test_training_success(training_type=TrainingType.mixed_data)
             test_training_success(
                 training_type=TrainingType.meta_data, test_keyword=True)
             # test_keywords(training_type=TrainingType.meta_data)
