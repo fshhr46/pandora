@@ -17,9 +17,12 @@ from pandora.service.training_job import JobStatus
 
 TEST_HOST = "127.0.0.1"
 TEST_PORT = "8888"
+
+# Torchserve related configs
+TORCHSERVE_HOST = "127.0.0.1"
+MODEL_STORE = "/home/model-server/model-store"
 MANAGEMENT_PORT = "8081"
 COMMAND_PORT = "8083"
-MODEL_STORE = "/home/model-server/model-store"
 
 
 def kill_proc_tree(pid):
@@ -66,11 +69,11 @@ def get_url():
 
 
 def get_command_url():
-    return f"http://{TEST_HOST}:{COMMAND_PORT}"
+    return f"http://{TORCHSERVE_HOST}:{COMMAND_PORT}"
 
 
 def get_management_url():
-    return f"http://{TEST_HOST}:{MANAGEMENT_PORT}"
+    return f"http://{TORCHSERVE_HOST}:{MANAGEMENT_PORT}"
 
 
 def prepare_job_data(training_type: str, job_id, job_type, file_path=None):
@@ -283,6 +286,10 @@ if __name__ == '__main__':
     parser.add_argument("--port", type=str, default=None, required=False)
     parser.add_argument("--local_server", action="store_true",
                         help="Whether to start a .")
+
+    # Torchserve related configs
+    parser.add_argument("--torchserve_host", type=str,
+                        default=None, required=False)
     parser.add_argument("--model_store", type=str,
                         default=None, required=False)
     parser.add_argument("--management_port", type=str,
@@ -295,6 +302,10 @@ if __name__ == '__main__':
         TEST_HOST = args.host
     if args.port:
         TEST_PORT = args.port
+
+    # Torchserve related configs
+    if args.torchserve_host:
+        TORCHSERVE_HOST = args.torchserve_host
     if args.model_store:
         MODEL_STORE = args.model_store
     if args.management_port:
