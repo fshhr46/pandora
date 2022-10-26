@@ -40,7 +40,7 @@ def _get_job_id(args) -> str:
 
 def _get_job_type(args) -> str:
     # TODO: remove default value
-    job_type = request.args.get("job_type", default=JobType.training, type=str)
+    job_type = args.get("job_type", default=JobType.training, type=str)
     if job_type and hasattr(JobType, job_type):
         logger.info(f"job_type is {job_type}")
         return job_type
