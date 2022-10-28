@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from cgi import print_directory
-from distutils.command.config import config
 import json
 import os
 import pathlib
@@ -12,6 +11,7 @@ from pandora.data.encoder import DataJSONEncoder
 
 import pandora.dataset.dataset_utils as dataset_utils
 from pandora.packaging.feature import TrainingType
+import pandora.tools.test_utils as test_utils
 
 
 def generate_data(
@@ -110,13 +110,20 @@ def generate_data(
     # and then check the response...
     if ingest_data and os.system("ping -c 1 " + host) == 0:
         print("ingesting data to mysql")
-        create_table(
+        test_utils.create_database(
+            database_name=database_name,
+            host=host,
+            port=port,
+        )
+
+        test_utils.cleanup_table(
             table_name=dataset_name,
             database_name=database_name,
             host=host,
             port=port,
         )
-        ingest_to_mysql(
+
+        test_utils.ingest_to_mysql(
             table_name=dataset_name,
             database_name=database_name,
             host=host,
@@ -146,90 +153,6 @@ def partition_data(training_type, output_dir, data_file, data_ratios, seed):
     data_partitions = dataset_utils.split_dataset(
         all_samples=all_samples, data_ratios=data_ratios, seed=seed)
     return data_partitions
-
-
-# alias vm_178_mysql_l="mysql -h 10.0.1.178 -u root -pSudodata-123 -P 7733"
-# alias vm_178_mysql="mysql -h 10.0.1.178 -u root -pSudodata -P 16969"
-# alias vm_140_mysql="mysql -h 10.0.1.140 -u root -pSudodata-123 -P 33039"
-# alias vm_67_mysql="mysql -h 10.0.1.67 -u root -pSudodata-123 -P 33039"
-# alias vm_me_mysql="mysql -h 10.0.1.48 -u root -pSudodata-123 -P 33039"
-def create_table(
-    table_name,
-    database_name,
-    host="10.0.1.178",
-    port="7733",
-    user="root",
-    password="Sudodata-123",
-):
-    import mysql.connector
-    connection = mysql.connector.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-    )
-    cursor = connection.cursor()
-    try:
-        # create database
-        create_db_sql = f'CREATE DATABASE {database_name}'
-        cursor.execute(create_db_sql)
-    except:
-        print(f"database {database_name} already exists")
-
-    cursor.execute(f"use {database_name}")
-    try:
-        # create table
-        cursor.execute(f"drop table {table_name}")
-    except:
-        print(f"table {table_name} does not exists")
-    connection.commit()
-
-
-def ingest_to_mysql(
-    table_name,
-    column_names,
-    column_name_2_comment,
-    dataset,
-    database_name,
-    host="10.0.1.178",
-    port="7733",
-    user="root",
-    password="Sudodata-123",
-):
-    import mysql.connector
-    connection = mysql.connector.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-    )
-    cursor = connection.cursor()
-    try:
-        # create table
-        cursor.execute(f"use {database_name}")
-        columns_query = ", \n".join(
-            [f"{col} VARCHAR(50) COMMENT '{column_name_2_comment[col]}'" for col in column_names])
-        sql = f'''CREATE TABLE {table_name} (
-                {columns_query}
-            )'''
-        cursor.execute(sql)
-
-        # insert data
-        values_template = ", ".join(["%s"] * len(column_names))
-        mySql_insert_query = f"INSERT INTO {table_name} VALUES ({values_template})"
-        records_to_insert = [tuple([k_v[1] for k_v in data_entry])
-                             for data_entry in dataset]
-        cursor.executemany(mySql_insert_query, records_to_insert)
-        connection.commit()
-        print(cursor.rowcount, "Record inserted successfully into Laptop table")
-    except mysql.connector.Error as error:
-        print("Failed to insert record into MySQL table {}".format(error))
-
-    finally:
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
-            print("MySQL connection is closed")
 
 
 def build_dataset(

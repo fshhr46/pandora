@@ -1,6 +1,5 @@
 import torch
 import os
-import requests
 import json
 import pathlib
 
@@ -9,7 +8,6 @@ from torch.utils.data import DataLoader, SequentialSampler
 import pandora.tools.mps_utils as mps_utils
 import pandora.packaging.feature as feature
 import pandora.tools.runner_utils as runner_utils
-import pandora.service.job_runner as job_runner
 
 from pandora.tools.common import logger
 from pandora.packaging.feature import (
@@ -84,7 +82,7 @@ def get_test_data():
 
 
 def load_model(device, datasets, model_package_dir, training_type, meta_data_types):
-
+    import pandora.service.job_runner as job_runner
     home = str(pathlib.Path.home())
     resource_dir = os.path.join(home, "workspace", "resource")
     cache_dir = os.path.join(home, ".cache/torch/transformers")
@@ -170,6 +168,7 @@ def load_dataset(local_rank, tokenizer, processor, lines, batch_size):
 
 
 def make_request(url: str, post: bool = False, data=None, headers=None):
+    import requests
     if post:
         url_obj = requests.post(url, data=data, headers=headers)
     else:
@@ -177,3 +176,108 @@ def make_request(url: str, post: bool = False, data=None, headers=None):
     text = url_obj.text
     data = json.loads(text)
     return data
+
+
+def ingest_to_mysql(
+    table_name,
+    column_names,
+    column_name_2_comment,
+    dataset,
+    database_name,
+    host="10.0.1.178",
+    port="7733",
+    user="root",
+    password="Sudodata-123",
+):
+    import mysql.connector
+    connection = mysql.connector.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+    )
+    cursor = connection.cursor()
+    try:
+        # create table
+        cursor.execute(f"use {database_name}")
+        columns_query = ", \n".join(
+            [f"{col} INT COMMENT '{column_name_2_comment[col]}'" for col in column_names])
+        sql = f'''CREATE TABLE {table_name} (\n{columns_query}\n)'''
+        print(f"creating table with query:\n {sql}")
+        cursor.execute(sql)
+    except mysql.connector.Error as error:
+        print("Failed to create table {}".format(error))
+        raise error
+
+    try:
+        # insert data
+        values_template = ", ".join(["%s"] * len(column_names))
+        mySql_insert_query = f"INSERT INTO {table_name} VALUES ({values_template})"
+        records_to_insert = [tuple([k_v[1] for k_v in data_entry])
+                             for data_entry in dataset]
+        cursor.executemany(mySql_insert_query, records_to_insert)
+        connection.commit()
+        print(cursor.rowcount, "Record inserted successfully into Laptop table")
+    except mysql.connector.Error as error:
+        print("Failed to insert record into MySQL table {}".format(error))
+        raise error
+
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
+            print("MySQL connection is closed")
+
+
+def create_database(
+    database_name,
+    host="10.0.1.178",
+    port="7733",
+    user="root",
+    password="Sudodata-123",
+):
+    # alias vm_178_mysql_l="mysql -h 10.0.1.178 -u root -pSudodata-123 -P 7733"
+    # alias vm_178_mysql="mysql -h 10.0.1.178 -u root -pSudodata -P 16969"
+    # alias vm_140_mysql="mysql -h 10.0.1.140 -u root -pSudodata-123 -P 33039"
+    # alias vm_67_mysql="mysql -h 10.0.1.67 -u root -pSudodata-123 -P 33039"
+    # alias vm_me_mysql="mysql -h 10.0.1.48 -u root -pSudodata-123 -P 33039"
+
+    import mysql.connector
+    connection = mysql.connector.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+    )
+    cursor = connection.cursor()
+    try:
+        # create database
+        create_db_sql = f'CREATE DATABASE {database_name}'
+        cursor.execute(create_db_sql)
+    except:
+        print(f"database {database_name} already exists")
+
+
+def cleanup_table(
+    table_name,
+    database_name,
+    host="10.0.1.178",
+    port="7733",
+    user="root",
+    password="Sudodata-123",
+):
+    import mysql.connector
+    connection = mysql.connector.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+    )
+    cursor = connection.cursor()
+    try:
+        cursor.execute(f"use {database_name}")
+        # delete table if exists
+        cursor.execute(f"drop table {table_name}")
+    except Exception as e:
+        print(f"table {table_name} does not exists")
+    connection.commit()
