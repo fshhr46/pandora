@@ -2,9 +2,12 @@ import json
 import os
 import pandora.tools.test_utils as test_utils
 import logging
+from pandora.poseidon.client import get_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+poseidon_client = get_client()
 
 
 def load_data(file_path):
@@ -43,11 +46,11 @@ def load_data(file_path):
             # Check duplicate column name
             if column_name in table_data:
                 existing_obj = table_data[column_name]
-                logger.info(
-                    f"conflict: {obj}, existing: {existing_obj}")
                 existing_labels = existing_obj["label"]
                 if label in existing_labels:
                     raise ValueError(f"duplicated data entry {obj}")
+                logger.info(
+                    f"adding additional label {label} to existing ones: {existing_labels}")
                 existing_labels.append(label)
             else:
                 obj["meta_data"]["column_name"] = column_name
@@ -135,66 +138,6 @@ def create_tags(
     connection.commit()
 
 
-def get_label_2_tagid(
-        labels,
-        host="10.0.1.48",
-        port="33039",
-        user="root",
-        password="Sudodata-123"):
-
-    import mysql.connector
-    connection = mysql.connector.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-    )
-    cursor = connection.cursor()
-    cursor.execute(f"use governance")
-    labels = [f"\'{label}\'" for label in labels]
-    query_template = f"select id, `key` from tag where `key` in ({', '.join(labels)})"
-    cursor.execute(query_template)
-    label_2_tagid_info_list = cursor.fetchall()
-
-    label_2_tagid = {}
-    for label_2_tagid_info in label_2_tagid_info_list:
-        label_2_tagid[label_2_tagid_info[1]] = label_2_tagid_info[0]
-    return label_2_tagid
-
-
-def get_column_id_2_data(
-        column_comments,
-        host="10.0.1.48",
-        port="33039",
-        user="root",
-        password="Sudodata-123"):
-    import mysql.connector
-    connection = mysql.connector.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-    )
-    cursor = connection.cursor()
-    cursor.execute(f"use governance")
-    col_id_col_name_col_comments = []
-    column_comments = [f"\'{comment}\'" for comment in column_comments]
-    for comment in column_comments:
-        logger.info("==")
-        logger.info(comment)
-        # query_template = f"select id, name, comment from `column` where comment in ({', '.join(column_comments)})"
-        query_template = f"select id, name, comment from `column` where comment=({comment})"
-    # logger.info(query_template)
-        cursor.execute(query_template)
-        col_id_col_name_col_comment = cursor.fetchall()
-        logger.info(col_id_col_name_col_comment)
-        # assert len(col_id_col_name_col_comment) == 1
-        # import time
-        # time.sleep(1)
-        col_id_col_name_col_comments.extend(col_id_col_name_col_comment)
-    return col_id_col_name_col_comments
-
-
 def make_request(url: str, post: bool = False, data=None, headers=None):
     import requests
     if post:
@@ -206,113 +149,147 @@ def make_request(url: str, post: bool = False, data=None, headers=None):
     return data
 
 
-def tag_columns(
+def tag_table_columns(
         tables_data,
-        label_2_tagid,
-        host="10.0.1.48",
-        port="33039",
-        user="root",
-        password="Sudodata-123"):
+        tag_name_to_obj,
+        datasource_id,
+        datasource_name,
+        add_tagging=False):
 
-    import mysql.connector
-    connection = mysql.connector.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-    )
-    cursor = connection.cursor()
-    cursor.execute(f"use governance")
+    dataset_tags = {}
+    dataset_tags_data = {}
 
-    # TODO: Fix this hard coded datasource_id
-    datasource_id = 108
-    get_tables_query = f"select id, name from asset where type=1 and datasource_id={datasource_id}"
-    cursor.execute(get_tables_query)
-    table_info_list = cursor.fetchall()
-    table_name_2_asset_id = {}
-    for table_info in table_info_list:
-        table_name_2_asset_id[table_info[1]] = table_info[0]
-    connection.commit()
+    # list databases - should have only 1
+    list_dbs_resp = poseidon_client.list_databases(datasource_id=datasource_id)
+    assert list_dbs_resp.status_code == 200, list_dbs_resp.text
+    list_dbs_resp_obj = json.loads(list_dbs_resp.text)
+    assert len(list_dbs_resp_obj["assets"]) == 1
+    db_id = list_dbs_resp_obj["assets"][0]["id"]
+    db_name = list_dbs_resp_obj["assets"][0]["name"]
 
-    for table_name, table_data in tables_data.items():
+    # list tables in the DB, should have 34
+    list_tables_resp = poseidon_client.list_tables(
+        datasource_id=datasource_id, db_name=db_name)
+    assert list_tables_resp.status_code == 200, list_tables_resp.text
+    list_tables_resp_obj = json.loads(list_tables_resp.text)
+    assert len(list_tables_resp_obj["assets"]) == 34, len(
+        list_tables_resp_obj["assets"])
 
-        cursor = connection.cursor()
-        cursor.execute(f"use governance")
-        records_to_insert = []
+    for asset in list_tables_resp_obj["assets"]:
+        table_asset_id = asset["id"]
+
+        table_name = asset["name"]
+        logger.info(f"tagging columns in table {table_name}")
+        table_data = tables_data[table_name]
 
         # build column comment 2 column id
-        table_asset_id = table_name_2_asset_id[table_name]
-        column_info_query = f"select id, name, comment from `column` where asset_id={table_asset_id};"
-        cursor.execute(column_info_query)
+        list_columns_resp = poseidon_client.list_columns(
+            asset_id=table_asset_id)
+        assert list_columns_resp.status_code == 200, list_columns_resp.text
+        list_columns_resp_obj = json.loads(list_columns_resp.text)
 
-        column_info_list = cursor.fetchall()
-        logger.info(
-            f"fetching column_comment_2_column_info for table {table_name}, table_asset_id: {table_asset_id}")
-        logger.info(f"column_info_list is {column_info_list}")
+        table_taggings = []
+        for column in list_columns_resp_obj["columns"]:
+            column_comment = column["comment"]
+            column_id = column["id"]
+            column_name = column["name"]
+            column_obj = table_data[column_comment]
+            column_path = f"{datasource_name}/{db_name}/{table_name}/{column_name}"
 
-        column_comment_2_column_info = {}
-        for column_info in column_info_list:
-            column_comment_2_column_info[column_info[2]] = column_info
-        logger.info(
-            "column_comment_2_column_info:\n {column_comment_2_column_info}")
+            col_labels = column_obj["label"]
+            logger.info(
+                f"===== tagging column_name {column_name}(column_comment: {column_comment}) with tags/labels {col_labels}")
+            if len(col_labels) <= 0:
+                raise ValueError(f"column {column_name} has no labels")
 
-        for column_name, column_obj in table_data.items():
-            column_comment = column_obj["meta_data"]["column_comment"]
-            if column_comment not in column_comment_2_column_info:
-                raise ValueError(
-                    f"{column_comment} not in column_info_list {column_info_list}")
-            column_info = column_comment_2_column_info[column_comment]
-            column_id = column_info[0]
+            for label in col_labels:
 
-            all_labels = column_obj["label"]
-            for label in all_labels:
-                tag_name = label
-                tag_id = label_2_tagid[tag_name]
-                record = [None, 1666957310388597317,
-                          1666957310388597317, None, 3, column_id, 1, tag_id]
-                logger.info(f"tagging data query {record}")
-                records_to_insert.append(record)
-                # TODO: Fix this - only one label is allowed
-                break
+                tag_data = tag_name_to_obj[label]
+                tag_id = tag_data["id"]
 
-        # records_to_insert = [[None, 1666957310388597317,
-        #             1666957310388597317, None, 3, column_id, 1, tag_id]]
-        values_template = ", ".join(["%s"] * 8)
-        mySql_insert_query = f"INSERT INTO subject2subject VALUES({values_template})"
-        # records_to_insert = records_to_insert[:3]
-        # logger.info(records_to_insert)
-        cursor.executemany(mySql_insert_query, records_to_insert)
-        connection.commit()
+                # Create tags
+                if tag_id not in dataset_tags:
+                    dataset_tags[tag_id] = label
+                    dataset_tags_data[tag_id] = {
+                        "data": []
+                    }
+                dataset_tags_data[tag_id]["data"].append(
+                    {"id": column_id, "name": column_name, "path": column_path}
+                )
+
+                tag = {"key": label, "value": "true",
+                       "subjectId": column_id, "subjectType": "COLUMN"}
+                table_taggings.append(tag)
+
+        if add_tagging:
+            poseidon_client.add_column_tags(tags=table_taggings)
+
+    tags_list = []
+    for tag_id, tag_key in dataset_tags.items():
+        tags_list.append({"id": tag_id, "key": tag_key})
+    dataset = {
+        "tags": tags_list,
+        "tagsData": dataset_tags_data
+    }
+    return dataset
 
 
 if __name__ == '__main__':
+    create_tables = False
     tables_data, labels, duplicated = load_data(
         "test_data/data.json")
     # logger.info(json.dumps(tables, ensure_ascii=True, indent=4))
 
     # create tags
     # create_tags(labels=labels)
+    list_tags_resp = poseidon_client.list_tags()
+    assert list_tags_resp.status_code == 200, list_tags_resp.text
+    tag_name_to_obj = {tag["key"]: tag for tag in json.loads(list_tags_resp.text)[
+        "tags"]}
 
-    # Create tables
-    # logger.info("ingesting data to mysql")
-    # host = "10.0.1.178"
-    # port = "7733"
-    # # and then check the response...
-    # dataset_name = "test_real_data"
-    # create_tables(
-    #     host=host,
-    #     port=port,
-    #     database_name=dataset_name,
-    #     tables_data=tables_data
-    # )
+    # Create tables in mysql
+    database_name = "test_real_data"
+    if create_tables:
+        logger.info("ingesting data to mysql")
+        host = "10.0.1.178"
+        port = "7733"
+        create_tables(
+            host=host,
+            port=port,
+            database_name=database_name,
+            tables_data=tables_data
+        )
 
-    # get tag IDs and column IDs
-    label_2_tagid = get_label_2_tagid(labels)
-    # logger.info(label_2_tagid)
-    # col_id_col_name_col_comments = get_column_id_2_data(column_comments)
-    # logger.info(col_id_col_name_col_comments)
+        # create datasource
+        collection_id = 2
+        create_resp = poseidon_client.create_datasource(
+            resource_name=database_name,
+            collection_id=collection_id)
+        assert create_resp.status_code == 200, create_resp.text
 
-    tag_columns(
+        # get datasource ID
+        response_create_obj = json.loads(create_resp.text)
+        datasource_id = response_create_obj["id"]
+        datasource_name = response_create_obj["name"]
+
+        # metasync
+        sync_resp = poseidon_client.do_meta_sync(
+            datasource_id=datasource_id, path=database_name)
+        assert sync_resp.status_code == 200, sync_resp.text
+    else:
+        datasource_id = 140
+        datasource_name = database_name
+
+    dataset = tag_table_columns(
         tables_data=tables_data,
-        label_2_tagid=label_2_tagid,
+        tag_name_to_obj=tag_name_to_obj,
+        datasource_id=datasource_id,
+        datasource_name=datasource_name,
+        add_tagging=False,
     )
+    poseidon_client.start_training("test_real_data", dataset=dataset)
+
+    # delete datasource
+    # delete_resp = poseidon_client.delete_datasource(
+    #     datasource_id=datasource_id)
+    # assert delete_resp.status_code == 200, delete_resp.text
