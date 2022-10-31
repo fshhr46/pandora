@@ -163,6 +163,8 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     args = parser.parse_args(arg_list)
     training_type = args.training_type
     meta_data_types = args.meta_data_type
+    if meta_data_types is None:
+        meta_data_types = []
 
     processor = runner_utils.get_data_processor(
         training_type=training_type,
@@ -575,7 +577,7 @@ def get_args_parser():
                             TrainingType.mixed_data
                         ],
                         help="Training type selected in TrainingType")
-    parser.add_argument("--meta_data_type", action="append", type=str, required=True,
+    parser.add_argument("--meta_data_type", action="append", type=str, required=False,
                         choices=[
                             MetadataType.column_name,
                             MetadataType.column_comment,
