@@ -60,8 +60,8 @@ class InputExample(object):
             assert meta_data_text, "meta_data_text data is required for meta_data model"
             self.text = meta_data_text
         elif training_type == TrainingType.mixed_data:
-            assert sentence, "text data is required for mixed_data training"
-            assert meta_data_text, "column_name data is required for mixed_data model"
+            assert sentence, "text data is required for mixed_data model"
+            assert meta_data_text, "meta_data_text data is required for mixed_data model"
             combined_text = f"{meta_data_text}|{sentence}"
             self.text = combined_text
         else:
