@@ -2,7 +2,7 @@ from genericpath import isdir, isfile
 import logging
 import os
 import json
-import glob
+import traceback
 
 import torch.multiprocessing as mp
 from typing import Dict, Tuple, List
@@ -162,8 +162,13 @@ def partition_dataset(
             min_samples=min_samples,
             data_ratios=data_ratios,
             seed=seed)
+
+        if not result["valid_tags"]:
+            message = "No valid tags in dataset"
+            logger.warn(message)
+            raise ValueError(message)
     except ValueError as e:
-        return False, {}, e
+        return False, {}, f"failed to validate and partition dataset. Error: {e}"
     return True, result, ""
 
 

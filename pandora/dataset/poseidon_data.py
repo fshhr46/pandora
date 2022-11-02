@@ -211,18 +211,18 @@ def partition_poseidon_dataset(
                     distribution)
                 invalid_tags.append(result)
 
-        # write merged partitions
-        data_partitions_all = {
-            "train": partitions_train,
-            "dev": partitions_dev,
-            "test": partitions_test,
-        }
-        dataset_utils.write_partitions(
-            data_partitions_all, output_dir=output_dir)
-        distribution = get_partition_distribution(
-            data_partitions=data_partitions_all)
-        # dump labels
-        dataset_utils.write_labels(output_dir=output_dir, labels=final_labels)
+    # write merged partitions
+    data_partitions_all = {
+        "train": partitions_train,
+        "dev": partitions_dev,
+        "test": partitions_test,
+    }
+    dataset_utils.write_partitions(
+        data_partitions_all, output_dir=output_dir)
+    distribution = get_partition_distribution(
+        data_partitions=data_partitions_all)
+    # dump labels
+    dataset_utils.write_labels(output_dir=output_dir, labels=final_labels)
     summary = {
         # TODO: Use dataclass
         "distribution": distribution,
