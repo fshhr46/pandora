@@ -7,6 +7,9 @@ cpu = common.get_device("cpu")
 mps = None
 
 has_mps = platform == "darwin" and torch.has_mps
+# TODO: fix MPS randomness issue
+has_mps = False
+
 if has_mps:
     mps = common.get_device("mps")
 
