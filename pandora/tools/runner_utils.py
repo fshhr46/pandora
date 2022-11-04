@@ -69,14 +69,14 @@ def prepare_data(args,
                 seed=args.seed,
                 sample_size=args.sample_size)
         train_dataset, train_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type='train',  evaluate=False, processor=processor, sampler=sampler)
+            args, tokenizer, data_type='train',  evaluate=False, processor=processor, sampler=sampler)
     if args.do_eval:
         eval_dataset, eval_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type='dev', evaluate=True, processor=processor)
+            args, tokenizer, data_type='dev', evaluate=True, processor=processor)
 
     if args.do_predict:
         test_dataset, test_examples = load_and_cache_examples(
-            args, args.task_name, tokenizer, data_type="test", evaluate=True, processor=processor)
+            args, tokenizer, data_type="test", evaluate=True, processor=processor)
     return {
         "datasets": {
             "train": train_dataset,
@@ -104,7 +104,6 @@ def load_examples(data_dir, processor, data_type):
 
 
 def load_and_cache_examples(args,
-                            task,
                             tokenizer,
                             data_type,
                             evaluate: bool,
@@ -118,7 +117,7 @@ def load_and_cache_examples(args,
     base_model_name = list(
         filter(None, args.model_name_or_path.split('/'))).pop()
     cached_features_file = os.path.join(
-        args.output_dir, f'cached_softmax-{data_type}_{base_model_name}_{feature_dim}_{task}')
+        args.output_dir, f'cached_softmax-{data_type}_{base_model_name}_{feature_dim}')
     examples = load_examples(args.data_dir, processor, data_type)
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s",

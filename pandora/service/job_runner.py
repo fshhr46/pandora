@@ -5,8 +5,6 @@ import pandora.tools.runner_utils as runner_utils
 import pandora.tools.common as common_utils
 import pandora.packaging.packager as packager
 from pandora.tools.common import init_logger, logger
-from pandora.packaging.tokenizer import SentenceTokenizer
-from pandora.packaging.feature import cls_processors
 from pandora.packaging.cache_configs import BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
 from pandora.packaging.model import BertForSentence
 from pandora.packaging.feature import (
@@ -30,6 +28,8 @@ from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
 from pandora.callback.optimizater.adamw import AdamW
 from pandora.callback.progressbar import ProgressBar
 from pandora.packaging.feature import MetadataType, TrainingType
+from pandora.packaging.tokenizer import SentenceTokenizer
+from pandora.packaging.model import BertBaseModelType
 from pandora.service.job_utils import JobType, get_log_path, get_all_checkpoints, create_setup_config_file
 
 
@@ -37,14 +37,13 @@ ALL_MODELS = tuple(BERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys())
 
 
 MODEL_CLASSES = {
-    'bert': (BertConfig, BertForSentence, SentenceTokenizer),
-    'char_bert': (BertConfig, BertForSentence, SentenceTokenizer),
+    BertBaseModelType.bert: (BertConfig, BertForSentence, SentenceTokenizer),
+    BertBaseModelType.char_bert: (BertConfig, BertForSentence, SentenceTokenizer),
 }
 
 
 def get_training_args(
-    task_name,
-    mode_type,
+    bert_model_type,
     bert_base_model_name,
     training_type: TrainingType,
     meta_data_types: List[str],
@@ -69,9 +68,8 @@ def get_training_args(
         else:
             raise ValueError
 
-    arg_list = [f"--model_type={mode_type}",
+    arg_list = [f"--bert_model_type={bert_model_type}",
                 f"--model_name_or_path={bert_base_model_name}",
-                f"--task_name={task_name}",
                 "--do_lower_case",
                 "--loss_type=ce",
 
@@ -164,6 +162,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     args = parser.parse_args(arg_list)
     training_type = args.training_type
     meta_data_types = args.meta_data_type
+    bert_model_type = args.bert_model_type
     if meta_data_types is None:
         meta_data_types = []
 
@@ -181,6 +180,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     create_setup_config_file(
         args.output_dir,
         packager.SERUP_CONF_FILE_NAME,
+        bert_model_type,
         args.training_type,
         meta_data_types,
         args.eval_max_seq_length,
@@ -278,7 +278,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
             if not os.path.exists(report_dir) and args.local_rank in [-1, 0]:
                 os.makedirs(report_dir)
             predictions = predict(
-                args.model_type, model,
+                args.bert_model_type, model,
                 args.id2label, test_dataset,
                 args.local_rank, args.device,
                 prefix=prefix)
@@ -386,11 +386,7 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
                 continue
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
-            token_type_ids = None
-            # XLM and RoBERTa don"t use segment_ids
-            if args.model_type != "distilbert" and args.model_type in [
-                    "bert", "xlnet"]:
-                token_type_ids = batch[2]
+            token_type_ids = batch[2]
             inputs = {"input_ids": batch[0],
                       "attention_mask": batch[1],
                       "token_type_ids": token_type_ids,
@@ -480,11 +476,7 @@ def evaluate(args, model, eval_dataset, prefix=""):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
         with torch.no_grad():
-            token_type_ids = None
-            # XLM and RoBERTa don"t use segment_ids
-            if args.model_type != "distilbert" and args.model_type in [
-                    "bert", "xlnet"]:
-                token_type_ids = batch[2]
+            token_type_ids = batch[2]
             inputs = {"input_ids": batch[0],
                       "attention_mask": batch[1],
                       "token_type_ids": token_type_ids,
@@ -556,11 +548,9 @@ def predict(
 def get_args_parser():
     parser = argparse.ArgumentParser()
     # Required parameters
-    parser.add_argument("--task_name", default=None, type=str, required=True,
-                        help="The name of the task to train selected in the list: " + ", ".join(cls_processors.keys()))
     parser.add_argument("--data_dir", default=None, type=str, required=True,
                         help="The input data dir. Should contain the training files for the CoNLL-2003 NER task.", )
-    parser.add_argument("--model_type", default=None, type=str, required=True,
+    parser.add_argument("--bert_model_type", default=None, type=str, required=True,
                         help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()), )
     parser.add_argument("--model_name_or_path", default=None, type=str, required=True,
                         help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(
@@ -716,13 +706,6 @@ def setup(args, processor):
 
     # Set seed
     common_utils.seed_everything(args.seed)
-
-    # Prepare NER task
-    args.task_name = args.task_name.lower()
-    if args.task_name not in cls_processors:
-        raise ValueError("Task not found: %s" % (args.task_name))
-
-    logger.info(f"task_name is {args.task_name}")
     label_list = processor.get_labels()
     args.id2label = {i: label for i, label in enumerate(label_list)}
     args.label2id = {label: i for i, label in enumerate(label_list)}
@@ -732,11 +715,11 @@ def setup(args, processor):
     if args.local_rank not in [-1, 0]:
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
-    args.model_type = args.model_type.lower()
-    logger.info(f"model_type is {args.model_type}")
+    args.bert_model_type = args.bert_model_type.lower()
+    logger.info(f"bert_model_type is {args.bert_model_type}")
 
     # Load and initialize config, tokenizer and the seed model
-    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
+    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.bert_model_type]
 
     # 'sentence': (BertConfig, BertForSentence, CNerTokenizer),
     #  {'num_labels': 34, 'loss_type': 'ce', 'cache_dir': '/Users/haoranhuang/.cache/torch/transformers'}
@@ -756,4 +739,4 @@ def setup(args, processor):
     model.to(args.device)
     logger.info(
         f"\n========\nTraining/evaluation parameters {args}\n========\n")
-    return args, config, tokenizer, model, MODEL_CLASSES[args.model_type]
+    return args, config, tokenizer, model, MODEL_CLASSES[args.bert_model_type]

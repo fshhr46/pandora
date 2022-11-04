@@ -24,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 class TrainingJob(object):
 
-    model_type = "bert"
-    task_name = "sentence"
+    bert_model_type = "bert"
     bert_base_model_name = "bert-base-chinese"
 
     def __init__(self,
@@ -48,8 +47,7 @@ class TrainingJob(object):
 
     def __call__(self, *args, **kwds) -> None:
         arg_list = job_runner.get_training_args(
-            task_name=self.task_name,
-            mode_type=self.model_type,
+            bert_model_type=self.bert_model_type,
             bert_base_model_name=self.bert_base_model_name,
             sample_size=self.sample_size,
             training_type=self.training_type,

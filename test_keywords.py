@@ -10,6 +10,7 @@ from captum.attr import visualization
 from pandora.dataset.sentence_data import Dataset
 
 import pandora.packaging.inference as inference
+from pandora.packaging.model import BertBaseModelType
 import pandora.tools.test_utils as test_utils
 import pandora.service.keywords_job as keywords_job
 
@@ -66,7 +67,7 @@ def test_get_insights(
         insights = inference.run_get_insights(
             # configs
             mode=test_utils.HANDLER_MODE,
-            embedding_name="bert",
+            embedding_name=BertBaseModelType.bert,
             # model related
             model=model,
             tokenizer=tokenizer,

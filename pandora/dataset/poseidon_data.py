@@ -7,7 +7,7 @@ import os
 import json
 
 import pandora.dataset.dataset_utils as dataset_utils
-from pandora.packaging.feature import TrainingType, ModelType
+from pandora.packaging.feature import TrainingType, ModelTaskType
 from pandora.tools.common import logger
 
 
@@ -72,7 +72,7 @@ def load_poseidon_dataset_file(
     logger.info(f"training_type is {training_type}")
 
     # get model_type type
-    model_type = ModelType(dataset["model_type"])
+    model_type = ModelTaskType(dataset["model_type"])
     logger.info(f"model_type is {model_type}")
 
     # get metadata types

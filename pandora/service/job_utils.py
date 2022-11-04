@@ -110,6 +110,7 @@ def get_log_path(output_dir, job_type):
 def create_setup_config_file(
         package_dir,
         setup_config_file_name,
+        bert_model_type,
         training_type,
         meta_data_types,
         eval_max_seq_length,
@@ -124,7 +125,7 @@ def create_setup_config_file(
         "save_mode": "pretrained",
         # TODO: This needs to be aligned with traning/eval? current set to eval's "eval_max_seq_length".
         "max_length": eval_max_seq_length,
-        "embedding_name": "bert",
+        "embedding_name": bert_model_type,
         "FasterTransformer": False,  # TODO: make this True
         "model_parallel": False  # Beta Feature, set to False for now.
     }

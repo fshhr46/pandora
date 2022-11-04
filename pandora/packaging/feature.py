@@ -22,7 +22,7 @@ class MetadataType(str, Enum):
     column_descripition = "column_descripition"
 
 
-class ModelType(str, Enum):
+class ModelTaskType(str, Enum):
     def __str__(self):
         return str(self.value)
     tag = "tag"  # tagging model
@@ -513,9 +513,3 @@ def extract_feature_from_request(
         max_seq_length=int(max_seq_length),
         tokenizer=tokenizer)
     return feat
-
-
-# TODO: Delete this
-cls_processors = {
-    "sentence": SentenceProcessor,
-}

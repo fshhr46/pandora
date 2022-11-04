@@ -1,9 +1,17 @@
-import torch.nn as nn
-from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertModel
 from torch.nn import CrossEntropyLoss
+from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertModel
+import torch.nn as nn
+from enum import Enum
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+class BertBaseModelType(str, Enum):
+    def __str__(self):
+        return str(self.value)
+    bert = "bert"
+    char_bert = "char_bert"
 
 
 class BertForSentence(BertPreTrainedModel):
