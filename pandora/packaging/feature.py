@@ -40,7 +40,7 @@ class TrainingType(str, Enum):
 class InputExample(object):
     """A single training/test example for token classification."""
 
-    def __init__(self, id, training_type, labels, sentence, meta_data_text):
+    def __init__(self, id, labels, sentence, meta_data):
         """Constructs a InputExample.
         Args:
             guid: Unique id for the example.
@@ -51,21 +51,7 @@ class InputExample(object):
         self.id = id
         self.labels = labels
         self.sentence = sentence
-        self.meta_data_text = meta_data_text
-
-        if training_type == TrainingType.column_data:
-            assert sentence, "text data is required for column_data model"
-            self.text = sentence
-        elif training_type == TrainingType.meta_data:
-            assert meta_data_text, "meta_data_text data is required for meta_data model"
-            self.text = meta_data_text
-        elif training_type == TrainingType.mixed_data:
-            assert sentence, "text data is required for mixed_data model"
-            assert meta_data_text, "meta_data_text data is required for mixed_data model"
-            combined_text = f"{meta_data_text}|{sentence}"
-            self.text = combined_text
-        else:
-            raise ValueError(f"invalid training_type {training_type}")
+        self.meta_data = meta_data
 
     def __repr__(self):
         return str(self.to_json_string())
@@ -118,6 +104,40 @@ def batch_collate_fn(batch):
     return all_input_ids, all_attention_mask, all_token_type_ids, all_labels, all_lens
 
 
+def get_text_from_example(
+        example,
+        training_type,
+        meta_data_types):
+    # create meta_data_text
+    meta_data_types = sorted(meta_data_types)
+    meta_data_vals = []
+    for meta_data_type in meta_data_types:
+        if meta_data_type == MetadataType.column_name:
+            meta_data_vals.append(
+                example.meta_data[meta_data_type].replace("_", "_"))
+        else:
+            meta_data_vals.append(example.meta_data[meta_data_type])
+    meta_data_text = "|".join(meta_data_vals)
+
+    # append meta_data_text to sentence
+
+    sentence = example.sentence
+    if training_type == TrainingType.column_data:
+        assert sentence, "text data is required for column_data model"
+        text = sentence
+    elif training_type == TrainingType.meta_data:
+        assert meta_data_text, "meta_data_text data is required for meta_data model"
+        text = meta_data_text
+    elif training_type == TrainingType.mixed_data:
+        assert sentence, "text data is required for mixed_data model"
+        assert meta_data_text, "meta_data_text data is required for mixed_data model"
+        combined_text = f"{meta_data_text}|{sentence}"
+        text = combined_text
+    else:
+        raise ValueError(f"invalid training_type {training_type}")
+    return text
+
+
 # Convert example to feature, and pad them
 def convert_example_to_feature(
         example,
@@ -131,21 +151,21 @@ def convert_example_to_feature(
         sequence_a_segment_id=0,
         mask_padding_with_zero=True):
 
+    text = get_text_from_example(
+        example,
+        training_type,
+        meta_data_types)
     # sentence labels
     sentence_labels = [label2id[x] for x in example.labels]
 
     # Extract tokens
     # Input token IDs from tokenizer
-    # TODO: Remove duplicate
-    # tokens_words = tokenizer.tokenize(example.words)
-    tokens = tokenizer.tokenize(example.text)
+    tokens = tokenizer.tokenize(text)
     # assert tokens_words == tokens_sentence
     # tokens = tokens_sentence
 
     # TODO: Remove duplicate
     input_ids = tokenizer.convert_tokens_to_ids(tokens)
-    # encodings = tokenizer.encode(example.text, add_special_tokens=False)
-    # assert encodings == input_ids
 
     # TODO: Fix this. Currently special token is removed.
     # However, this is not necessary for sentence classification
@@ -202,27 +222,16 @@ def convert_example_to_feature(
     return feature
 
 
-def create_example(id, training_type, meta_data_types: list, line):
+def create_example(id, line):
     labels = line['labels']
     sentence = str(line['sentence'])
-
-    # create meta_data_text
     meta_data = line['meta_data']
-    meta_data_types = sorted(meta_data_types)
-    meta_data_vals = []
-    for meta_data_type in meta_data_types:
-        if meta_data_type == MetadataType.column_name:
-            meta_data_vals.append(meta_data[meta_data_type].replace("_", "_"))
-        else:
-            meta_data_vals.append(meta_data[meta_data_type])
-    meta_data_text = "|".join(meta_data_vals)
 
     return InputExample(
         id=id,
-        training_type=training_type,
         labels=labels,
         sentence=sentence,
-        meta_data_text=meta_data_text)
+        meta_data=meta_data)
 
 
 class DataProcessor(object):
@@ -315,8 +324,6 @@ class SentenceProcessor(DataProcessor):
             guid = "%s-%s" % (dataset_type, i)
             example = create_example(
                 id=guid,
-                training_type=self.training_type,
-                meta_data_types=self.meta_data_types,
                 line=line
             )
             examples.append(example)
@@ -500,8 +507,6 @@ def extract_feature_from_request(
     # TODO: fix this hack: id=""
     example = create_example(
         id="",
-        training_type=training_type,
-        meta_data_types=meta_data_types,
         line=line
     )
     feat = convert_example_to_feature(

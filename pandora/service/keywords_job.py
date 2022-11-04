@@ -13,7 +13,11 @@ import torch
 import torch.multiprocessing as mp
 
 from pandora.tools.common import logger
-from pandora.packaging.feature import TrainingType, create_example
+from pandora.packaging.feature import (
+    TrainingType,
+    create_example,
+    get_text_from_example,
+)
 from pandora.service.job_utils import JobStatus, JobType
 
 import pandora.dataset.poseidon_data as poseidon_data
@@ -210,10 +214,12 @@ def extract_keywords(
                     }
                     example = create_example(
                         id="",
-                        training_type=training_type,
-                        meta_data_types=meta_data_types,
                         line=line
                     )
+                    text = get_text_from_example(
+                        example,
+                        training_type,
+                        meta_data_types)
                     pred_result = inference_online(
                         host=host,
                         port=port,
@@ -248,7 +254,7 @@ def extract_keywords(
                         combined, key=lambda tp: tp[2], reverse=True)
 
                     obj = {
-                        "text": example.text,
+                        "text": text,
                         "probability": probability,
                         "pred_online": pred_online,
                         "label": label,

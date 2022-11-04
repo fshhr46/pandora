@@ -43,7 +43,7 @@ MODEL_CLASSES = {
 
 
 def get_training_args(
-    bert_model_type,
+    bert_model_type: BertBaseModelType,
     bert_base_model_name,
     training_type: TrainingType,
     meta_data_types: List[str],
@@ -284,7 +284,11 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
                 prefix=prefix)
             test_examples = examples["test"]
             runner_utils.build_train_report(
-                test_examples, predictions, report_dir,
+                test_examples,
+                training_type,
+                meta_data_types,
+                predictions,
+                report_dir,
                 processor=processor)
     return args
 

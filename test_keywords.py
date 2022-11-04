@@ -17,7 +17,11 @@ import pandora.service.keywords_job as keywords_job
 from pandora.tools.common import logger
 from pandora.callback.progressbar import ProgressBar
 from pandora.tools.common import init_logger
-from pandora.packaging.feature import TrainingType, MetadataType
+from pandora.packaging.feature import (
+    TrainingType,
+    MetadataType,
+    get_text_from_example,
+)
 
 device = test_utils.get_device()
 
@@ -82,7 +86,11 @@ def test_get_insights(
 
             # Read baseline file data
             label = example.labels[0]
-            text = example.text
+            text = get_text_from_example(
+                example,
+                training_type,
+                meta_data_types,
+            )
 
             pred_online = pred_result["class"]
             probability = pred_result["probability"]

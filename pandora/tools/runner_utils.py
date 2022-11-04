@@ -9,6 +9,7 @@ from pandora.tools.common import json_to_text
 from pandora.packaging.feature import SentenceProcessor
 from pandora.packaging.feature import (
     convert_example_to_feature,
+    get_text_from_example,
     RandomDataSampler,
 )
 
@@ -18,7 +19,13 @@ from torch.utils.data import TensorDataset
 from pandora.tools.common import logger
 
 
-def build_train_report(examples, predictions, report_dir, processor):
+def build_train_report(
+        examples,
+        training_type,
+        meta_data_types,
+        predictions,
+        report_dir,
+        processor):
     logger.info(" ")
     output_predic_file = os.path.join(report_dir, "test_prediction.json")
     output_submit_file = os.path.join(report_dir, "test_submit.json")
@@ -27,12 +34,17 @@ def build_train_report(examples, predictions, report_dir, processor):
             writer.write(json.dumps(record) + '\n')
 
     test_submit = []
-    for x, y in zip(examples, predictions):
+    for example, pred in zip(examples, predictions):
+        text = get_text_from_example(
+            example=example,
+            training_type=training_type,
+            meta_data_types=meta_data_types,
+        )
         json_d = {}
-        json_d['guid'] = x.id
-        json_d['text'] = x.text
-        json_d['label'] = x.labels
-        json_d['pred'] = y['tags']
+        json_d['guid'] = example.id
+        json_d['text'] = text
+        json_d['label'] = example.labels
+        json_d['pred'] = pred['tags']
         test_submit.append(json_d)
     json_to_text(output_submit_file, test_submit)
 
