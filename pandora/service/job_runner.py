@@ -38,6 +38,7 @@ ALL_MODELS = tuple(BERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys())
 
 MODEL_CLASSES = {
     'bert': (BertConfig, BertForSentence, SentenceTokenizer),
+    'char_bert': (BertConfig, BertForSentence, SentenceTokenizer),
 }
 
 

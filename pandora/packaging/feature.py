@@ -118,36 +118,6 @@ def batch_collate_fn(batch):
     return all_input_ids, all_attention_mask, all_token_type_ids, all_labels, all_lens
 
 
-def convert_examples_to_features(examples,
-                                 training_type,
-                                 meta_data_types,
-                                 label_list,
-                                 max_seq_length, tokenizer,
-                                 *args, **kwargs):
-    """
-    batch should be a list of (sequence, target, length) tuples...
-    Returns a padded tensor of sequences sorted from longest to shortest,
-
-    label_list: all labels
-    """
-    label2id = {label: i for i, label in enumerate(label_list)}
-    features = []
-    for (ex_index, example) in enumerate(examples):
-        if ex_index % 10000 == 0:
-            logger.info("Writing example %d of %d", ex_index, len(examples))
-        feature = convert_example_to_feature(
-            example,
-            training_type,
-            meta_data_types,
-            label2id,
-            ex_index < 5,
-            max_seq_length,
-            tokenizer,
-            *args, **kwargs)
-        features.append(feature)
-    return features
-
-
 # Convert example to feature, and pad them
 def convert_example_to_feature(
         example,
@@ -241,7 +211,10 @@ def create_example(id, training_type, meta_data_types: list, line):
     meta_data_types = sorted(meta_data_types)
     meta_data_vals = []
     for meta_data_type in meta_data_types:
-        meta_data_vals.append(meta_data[meta_data_type])
+        if meta_data_type == MetadataType.column_name:
+            meta_data_vals.append(meta_data[meta_data_type].replace("_", "_"))
+        else:
+            meta_data_vals.append(meta_data[meta_data_type])
     meta_data_text = "|".join(meta_data_vals)
 
     return InputExample(
@@ -357,6 +330,73 @@ class SentenceProcessor(DataProcessor):
     @classmethod
     def _create_labels(self, line):
         return _create_labels(line)
+
+    def build_char_inputs(self, input_ids, sub_index_to_ori_tok, start, rng, labels):
+        all_seq_tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
+        # if True:
+        if self.args.output_debug:
+            print(f"all_seq_tokens: {' '.join(all_seq_tokens)}")
+        char_ids = []
+        start_ids = []
+        end_ids = []
+        char_maxlen = self.args.block_size * self.args.char_maxlen_for_word
+        for idx, token in enumerate(all_seq_tokens):
+            if len(char_ids) >= char_maxlen:
+                break
+            token = token.strip("##")
+            if token == self.tokenizer.unk_token:
+                tok_orig_index = idx+start - 1
+                if tok_orig_index in sub_index_to_ori_tok:  # -1 for CLS
+                    orig_token = sub_index_to_ori_tok[tok_orig_index]
+                    #print(f'UNK: {token} to orig_tokens: {orig_token}')
+                    token = orig_token
+            if token in ["[CLS]", "[SEP]", "[MASK]", "[PAD]"] or labels[idx] != -1:
+                start_ids.append(len(char_ids))
+                end_ids.append(len(char_ids))
+                char_ids.append(0)
+            else:
+                for char_idx, c in enumerate(token):
+                    if len(char_ids) >= char_maxlen:
+                        break
+
+                    if char_idx == 0:
+                        start_ids.append(len(char_ids))
+                    if char_idx == len(token) - 1:
+                        end_ids.append(len(char_ids))
+
+                    if c in self.char2ids_dict:
+                        cid = self.char2ids_dict[c]
+                    else:
+                        cid = self.char2ids_dict["<unk>"]
+                    char_ids.append(cid)
+
+            if len(char_ids) < char_maxlen:
+                char_ids.append(0)
+            # if True:
+            if self.args.output_debug:
+                print(
+                    f'token[{token}]: {" ".join(map(str, char_ids[-1*(len(token)+2):]))}')
+        #print(f'len of char_ids: {len(char_ids)}')
+        if len(char_ids) > char_maxlen:
+            char_ids = char_ids[:char_maxlen]
+        else:
+            pad_len = char_maxlen - len(char_ids)
+            char_ids = char_ids + [0] * pad_len
+        while len(start_ids) < self.args.block_size:
+            start_ids.append(char_maxlen-1)
+        while len(end_ids) < self.args.block_size:
+            end_ids.append(char_maxlen-1)
+        # if True:
+        if self.args.output_debug:
+            print(f'char_ids : {" ".join(map(str, char_ids))}')
+            print(f'start_ids: {" ".join(map(str, start_ids))}')
+            print(f'end_ids  : {" ".join(map(str, end_ids))}')
+        #max_start = max(start_ids)
+        #max_end   = max(end_ids)
+        # if max_start > char_maxlen or max_end > char_maxlen:
+        #    print("Error sequence information")
+        #    exit(0)
+        return char_ids, start_ids, end_ids
 
 
 def read_json_lines(json_lines_itr):

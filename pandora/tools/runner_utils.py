@@ -8,7 +8,7 @@ from pandora.tools.common import json_to_text
 
 from pandora.packaging.feature import SentenceProcessor
 from pandora.packaging.feature import (
-    convert_examples_to_features,
+    convert_example_to_feature,
     RandomDataSampler,
 )
 
@@ -129,17 +129,26 @@ def load_and_cache_examples(args,
         label_list = processor.get_labels()
         if sampler:
             examples = sampler.sample(examples=examples)
-        features = convert_examples_to_features(examples=examples,
-                                                training_type=processor.training_type,
-                                                meta_data_types=processor.meta_data_types,
-                                                tokenizer=tokenizer,
-                                                label_list=label_list,
-                                                max_seq_length=args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length,
-                                                # pad on the left for xlnet
-                                                pad_token=tokenizer.convert_tokens_to_ids(
-                                                    [tokenizer.pad_token])[0],
-                                                pad_token_segment_id=0,
-                                                )
+        label2id = {label: i for i, label in enumerate(label_list)}
+        features = []
+        for (ex_index, example) in enumerate(examples):
+            if ex_index % 10000 == 0:
+                logger.info("Writing example %d of %d",
+                            ex_index, len(examples))
+            feature = convert_example_to_feature(
+                example,
+                training_type=processor.training_type,
+                meta_data_types=processor.meta_data_types,
+                label2id=label2id,
+                log_data=ex_index < 5,
+                max_seq_length=args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length,
+                tokenizer=tokenizer,
+                # pad on the left for xlnet
+                pad_token=tokenizer.convert_tokens_to_ids(
+                    [tokenizer.pad_token])[0],
+                pad_token_segment_id=0,
+            )
+            features.append(feature)
         if args.local_rank in [-1, 0]:
             logger.info("Saving features into cached file %s",
                         cached_features_file)
