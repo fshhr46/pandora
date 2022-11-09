@@ -12,7 +12,7 @@ import os
 import feature
 import inference
 from tokenizer import SentenceTokenizer
-from model import BertForSentence
+from model import BertForSentence, BertBaseModelType
 
 logger = logging.getLogger(__name__)
 logger.info("Transformers version %s", transformers.__version__)
@@ -90,6 +90,12 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         # TODO: remove this hard coded number
         self.n_steps = 1
 
+        # char bert setup
+        if self.setup_config["embedding_name"] == BertBaseModelType.char_bert:
+            self.char2ids_dict = feature.load_char_vocab()
+        else:
+            self.char2ids_dict = None
+
         self.model.eval()
         logger.info(
             "Transformer model from path %s loaded successfully", model_dir)
@@ -123,6 +129,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             self.label2id,
             max_seq_length,
             self.tokenizer,
+            char2ids_dict=self.char2ids_dict,
         )
 
         input_ids = feat.input_ids[None, :].to(self.device)
@@ -204,13 +211,15 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         # input_ids_batch, attention_mask_batch, segment_ids_batch, indexes
         return (input_ids_batch, attention_mask_batch, segment_ids_batch, indexes)
 
-    def inference(self, input_batch):
+    def inference(self, input_batch_with_index):
         with torch.no_grad():
+            # with index removed
+            input_batch = input_batch_with_index[-1]
             inferences = inference.run_inference(
                 input_batch,
                 self.setup_config["mode"],
                 self.model)
-            _, _, _, indexes = input_batch
+            indexes = input_batch[-1]
             formated_outputs = inference.format_outputs(
                 inferences=inferences, id2label=self.id2label)
             # if indexes is passed, merge results (column level inferencing)

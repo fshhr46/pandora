@@ -8,7 +8,9 @@ from pandora.tools.common import init_logger, logger
 from pandora.packaging.cache_configs import BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
 from pandora.packaging.model import BertForSentence
 from pandora.packaging.feature import (
-    batch_collate_fn,
+    batch_collate_fn_bert,
+    batch_collate_fn_char_bert,
+    build_inputs_from_batch,
 )
 import errno
 import argparse
@@ -16,8 +18,6 @@ import json
 import logging
 import os
 from typing import List
-
-from transformers import BertConfig
 
 import numpy as np
 import torch
@@ -27,19 +27,46 @@ from torch.utils.data.distributed import DistributedSampler
 from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
 from pandora.callback.optimizater.adamw import AdamW
 from pandora.callback.progressbar import ProgressBar
-from pandora.packaging.feature import MetadataType, TrainingType
-from pandora.packaging.tokenizer import SentenceTokenizer
-from pandora.packaging.model import BertBaseModelType
-from pandora.service.job_utils import JobType, get_log_path, get_all_checkpoints, create_setup_config_file
 
+# model types
+from pandora.packaging.feature import MetadataType, TrainingType
+from pandora.packaging.model import BertBaseModelType
+
+# Model shared
+from transformers import BertConfig
+
+# Normal bert
+from pandora.packaging.tokenizer import SentenceTokenizer
+
+# Char bert model
+from transformers import BertTokenizer
+from pandora.packaging.model_char_bert import CharBertForSequenceClassification
+
+from pandora.service.job_utils import (
+    JobType,
+    get_log_path,
+    get_all_checkpoints,
+    create_setup_config_file,
+)
 
 ALL_MODELS = tuple(BERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys())
 
-
 MODEL_CLASSES = {
     BertBaseModelType.bert: (BertConfig, BertForSentence, SentenceTokenizer),
-    BertBaseModelType.char_bert: (BertConfig, BertForSentence, SentenceTokenizer),
+    BertBaseModelType.char_bert: (BertConfig, CharBertForSequenceClassification, BertTokenizer),
 }
+
+
+CACHE_MODEL_DIR_NAME = {
+    "char-bert": "char-bert",
+}
+
+
+def get_model_path(bert_base_model_name, cache_dir):
+    if bert_base_model_name in CACHE_MODEL_DIR_NAME:
+        return os.path.join(cache_dir, CACHE_MODEL_DIR_NAME[bert_base_model_name])
+    else:
+        return bert_base_model_name
 
 
 def get_training_args(
@@ -166,6 +193,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     if meta_data_types is None:
         meta_data_types = []
 
+    batch_collate_fn = batch_collate_fn_char_bert if bert_model_type == BertBaseModelType.char_bert else batch_collate_fn_bert
     processor = runner_utils.get_data_processor(
         training_type=training_type,
         meta_data_types=meta_data_types,
@@ -185,9 +213,11 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
         meta_data_types,
         args.eval_max_seq_length,
         len(args.id2label))
-
     data = runner_utils.prepare_data(
-        args, tokenizer, processor=processor)
+        args,
+        tokenizer,
+        processor=processor,
+        bert_model_type=bert_model_type)
     dataset_partitions = data["datasets"]
     train_dataset, eval_dataset, test_dataset = dataset_partitions[
         "train"], dataset_partitions["eval"], dataset_partitions["test"]
@@ -195,7 +225,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     # Training
     if train_dataset:
         global_step, tr_loss = train(
-            args, train_dataset, eval_dataset, model, tokenizer)
+            args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn)
         logger.info(" global_step = %s, average loss = %s",
                     global_step, tr_loss)
 
@@ -241,7 +271,8 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
                 '/')[-1] if checkpoint.find('checkpoint') != -1 else ""
             model = model_class.from_pretrained(checkpoint)
             model.to(args.device)
-            result = evaluate(args, model, eval_dataset, prefix=prefix)
+            result = evaluate(args, bert_model_type, model, eval_dataset,
+                              batch_collate_fn, prefix=prefix)
             if global_step:
                 result = {"{}_{}".format(
                     global_step, k): v for k, v in result.items()}
@@ -277,23 +308,29 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
             report_dir = os.path.join(args.output_dir, prefix)
             if not os.path.exists(report_dir) and args.local_rank in [-1, 0]:
                 os.makedirs(report_dir)
-            predictions = predict(
-                args.bert_model_type, model,
-                args.id2label, test_dataset,
-                args.local_rank, args.device,
-                prefix=prefix)
-            test_examples = examples["test"]
-            runner_utils.build_train_report(
-                test_examples,
-                training_type,
-                meta_data_types,
-                predictions,
-                report_dir,
-                processor=processor)
+
+        predictions = predict(
+            bert_model_type=bert_model_type,
+            model=model,
+            id2label=args.id2label,
+            test_dataset=test_dataset,
+            local_rank=args.local_rank,
+            device=args.device,
+            batch_collate_fn=batch_collate_fn,
+            prefix=prefix
+        )
+        test_examples = examples["test"]
+        runner_utils.build_train_report(
+            test_examples,
+            training_type,
+            meta_data_types,
+            predictions,
+            report_dir,
+            processor=processor)
     return args
 
 
-def train(args, train_dataset, eval_dataset, model, tokenizer):
+def train(args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn):
     """ Train the model """
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(
@@ -390,12 +427,9 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
                 continue
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
-            token_type_ids = batch[2]
-            inputs = {"input_ids": batch[0],
-                      "attention_mask": batch[1],
-                      "token_type_ids": token_type_ids,
-                      "labels": batch[3]
-                      }
+            include_char_data = bert_model_type == BertBaseModelType.char_bert
+            inputs = build_inputs_from_batch(
+                batch=batch, include_labels=True, include_char_data=include_char_data)
             outputs = model(**inputs)
             # model outputs are always tuple in pytorch-transformers (see doc)
             loss = outputs[0]
@@ -458,7 +492,7 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, model, eval_dataset, prefix=""):
+def evaluate(args, bert_model_type, model, eval_dataset, batch_collate_fn, prefix=""):
     eval_output_dir = os.path.join(args.output_dir, prefix)
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
@@ -480,12 +514,10 @@ def evaluate(args, model, eval_dataset, prefix=""):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
         with torch.no_grad():
-            token_type_ids = batch[2]
-            inputs = {"input_ids": batch[0],
-                      "attention_mask": batch[1],
-                      "token_type_ids": token_type_ids,
-                      "labels": batch[3]
-                      }
+            batch = tuple(t.to(args.device) for t in batch)
+            include_char_data = bert_model_type == BertBaseModelType.char_bert
+            inputs = build_inputs_from_batch(
+                batch=batch, include_labels=True, include_char_data=include_char_data)
             outputs = model(**inputs)
             tmp_eval_loss, logits = outputs[:2]
             if args.n_gpu > 1:
@@ -509,9 +541,13 @@ def evaluate(args, model, eval_dataset, prefix=""):
 
 
 def predict(
-        model_type, model,
-        id2label, test_dataset,
-        local_rank, device,
+        bert_model_type,
+        model,
+        id2label,
+        test_dataset,
+        local_rank,
+        device,
+        batch_collate_fn,
         prefix="",
         batch_size=1):
     # Note that DistributedSampler samples randomly
@@ -526,16 +562,16 @@ def predict(
 
     predictions = []
     pbar = ProgressBar(n_total=len(test_dataloader), desc="Predicting")
-    for step, input_batch in enumerate(test_dataloader):
+    for step, batch in enumerate(test_dataloader):
         model.eval()
-        input_batch = tuple(t.to(device) for t in input_batch)
+        batch = tuple(t.to(device) for t in batch)
+        include_char_data = bert_model_type == BertBaseModelType.char_bert
+        inputs = build_inputs_from_batch(
+            batch=batch, include_labels=False, include_char_data=include_char_data)
         with torch.no_grad():
             # TODO: Fix hard coded "sequence_classification"
-            # input_ids_batch, attention_mask_batch, token_type_ids, indexes
-            input_batch_with_index = (
-                input_batch[0], input_batch[1], input_batch[2], [])
             inferences = inference.run_inference(
-                input_batch_with_index,
+                inputs,
                 "sequence_classification",
                 model)
             preds = inference.format_outputs(
@@ -725,16 +761,15 @@ def setup(args, processor):
     # Load and initialize config, tokenizer and the seed model
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.bert_model_type]
 
-    # 'sentence': (BertConfig, BertForSentence, CNerTokenizer),
-    #  {'num_labels': 34, 'loss_type': 'ce', 'cache_dir': '/Users/haoranhuang/.cache/torch/transformers'}
-    # args: removing "cache_dir" and "num_labels", loss_type is left
-    config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path,
+    model_path = get_model_path(
+        args.model_name_or_path, cache_dir=args.cache_dir)
+    config = config_class.from_pretrained(args.config_name if args.config_name else model_path,
                                           num_labels=num_labels, loss_type=args.loss_type,
                                           cache_dir=args.cache_dir if args.cache_dir else None, )
-    tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
+    tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else model_path,
                                                 do_lower_case=args.do_lower_case,
                                                 cache_dir=args.cache_dir if args.cache_dir else None, )
-    model = model_class.from_pretrained(args.model_name_or_path, from_tf=bool(".ckpt" in args.model_name_or_path),
+    model = model_class.from_pretrained(model_path, from_tf=False,
                                         config=config, cache_dir=args.cache_dir if args.cache_dir else None, )
     if args.local_rank == 0:
         # Make sure only the first process in distributed training will download model & vocab

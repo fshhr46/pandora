@@ -111,11 +111,11 @@ def test_offline(lines, batch_size=20):
     pbar = ProgressBar(n_total=len(lines), desc='comparing')
     for step, input_batch in enumerate(dataloader):
         input_batch = tuple(t.to(device) for t in input_batch)
-        input_batch_with_index = (
-            input_batch[0], input_batch[1], input_batch[2], [])
+        input_batch = (
+            input_batch[0], input_batch[1], input_batch[2])
         # TODO: Fix hard coded "sequence_classification"
         inferences = inference.run_inference(
-            input_batch=input_batch_with_index,
+            input_batch=input_batch,
             mode=test_utils.HANDLER_MODE,
             model=model)
         results = inference.format_outputs(

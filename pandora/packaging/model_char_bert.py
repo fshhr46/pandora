@@ -19,6 +19,8 @@ from transformers.models.bert.modeling_bert import (
     BertOnlyMLMHead,
 )
 
+logger = logging.getLogger(__name__)
+
 BertLayerNorm = torch.nn.LayerNorm
 
 
@@ -432,7 +434,13 @@ class CharBertForSequenceClassification(BertPreTrainedModel):
 
     def forward(self, char_input_ids=None, start_ids=None, end_ids=None, input_ids=None, attention_mask=None, token_type_ids=None,
                 position_ids=None, head_mask=None, inputs_embeds=None, labels=None):
-
+        # logger.info(char_input_ids.shape)
+        # logger.info(start_ids.shape)
+        # logger.info(start_ids)
+        # logger.info(end_ids.shape)
+        # logger.info(input_ids.shape)
+        # logger.info(attention_mask.shape)
+        # logger.info(token_type_ids.shape)
         outputs = self.bert(char_input_ids,
                             start_ids,
                             end_ids,

@@ -11,8 +11,11 @@ import pandora.tools.runner_utils as runner_utils
 
 from pandora.tools.common import logger
 from pandora.packaging.feature import (
-    batch_collate_fn,
+    batch_collate_fn_bert,
+    batch_collate_fn_char_bert,
 )
+
+from pandora.packaging.model import BertBaseModelType
 
 
 MAX_SEQ_LENGTH = 64
@@ -137,6 +140,7 @@ def load_model(device, datasets, model_package_dir, training_type, meta_data_typ
 
 def load_dataset(local_rank, tokenizer, processor, lines, batch_size):
 
+    bert_base_model_type = BertBaseModelType.bert
     logger.info("========================= Start loading dataset")
     partition = "test"
     examples = processor.create_examples(
@@ -152,19 +156,24 @@ def load_dataset(local_rank, tokenizer, processor, lines, batch_size):
     for (ex_index, example) in enumerate(examples):
         if ex_index % 10000 == 0:
             logger.info("Writing example %d of %d", ex_index, len(examples))
-        feature = feature.convert_example_to_feature(
+        feat = feature.convert_example_to_feature(
             example,
             processor.training_type,
             processor.meta_data_types,
             label2id,
             ex_index < 5,
             MAX_SEQ_LENGTH,
-            tokenizer)
-        features.append(feature)
-    dataset = runner_utils.convert_features_to_dataset(
-        local_rank, features, True)
+            tokenizer,
+            char2ids_dict=None)
+        features.append(feat)
+
+    include_char_data = bert_base_model_type == BertBaseModelType.char_bert
+    dataset = feature.convert_features_to_dataset(
+        local_rank, features, evaluate=True, include_char_data=include_char_data)
 
     sampler = SequentialSampler(dataset)
+
+    batch_collate_fn = batch_collate_fn_char_bert if bert_base_model_type == BertBaseModelType.char_bert else batch_collate_fn_bert
     dataloader = DataLoader(dataset, sampler=sampler, batch_size=batch_size,
                             collate_fn=batch_collate_fn)
     logger.info("========================= Done loading dataset")

@@ -1,20 +1,25 @@
 import os
 import json
 from typing import List
-from pandora.packaging.feature import MetadataType, TrainingType
+from pandora.packaging.feature import (
+    MetadataType,
+    TrainingType,
+    convert_features_to_dataset
+)
 import pandora.tools.report as report
 from pandora.tools.common import json_to_text
 
 
-from pandora.packaging.feature import SentenceProcessor
+from pandora.packaging.model import BertBaseModelType
 from pandora.packaging.feature import (
     convert_example_to_feature,
     get_text_from_example,
+    load_char_vocab,
     RandomDataSampler,
+    SentenceProcessor,
 )
 
 import torch
-from torch.utils.data import TensorDataset
 
 from pandora.tools.common import logger
 
@@ -71,9 +76,17 @@ def get_data_processor(
 
 def prepare_data(args,
                  tokenizer,
-                 processor):
+                 processor,
+                 bert_model_type: BertBaseModelType):
     train_dataset = eval_dataset = test_dataset = None
     train_examples = eval_examples = test_examples = None
+
+    # char bert setup
+    if bert_model_type == BertBaseModelType.char_bert:
+        char2ids_dict = load_char_vocab()
+    else:
+        char2ids_dict = None
+
     if args.do_train:
         sampler = None
         if args.sample_size:
@@ -81,14 +94,14 @@ def prepare_data(args,
                 seed=args.seed,
                 sample_size=args.sample_size)
         train_dataset, train_examples = load_and_cache_examples(
-            args, tokenizer, data_type='train',  evaluate=False, processor=processor, sampler=sampler)
+            args, tokenizer, data_type='train',  evaluate=False, processor=processor, char2ids_dict=char2ids_dict, sampler=sampler)
     if args.do_eval:
         eval_dataset, eval_examples = load_and_cache_examples(
-            args, tokenizer, data_type='dev', evaluate=True, processor=processor)
+            args, tokenizer, data_type='dev', evaluate=True, processor=processor, char2ids_dict=char2ids_dict)
 
     if args.do_predict:
         test_dataset, test_examples = load_and_cache_examples(
-            args, tokenizer, data_type="test", evaluate=True, processor=processor)
+            args, tokenizer, data_type="test", evaluate=True, processor=processor, char2ids_dict=char2ids_dict)
     return {
         "datasets": {
             "train": train_dataset,
@@ -120,6 +133,7 @@ def load_and_cache_examples(args,
                             data_type,
                             evaluate: bool,
                             processor,
+                            char2ids_dict,
                             sampler=None):
     if args.local_rank not in [-1, 0] and not evaluate:
         # Make sure only the first process in distributed training process the dataset, and the others will use the cache
@@ -146,7 +160,7 @@ def load_and_cache_examples(args,
             if ex_index % 10000 == 0:
                 logger.info("Writing example %d of %d",
                             ex_index, len(examples))
-            feature = convert_example_to_feature(
+            feat = convert_example_to_feature(
                 example,
                 training_type=processor.training_type,
                 meta_data_types=processor.meta_data_types,
@@ -158,33 +172,14 @@ def load_and_cache_examples(args,
                 pad_token=tokenizer.convert_tokens_to_ids(
                     [tokenizer.pad_token])[0],
                 pad_token_segment_id=0,
+                char2ids_dict=char2ids_dict
             )
-            features.append(feature)
+            features.append(feat)
         if args.local_rank in [-1, 0]:
             logger.info("Saving features into cached file %s",
                         cached_features_file)
             torch.save(features, cached_features_file)
-    dataset = convert_features_to_dataset(args.local_rank, features, evaluate)
+    include_char_data = char2ids_dict is not None
+    dataset = convert_features_to_dataset(
+        args.local_rank, features, evaluate, include_char_data)
     return dataset, examples
-
-
-def convert_features_to_dataset(local_rank, features, evaluate):
-    if local_rank == 0 and not evaluate:
-        # Make sure only the first process in distributed training process the dataset, and the others will use the cache
-        torch.distributed.barrier()
-    # Convert to Tensors and build dataset
-    all_input_ids = torch.stack(
-        [f.input_ids for f in features])
-    all_input_mask = torch.stack(
-        [f.input_mask for f in features])
-    all_segment_ids = torch.stack(
-        [f.segment_ids for f in features])
-
-    # Only support single label now.
-    all_label_ids = torch.stack(
-        [f.sentence_labels[0] for f in features])
-
-    all_lens = torch.stack([f.input_len for f in features])
-    dataset = TensorDataset(
-        all_input_ids, all_input_mask, all_segment_ids, all_lens, all_label_ids)
-    return dataset

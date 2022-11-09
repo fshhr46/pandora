@@ -34,7 +34,7 @@ def format_outputs(inferences, id2label):
     return [_format_output(inference, id2label) for inference in inferences]
 
 
-def run_inference(input_batch, mode: str, model):
+def run_inference(inputs, mode: str, model):
     """Predict the class (or classes) of the received text using the
     serialized transformers checkpoint.
     Args:
@@ -45,11 +45,6 @@ def run_inference(input_batch, mode: str, model):
         list : It returns a list of the predicted value (list of logits) for the input text
     """
     # token_type_ids, labels are place holders
-    input_ids_batch, attention_mask_batch, token_type_ids_batch, indexes = input_batch
-    inputs = {"input_ids": input_ids_batch,
-              "attention_mask": attention_mask_batch,
-              "token_type_ids": token_type_ids_batch,
-              }
     inferences = []
     # Handling inference for sequence_classification.
     if mode == "sequence_classification":
