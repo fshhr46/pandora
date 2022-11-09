@@ -190,6 +190,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     training_type = args.training_type
     meta_data_types = args.meta_data_type
     bert_model_type = args.bert_model_type
+    bert_base_model_name = args.model_name_or_path
     if meta_data_types is None:
         meta_data_types = []
 
@@ -208,6 +209,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     create_setup_config_file(
         args.output_dir,
         packager.SERUP_CONF_FILE_NAME,
+        bert_base_model_name,
         bert_model_type,
         args.training_type,
         meta_data_types,

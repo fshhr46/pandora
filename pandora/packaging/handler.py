@@ -82,6 +82,10 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         self.tokenizer = SentenceTokenizer.from_pretrained(
             model_dir, do_lower_case=self.setup_config["do_lower_case"])
 
+        # Load bert base model name and model type
+        self.bert_base_model_name = self.setup_config["bert_base_model_name"]
+        self.bert_model_type = self.setup_config["bert_model_type"]
+
         # set model training type
         self.training_type = self.setup_config["training_type"]
         self.meta_data_types = self.setup_config["meta_data_types"]
@@ -215,8 +219,11 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         with torch.no_grad():
             # with index removed
             input_batch = input_batch_with_index[-1]
+            include_char_data = self.bert_model_type == BertBaseModelType.char_bert
+            inputs = feature.build_inputs_from_batch(
+                batch=input_batch, include_labels=False, include_char_data=include_char_data)
             inferences = inference.run_inference(
-                input_batch,
+                inputs,
                 self.setup_config["mode"],
                 self.model)
             indexes = input_batch[-1]
