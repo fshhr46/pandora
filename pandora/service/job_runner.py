@@ -3,7 +3,7 @@ import pandora.dataset.dataset_utils as dataset_utils
 import pandora.tools.mps_utils as mps_utils
 import pandora.tools.runner_utils as runner_utils
 import pandora.tools.common as common_utils
-import pandora.packaging.packager as packager
+import pandora.packaging.constants as constants
 from pandora.tools.common import init_logger, logger
 from pandora.packaging.cache_configs import BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
 from pandora.packaging.model import BertForSentence
@@ -91,7 +91,7 @@ def get_training_args(
         elif training_type == TrainingType.mixed_data:
             num_epochs = 2
         elif training_type == TrainingType.meta_data:
-            num_epochs = 50
+            num_epochs = 10
         else:
             raise ValueError
 
@@ -208,7 +208,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     # create torchserve config file
     create_setup_config_file(
         args.output_dir,
-        packager.SERUP_CONF_FILE_NAME,
+        constants.SERUP_CONF_FILE_NAME,
         bert_base_model_name,
         bert_model_type,
         args.training_type,
@@ -252,7 +252,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
         torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
 
         # save as json
-        with open(os.path.join(args.output_dir, packager.INDEX2NAME_FILE_NAME), "w") as id2label_f:
+        with open(os.path.join(args.output_dir, constants.INDEX2NAME_FILE_NAME), "w") as id2label_f:
             json.dump(args.id2label, id2label_f, indent=4, ensure_ascii=False)
 
     # Evaluation

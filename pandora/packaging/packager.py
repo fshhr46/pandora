@@ -3,7 +3,7 @@ import json
 import pandora.tools.common as common
 import pathlib
 
-import constants
+from . import constants
 
 
 def get_package_dir(model_dir: str):
@@ -46,6 +46,10 @@ class ModelPackager(object):
         common.copy_file(curr_dir, package_dir, constants.TOKENIZER_NAME)
         common.copy_file(curr_dir, package_dir, constants.INFERENCE_NAME)
         common.copy_file(curr_dir, package_dir, constants.FEATURE_NAME)
+
+        # copy char_bert vocab files
+        common.copy_file(curr_dir, package_dir, constants.CHARBERT_CHAR_VOCAB)
+        common.copy_file(curr_dir, package_dir, constants.CHARBERT_TERM_VOCAB)
 
         # copy pandora as dependency
         # pandora_dir = os.path.dirname(pandora.__file__)

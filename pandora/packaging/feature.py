@@ -13,7 +13,7 @@ from typing import List, Dict
 import torch
 from torch.utils.data import TensorDataset
 
-import constants
+from . import constants
 
 logger = logging.getLogger(__name__)
 

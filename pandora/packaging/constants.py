@@ -14,9 +14,7 @@ CHARBERT_TERM_VOCAB = "char-bert_term_vocab.txt"
 
 MODEL_FILES_TO_COPY = [MODEL_FILE_NAME, MODEL_CONFIG_FILE_NAME,
                        VOCAB_FILE_NAME, INDEX2NAME_FILE_NAME,
-                       SERUP_CONF_FILE_NAME,
-                       CHARBERT_CHAR_VOCAB,
-                       CHARBERT_TERM_VOCAB]
+                       SERUP_CONF_FILE_NAME]
 
 
 # handler and python files
