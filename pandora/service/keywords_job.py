@@ -72,15 +72,18 @@ def start_keyword_extraction_job(
     output_dir = job_utils.get_job_output_dir(
         server_dir, prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id)
     log_path = job_utils.get_log_path(output_dir, JobType.keywords)
-    init_logger(log_file=log_path)
-    logger.info("start running extract_keywords")
 
     dataset_path = job_utils.get_dataset_file_path(
         server_dir, job_utils.KEYWORD_JOB_PREFIX, job_id)
     keyword_file_path = get_keyword_file_path(server_dir, job_id)
 
+    # Check if dataset is prepared
     if not os.path.isfile(dataset_path):
         return False, f"dataset file {dataset_path} not exists", ""
+
+    init_logger(log_file=log_path)
+    logger.info("start running extract_keywords")
+
     _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
         dataset_path)
     if training_type != TrainingType.meta_data:
