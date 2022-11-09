@@ -61,7 +61,7 @@ class TrainingJob(object):
         self.meta_data_types = meta_data_types
 
         # Find the right model
-        self._set_mode_type_and_name
+        self._set_mode_type_and_name()
 
     def __call__(self, *args, **kwds) -> None:
         arg_list = job_runner.get_training_args(
