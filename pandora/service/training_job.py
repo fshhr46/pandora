@@ -16,7 +16,11 @@ import pandora.dataset.dataset_utils as dataset_utils
 import pandora.tools.runner_utils as runner_utils
 import pandora.tools.common as common
 
-from pandora.packaging.feature import TrainingType
+from pandora.packaging.feature import (
+    TrainingType,
+    MetadataType,
+)
+from pandora.packaging.model import BertBaseModelType
 
 REPORT_DIR_NAME = "predict"
 logger = logging.getLogger(__name__)
@@ -24,8 +28,19 @@ logger = logging.getLogger(__name__)
 
 class TrainingJob(object):
 
-    bert_model_type = "bert"
-    bert_base_model_name = "bert-base-chinese"
+    def _set_mode_type_and_name(
+            self,
+            training_type: TrainingType,
+            meta_data_types: List[str]):
+
+        if training_type == TrainingType.meta_data and \
+                len(meta_data_types) == 1 and \
+                meta_data_types[0] == MetadataType.column_name:
+            self.bert_model_type = BertBaseModelType.char_bert
+            self.bert_base_model_name = "char-bert"
+        else:
+            self.bert_model_type = BertBaseModelType.bert
+            self.bert_base_model_name = "bert-base-chinese"
 
     def __init__(self,
                  job_id,
@@ -34,7 +49,7 @@ class TrainingJob(object):
                  cache_dir,
                  sample_size: int,
                  training_type: TrainingType,
-                 meta_data_types: List[str],) -> None:
+                 meta_data_types: List[str]) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
         self.output_dir = output_dir
@@ -44,6 +59,9 @@ class TrainingJob(object):
         self.sample_size = sample_size
         self.training_type = training_type
         self.meta_data_types = meta_data_types
+
+        # Find the right model
+        self._set_mode_type_and_name
 
     def __call__(self, *args, **kwds) -> None:
         arg_list = job_runner.get_training_args(

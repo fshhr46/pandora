@@ -432,31 +432,24 @@ class CharBertForSequenceClassification(BertPreTrainedModel):
 
         self.init_weights()
 
-    def forward(self, char_input_ids=None, start_ids=None, end_ids=None, input_ids=None, attention_mask=None, token_type_ids=None,
-                position_ids=None, head_mask=None, inputs_embeds=None, labels=None):
-        # logger.info(char_input_ids.shape)
-        # logger.info(start_ids.shape)
-        # logger.info(start_ids)
-        # logger.info(end_ids.shape)
-        # logger.info(input_ids.shape)
-        # logger.info(attention_mask.shape)
-        # logger.info(token_type_ids.shape)
+    def forward(
+            self,
+            input_ids=None, attention_mask=None, token_type_ids=None,
+            char_input_ids=None, start_ids=None, end_ids=None,
+            labels=None):
+
         outputs = self.bert(char_input_ids,
                             start_ids,
                             end_ids,
                             input_ids,
                             attention_mask=attention_mask,
-                            token_type_ids=token_type_ids,
-                            position_ids=position_ids,
-                            head_mask=head_mask,
-                            inputs_embeds=inputs_embeds)
+                            token_type_ids=token_type_ids)
 
-        #pooled_output = outputs[1]
+        token_seq_repr = outputs[0]
         #token_pooled_output = outputs[1]
+        char_seq_repr = outputs[2]
         #char_pooled_output = outputs[3]
         #pooled_output = torch.cat([token_pooled_output, char_pooled_output], dim=-1)
-        token_seq_repr = outputs[0]
-        char_seq_repr = outputs[2]
         seq_repr = torch.cat([token_seq_repr, char_seq_repr], dim=-1)
         seq_output = torch.mean(seq_repr, dim=1)
 
@@ -467,14 +460,9 @@ class CharBertForSequenceClassification(BertPreTrainedModel):
         outputs = (logits,) + outputs[4:]
 
         if labels is not None:
-            if self.num_labels == 1:
-                #  We are doing regression
-                loss_fct = MSELoss()
-                loss = loss_fct(logits.view(-1), labels.view(-1))
-            else:
-                loss_fct = CrossEntropyLoss()
-                loss = loss_fct(
-                    logits.view(-1, self.num_labels), labels.view(-1))
+            loss_fct = CrossEntropyLoss()
+            loss = loss_fct(
+                logits.view(-1, self.num_labels), labels.view(-1))
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)

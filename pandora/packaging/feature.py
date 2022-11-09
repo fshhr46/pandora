@@ -13,6 +13,8 @@ from typing import List, Dict
 import torch
 from torch.utils.data import TensorDataset
 
+import constants
+
 logger = logging.getLogger(__name__)
 
 
@@ -331,12 +333,16 @@ def convert_example_to_feature(
             [str(x) for x in segment_ids]))
         logger.info("sentence_labels: %s", " ".join(
             [str(x) for x in sentence_labels]))
-        logger.info("char_input_ids: %s", " ".join(
-            [str(x) for x in char_input_ids]))
-        logger.info("start_ids: %s", " ".join(
-            [str(x) for x in start_ids]))
-        logger.info("end_ids: %s", " ".join(
-            [str(x) for x in end_ids]))
+
+        if char_input_ids:
+            logger.info("char_input_ids: %s", " ".join(
+                [str(x) for x in char_input_ids]))
+        if start_ids:
+            logger.info("start_ids: %s", " ".join(
+                [str(x) for x in start_ids]))
+        if end_ids:
+            logger.info("end_ids: %s", " ".join(
+                [str(x) for x in end_ids]))
 
     feature = InputFeatures(
         input_ids=torch.tensor(input_ids, dtype=torch.long),
@@ -691,7 +697,7 @@ def extract_feature_from_request(
 
 def load_char_vocab():
     curr_dir = str(pathlib.Path(os.path.dirname(__file__)).absolute())
-    fname = os.path.join(curr_dir, "bert_char_vocab")
+    fname = os.path.join(curr_dir, constants.CHARBERT_CHAR_VOCAB)
     return load_line_to_ids_dict(fname)
 
 
