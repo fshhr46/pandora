@@ -193,6 +193,8 @@ def convert_tokens_to_char_ids(
     char_ids = []
     start_ids = []
     end_ids = []
+
+    # Hyper params: estimated number of chars per token
     char_maxlen = max_seq_length * 6
 
     #print(f"Input tokens: {' '.join(tokens)}")
