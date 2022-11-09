@@ -3,16 +3,35 @@ import json
 import pandora.tools.common as common
 import pathlib
 
-from . import constants
+import pandora.tools.common as common
+from pandora.packaging.constants import (
+    PACKAGE_DIR_NAME,
+    REGISTER_SCRIPT_NAME,
+    FEATURE_NAME,
+    MODEL_FILES_TO_COPY,
+    PACKAGING_DONE_FILE,
+    MODEL_FILE_NAME,
+    HANDLER_NAME,
+    MODEL_CONFIG_FILE_NAME,
+    SERUP_CONF_FILE_NAME,
+    INDEX2NAME_FILE_NAME,
+    VOCAB_FILE_NAME,
+    MODEL_NAME,
+    TOKENIZER_NAME,
+    INFERENCE_NAME,
+    CHARBERT_CHAR_VOCAB,
+    CHARBERT_TERM_VOCAB,
+    PACKAGE_SCRIPT_NAME,
+)
 
 
 def get_package_dir(model_dir: str):
-    return os.path.join(model_dir, constants.PACKAGE_DIR_NAME)
+    return os.path.join(model_dir, PACKAGE_DIR_NAME)
 
 
 def done_packaging(model_dir: str):
     done_file = os.path.join(get_package_dir(
-        model_dir), constants.PACKAGING_DONE_FILE)
+        model_dir), PACKAGING_DONE_FILE)
     return os.path.isfile(done_file)
 
 
@@ -37,30 +56,30 @@ class ModelPackager(object):
 
         curr_dir = str(pathlib.Path(os.path.dirname(__file__)).absolute())
         # copy register.sh file
-        common.copy_file(curr_dir, package_dir, constants.REGISTER_SCRIPT_NAME)
+        common.copy_file(curr_dir, package_dir, REGISTER_SCRIPT_NAME)
 
         # copy handler, model and tokenizer
         # TODO: Make a list out of this
-        common.copy_file(curr_dir, package_dir, constants.HANDLER_NAME)
-        common.copy_file(curr_dir, package_dir, constants.MODEL_NAME)
-        common.copy_file(curr_dir, package_dir, constants.TOKENIZER_NAME)
-        common.copy_file(curr_dir, package_dir, constants.INFERENCE_NAME)
-        common.copy_file(curr_dir, package_dir, constants.FEATURE_NAME)
+        common.copy_file(curr_dir, package_dir, HANDLER_NAME)
+        common.copy_file(curr_dir, package_dir, MODEL_NAME)
+        common.copy_file(curr_dir, package_dir, TOKENIZER_NAME)
+        common.copy_file(curr_dir, package_dir, INFERENCE_NAME)
+        common.copy_file(curr_dir, package_dir, FEATURE_NAME)
 
         # copy char_bert vocab files
-        common.copy_file(curr_dir, package_dir, constants.CHARBERT_CHAR_VOCAB)
-        common.copy_file(curr_dir, package_dir, constants.CHARBERT_TERM_VOCAB)
+        common.copy_file(curr_dir, package_dir, CHARBERT_CHAR_VOCAB)
+        common.copy_file(curr_dir, package_dir, CHARBERT_TERM_VOCAB)
 
         # copy pandora as dependency
         # pandora_dir = os.path.dirname(pandora.__file__)
         # pandora_zip_path = os.path.join(package_dir, PANDORA_DEPENDENCY)
         # common.zipdir(dir_to_zip=pandora_dir, output_path=pandora_zip_path)
 
-        for file_name in constants.MODEL_FILES_TO_COPY:
+        for file_name in MODEL_FILES_TO_COPY:
             common.copy_file(self.model_dir, package_dir, file_name)
 
         # mark done
-        open(os.path.join(package_dir, constants.PACKAGING_DONE_FILE), "w")
+        open(os.path.join(package_dir, PACKAGING_DONE_FILE), "w")
         return package_dir
 
     def get_command(self):
@@ -69,23 +88,23 @@ class ModelPackager(object):
             "--force",
             f"--model-name $model_name",
             f"--version $model_version",
-            f"--serialized-file {constants.MODEL_FILE_NAME}",
-            f"--handler {constants.HANDLER_NAME}",
+            f"--serialized-file {MODEL_FILE_NAME}",
+            f"--handler {HANDLER_NAME}",
             "--extra-files"]
         extra_files = [
-            constants.MODEL_CONFIG_FILE_NAME, constants.SERUP_CONF_FILE_NAME,
-            constants.INDEX2NAME_FILE_NAME, constants.VOCAB_FILE_NAME,
-            constants.MODEL_NAME, constants.TOKENIZER_NAME,
-            constants.INFERENCE_NAME, constants.FEATURE_NAME,
-            constants.CHARBERT_CHAR_VOCAB, constants.CHARBERT_TERM_VOCAB]
+            MODEL_CONFIG_FILE_NAME, SERUP_CONF_FILE_NAME,
+            INDEX2NAME_FILE_NAME, VOCAB_FILE_NAME,
+            MODEL_NAME, TOKENIZER_NAME,
+            INFERENCE_NAME, FEATURE_NAME,
+            CHARBERT_CHAR_VOCAB, CHARBERT_TERM_VOCAB]
         return f'{" ".join(base_cmd)} {",".join(extra_files)}'
 
     def create_package_script(self, package_dir):
         # copy sample file to package dir
         curr_dir = str(pathlib.Path(os.path.dirname(__file__)).absolute())
-        common.copy_file(curr_dir, package_dir, constants.PACKAGE_SCRIPT_NAME)
+        common.copy_file(curr_dir, package_dir, PACKAGE_SCRIPT_NAME)
         # append command to dir
-        script_path = os.path.join(package_dir, constants.PACKAGE_SCRIPT_NAME)
+        script_path = os.path.join(package_dir, PACKAGE_SCRIPT_NAME)
         with open(script_path, "a") as script_f:
             script_f.write(self.get_command())
             script_f.write("\n")

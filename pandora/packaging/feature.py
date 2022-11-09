@@ -13,7 +13,6 @@ from typing import List, Dict
 import torch
 from torch.utils.data import TensorDataset
 
-from . import constants
 
 logger = logging.getLogger(__name__)
 
@@ -695,10 +694,10 @@ def extract_feature_from_request(
     return feat
 
 
-def load_char_vocab():
+def load_char_vocab(vocab_file_name):
     curr_dir = str(pathlib.Path(os.path.dirname(__file__)).absolute())
-    fname = os.path.join(curr_dir, constants.CHARBERT_CHAR_VOCAB)
-    return load_line_to_ids_dict(fname)
+    vocab_file_path = os.path.join(curr_dir, vocab_file_name)
+    return load_line_to_ids_dict(vocab_file_path)
 
 
 def load_line_to_ids_dict(fname):

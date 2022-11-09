@@ -11,6 +11,7 @@ import os
 # load pandora python dependencies
 import feature
 import inference
+from constants import CHARBERT_CHAR_VOCAB
 from tokenizer import SentenceTokenizer
 from model import BertForSentence, BertBaseModelType
 
@@ -96,7 +97,7 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
 
         # char bert setup
         if self.setup_config["embedding_name"] == BertBaseModelType.char_bert:
-            self.char2ids_dict = feature.load_char_vocab()
+            self.char2ids_dict = feature.load_char_vocab(CHARBERT_CHAR_VOCAB)
         else:
             self.char2ids_dict = None
 

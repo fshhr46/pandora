@@ -6,6 +6,8 @@ from pandora.packaging.feature import (
     TrainingType,
     convert_features_to_dataset
 )
+
+from pandora.packaging.constants import CHARBERT_CHAR_VOCAB
 import pandora.tools.report as report
 from pandora.tools.common import json_to_text
 
@@ -83,7 +85,7 @@ def prepare_data(args,
 
     # char bert setup
     if bert_model_type == BertBaseModelType.char_bert:
-        char2ids_dict = load_char_vocab()
+        char2ids_dict = load_char_vocab(CHARBERT_CHAR_VOCAB)
     else:
         char2ids_dict = None
 
