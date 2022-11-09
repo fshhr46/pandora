@@ -30,6 +30,8 @@ class KeywordExtractionJob(object):
             job_id: str,
             host: str,
             port: str,
+            dataset_path: str,
+            keyword_file_path: str,
             model_name: str,
             model_version: str = None):
 
@@ -37,6 +39,8 @@ class KeywordExtractionJob(object):
         self.job_id = job_id
         self.host = host
         self.port = port
+        self.dataset_path = dataset_path
+        self.keyword_file_path = keyword_file_path
         self.model_name = model_name
         self.model_version = model_version
 
@@ -46,6 +50,8 @@ class KeywordExtractionJob(object):
             job_id=self.job_id,
             host=self.host,
             port=self.port,
+            dataset_path=self.dataset_path,
+            keyword_file_path=self.keyword_file_path,
             model_name=self.model_name,
             model_version=self.model_version)
 
@@ -63,8 +69,16 @@ def start_keyword_extraction_job(
         logger.info(message)
         return False, message, ""
 
+    output_dir = job_utils.get_job_output_dir(
+        server_dir, prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id)
+    log_path = job_utils.get_log_path(output_dir, JobType.keywords)
+    init_logger(log_file=log_path)
+    logger.info("start running extract_keywords")
+
     dataset_path = job_utils.get_dataset_file_path(
         server_dir, job_utils.KEYWORD_JOB_PREFIX, job_id)
+    keyword_file_path = get_keyword_file_path(server_dir, job_id)
+
     if not os.path.isfile(dataset_path):
         return False, f"dataset file {dataset_path} not exists", ""
     _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
@@ -75,10 +89,12 @@ def start_keyword_extraction_job(
         return False, f"multiple meta data types {meta_data_types} are not supported", ""
 
     job = KeywordExtractionJob(
-        output_dir=server_dir,
+        output_dir=output_dir,
         job_id=job_id,
         host=host,
         port=port,
+        dataset_path=dataset_path,
+        keyword_file_path=keyword_file_path,
         model_name=model_name,
         model_version=model_version
     )
@@ -90,7 +106,6 @@ def start_keyword_extraction_job(
     job_process.start()
     message = f'Started keyword extraction job with ID {job_id}'
     logger.info(message)
-    keyword_file_path = get_keyword_file_path(server_dir, job_id)
     return True, "", keyword_file_path
 
 
@@ -165,16 +180,11 @@ def extract_keywords(
         job_id: str,
         host: str,
         port: str,
+        dataset_path: str,
+        keyword_file_path: str,
         model_name: str,
         model_version: str = None) -> Tuple[bool, Dict, str]:
 
-    # check if output dir already exists and override is not set
-    log_path = job_utils.get_log_path(output_dir, JobType.keywords)
-
-    init_logger(log_file=log_path)
-
-    dataset_path = job_utils.get_dataset_file_path(
-        output_dir, job_utils.KEYWORD_JOB_PREFIX, job_id)
     if not os.path.isfile(dataset_path):
         return False, f"dataset file {dataset_path} not exists"
     try:
@@ -261,7 +271,6 @@ def extract_keywords(
 
         label_2_keywords = build_keyword_dict(json_objs)
         # output_file = os.path.join(output_dir, "keywords.json")
-        keyword_file_path = get_keyword_file_path(output_dir, job_id)
         with open(keyword_file_path, 'w') as f:
             json.dump(label_2_keywords, f, ensure_ascii=False)
 

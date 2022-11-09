@@ -302,6 +302,12 @@ def test_keywords(training_type: str, model_name: str):
         checks += 1
         assert checks < max_checks, "timeout, job is not completed"
 
+    assert make_request(
+        f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.completed
+
+    assert not make_request(
+        f"{get_url()}/extract-keywords?id={job_id}&model_name={model_name}", post=True)["success"]
+
     make_request(
         f"{get_url()}/get-keywords?id={job_id}", post=False)
 
