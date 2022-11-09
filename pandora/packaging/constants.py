@@ -20,7 +20,8 @@ MODEL_FILES_TO_COPY = [MODEL_FILE_NAME, MODEL_CONFIG_FILE_NAME,
 # handler and python files
 # PANDORA_DEPENDENCY = "pandora.zip"
 HANDLER_NAME = "handler.py"
-MODEL_NAME = "model.py"
+BERT_MODEL_NAME = "model.py"
+CHAR_BERT_MODEL_NAME = "char_bert_model.py"
 TOKENIZER_NAME = "tokenizer.py"
 INFERENCE_NAME = "inference.py"
 FEATURE_NAME = "feature.py"

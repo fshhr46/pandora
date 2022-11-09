@@ -13,7 +13,13 @@ import feature
 import inference
 from constants import CHARBERT_CHAR_VOCAB
 from tokenizer import SentenceTokenizer
-from model import BertForSentence, BertBaseModelType
+
+from model import (
+    BertForSentence,
+    BertBaseModelType,
+)
+from char_bert_model import CharBertForSequenceClassification
+from transformers import BertTokenizer
 
 logger = logging.getLogger(__name__)
 logger.info("Transformers version %s", transformers.__version__)
@@ -67,25 +73,28 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             )
             torch.classes.load_library(faster_transformer_complied_path)
 
-        # Loading the model and tokenizer from checkpoint and config files based on the user's choice of mode
-        # further setup config can be added.
-        if self.setup_config["save_mode"] == "torchscript":
-            self.model = torch.jit.load(
-                model_pt_path, map_location=self.device)
-        elif self.setup_config["save_mode"] == "pretrained":
-            self.model = BertForSentence.from_pretrained(
-                model_dir)
-            self.model.to(self.device)
-        else:
-            logger.warning("Missing the checkpoint or state_dict.")
-
-        # Load tokenizer
-        self.tokenizer = SentenceTokenizer.from_pretrained(
-            model_dir, do_lower_case=self.setup_config["do_lower_case"])
-
         # Load bert base model name and model type
         self.bert_base_model_name = self.setup_config["bert_base_model_name"]
         self.bert_model_type = self.setup_config["bert_model_type"]
+
+        # TODO: Write a function that gets config/tokenizer/model
+        # Loading the model and tokenizer from checkpoint and config files based on the user's choice of mode
+        # further setup config can be added.
+        if self.setup_config["save_mode"] == "pretrained":
+            if self.bert_model_type == BertBaseModelType.char_bert:
+                self.model = CharBertForSequenceClassification.from_pretrained(
+                    model_dir)
+                self.tokenizer = BertTokenizer.from_pretrained(
+                    model_dir, do_lower_case=self.setup_config["do_lower_case"])
+            else:
+                # Load model
+                self.model = BertForSentence.from_pretrained(
+                    model_dir)
+                # Load tokenizer
+                self.tokenizer = SentenceTokenizer.from_pretrained(
+                    model_dir, do_lower_case=self.setup_config["do_lower_case"])
+        else:
+            logger.warning("Missing the checkpoint or state_dict.")
 
         # set model training type
         self.training_type = self.setup_config["training_type"]

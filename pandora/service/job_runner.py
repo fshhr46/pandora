@@ -40,7 +40,7 @@ from pandora.packaging.tokenizer import SentenceTokenizer
 
 # Char bert model
 from transformers import BertTokenizer
-from pandora.packaging.model_char_bert import CharBertForSequenceClassification
+from pandora.packaging.char_bert_model import CharBertForSequenceClassification
 
 from pandora.service.job_utils import (
     JobType,

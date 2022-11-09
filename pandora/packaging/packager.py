@@ -8,6 +8,7 @@ from pandora.packaging.constants import (
     PACKAGE_DIR_NAME,
     REGISTER_SCRIPT_NAME,
     FEATURE_NAME,
+    CONSTANT_NAME,
     MODEL_FILES_TO_COPY,
     PACKAGING_DONE_FILE,
     MODEL_FILE_NAME,
@@ -16,7 +17,8 @@ from pandora.packaging.constants import (
     SERUP_CONF_FILE_NAME,
     INDEX2NAME_FILE_NAME,
     VOCAB_FILE_NAME,
-    MODEL_NAME,
+    BERT_MODEL_NAME,
+    CHAR_BERT_MODEL_NAME,
     TOKENIZER_NAME,
     INFERENCE_NAME,
     CHARBERT_CHAR_VOCAB,
@@ -58,13 +60,15 @@ class ModelPackager(object):
         # copy register.sh file
         common.copy_file(curr_dir, package_dir, REGISTER_SCRIPT_NAME)
 
-        # copy handler, model and tokenizer
+        # copy handler, model and tokenizer, and other python files
         # TODO: Make a list out of this
         common.copy_file(curr_dir, package_dir, HANDLER_NAME)
-        common.copy_file(curr_dir, package_dir, MODEL_NAME)
+        common.copy_file(curr_dir, package_dir, BERT_MODEL_NAME)
+        common.copy_file(curr_dir, package_dir, CHAR_BERT_MODEL_NAME)
         common.copy_file(curr_dir, package_dir, TOKENIZER_NAME)
         common.copy_file(curr_dir, package_dir, INFERENCE_NAME)
         common.copy_file(curr_dir, package_dir, FEATURE_NAME)
+        common.copy_file(curr_dir, package_dir, CONSTANT_NAME)
 
         # copy char_bert vocab files
         common.copy_file(curr_dir, package_dir, CHARBERT_CHAR_VOCAB)
@@ -94,8 +98,10 @@ class ModelPackager(object):
         extra_files = [
             MODEL_CONFIG_FILE_NAME, SERUP_CONF_FILE_NAME,
             INDEX2NAME_FILE_NAME, VOCAB_FILE_NAME,
-            MODEL_NAME, TOKENIZER_NAME,
+            BERT_MODEL_NAME, CHAR_BERT_MODEL_NAME,
+            TOKENIZER_NAME,
             INFERENCE_NAME, FEATURE_NAME,
+            CONSTANT_NAME,
             CHARBERT_CHAR_VOCAB, CHARBERT_TERM_VOCAB]
         return f'{" ".join(base_cmd)} {",".join(extra_files)}'
 

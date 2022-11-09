@@ -1,9 +1,5 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 import logging
 import math
-import os
-import sys
 
 import torch
 from torch import nn
@@ -12,11 +8,8 @@ from torch.nn import CrossEntropyLoss, MSELoss
 from transformers.models.bert.modeling_bert import (
     BertEmbeddings,
     BertLayer,
-    BertEncoder,
     BertPooler,
     BertPreTrainedModel,
-    BertPredictionHeadTransform,
-    BertOnlyMLMHead,
 )
 
 logger = logging.getLogger(__name__)
