@@ -118,7 +118,7 @@ def batch_collate_fn_bert(batch):
     all_attention_mask = all_attention_mask[:, :max_len]
     all_token_type_ids = all_token_type_ids[:, :max_len]
     all_labels = all_labels[:]
-    return all_input_ids, all_attention_mask, all_token_type_ids, all_lens, \
+    return all_input_ids, all_attention_mask, all_token_type_ids, \
         all_labels
 
 
@@ -143,7 +143,7 @@ def batch_collate_fn_char_bert(batch):
     # all_start_ids = all_start_ids[:, :max_len]
     # all_end_ids = all_end_ids[:, :max_len]
 
-    return all_input_ids, all_attention_mask, all_token_type_ids, all_lens, \
+    return all_input_ids, all_attention_mask, all_token_type_ids, \
         all_char_input_ids, all_start_ids, all_end_ids, \
         all_labels
 
@@ -718,11 +718,11 @@ def build_inputs_from_batch(batch, include_labels, include_char_data):
               }
 
     # This is currently not used.
-    all_lens = batch[3]
+    # all_lens = batch[3]
     if include_char_data:
-        inputs["char_input_ids"] = batch[4]
-        inputs["start_ids"] = batch[5]
-        inputs["end_ids"] = batch[6]
+        inputs["char_input_ids"] = batch[3]
+        inputs["start_ids"] = batch[4]
+        inputs["end_ids"] = batch[5]
 
     if include_labels:
         inputs["labels"] = batch[-1]
