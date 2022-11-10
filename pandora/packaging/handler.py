@@ -11,8 +11,15 @@ import os
 # load pandora python dependencies
 import feature
 import inference
+from constants import CHARBERT_CHAR_VOCAB
 from tokenizer import SentenceTokenizer
-from model import BertForSentence
+
+from model import (
+    BertForSentence,
+    BertBaseModelType,
+)
+from char_bert_model import CharBertForSequenceClassification
+from transformers import BertTokenizer
 
 logger = logging.getLogger(__name__)
 logger.info("Transformers version %s", transformers.__version__)
@@ -41,11 +48,6 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         serialized_file = self.manifest["model"]["serializedFile"]
         model_pt_path = os.path.join(model_dir, serialized_file)
 
-        # self.device = torch.device(
-        #     "cuda:" + str(properties.get("gpu_id"))
-        #     if torch.cuda.is_available() and properties.get("gpu_id") is not None
-        #     else "cpu"
-        # )
         self.device = torch.device(
             "cuda"
             if torch.cuda.is_available()
@@ -66,21 +68,30 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             )
             torch.classes.load_library(faster_transformer_complied_path)
 
+        # Load bert base model name and model type
+        self.bert_base_model_name = self.setup_config["bert_base_model_name"]
+        self.bert_model_type = self.setup_config["bert_model_type"]
+        self.include_char_data = self.bert_model_type == BertBaseModelType.char_bert
+
+        # TODO: Write a function that gets config/tokenizer/model
         # Loading the model and tokenizer from checkpoint and config files based on the user's choice of mode
         # further setup config can be added.
-        if self.setup_config["save_mode"] == "torchscript":
-            self.model = torch.jit.load(
-                model_pt_path, map_location=self.device)
-        elif self.setup_config["save_mode"] == "pretrained":
-            self.model = BertForSentence.from_pretrained(
-                model_dir)
-            self.model.to(self.device)
+        if self.setup_config["save_mode"] == "pretrained":
+            if self.bert_model_type == BertBaseModelType.char_bert:
+                self.model = CharBertForSequenceClassification.from_pretrained(
+                    model_dir)
+                self.tokenizer = BertTokenizer.from_pretrained(
+                    model_dir, do_lower_case=self.setup_config["do_lower_case"])
+            else:
+                # Load model
+                self.model = BertForSentence.from_pretrained(
+                    model_dir)
+                # Load tokenizer
+                self.tokenizer = SentenceTokenizer.from_pretrained(
+                    model_dir, do_lower_case=self.setup_config["do_lower_case"])
         else:
             logger.warning("Missing the checkpoint or state_dict.")
-
-        # Load tokenizer
-        self.tokenizer = SentenceTokenizer.from_pretrained(
-            model_dir, do_lower_case=self.setup_config["do_lower_case"])
+        self.model.to(self.device)
 
         # set model training type
         self.training_type = self.setup_config["training_type"]
@@ -89,6 +100,12 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         # get insights setup
         # TODO: remove this hard coded number
         self.n_steps = 1
+
+        # char bert setup
+        if self.bert_model_type == BertBaseModelType.char_bert:
+            self.char2ids_dict = feature.load_char_vocab(CHARBERT_CHAR_VOCAB)
+        else:
+            self.char2ids_dict = None
 
         self.model.eval()
         logger.info(
@@ -113,6 +130,9 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             input_ids_batch,
             attention_mask_batch,
             segment_ids_batch,
+            char_input_ids_batch,
+            start_ids_batch,
+            end_ids_batch,
             max_seq_length: int,
             request_data):
 
@@ -123,11 +143,20 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             self.label2id,
             max_seq_length,
             self.tokenizer,
+            char2ids_dict=self.char2ids_dict,
         )
 
         input_ids = feat.input_ids[None, :].to(self.device)
         attention_mask = feat.input_mask[None, :].to(self.device)
         segment_ids = feat.segment_ids[None, :].to(self.device)
+
+        # add char-bert tensors
+        if self.include_char_data:
+            char_input_ids = feat.char_input_ids[None, :].to(self.device)
+            start_ids = feat.start_ids[None, :].to(self.device)
+            end_ids = feat.end_ids[None, :].to(self.device)
+        else:
+            char_input_ids, start_ids, end_ids = None, None, None
 
         # making a batch out of the recieved requests
         # attention masks are passed for cases where input tokens are padded.
@@ -138,6 +167,12 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 input_ids_batch = input_ids
                 attention_mask_batch = attention_mask
                 segment_ids_batch = segment_ids
+
+                # add char-bert tensors
+                if self.include_char_data:
+                    char_input_ids_batch = char_input_ids
+                    start_ids_batch = start_ids
+                    end_ids_batch = end_ids
             else:
                 input_ids_batch = torch.cat(
                     (input_ids_batch, input_ids), 0)
@@ -147,7 +182,19 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 segment_ids_batch = torch.cat(
                     (segment_ids_batch, segment_ids), 0
                 )
-        return (input_ids_batch, attention_mask_batch, segment_ids_batch)
+                # add char-bert tensors
+                if self.include_char_data:
+                    char_input_ids_batch = torch.cat(
+                        (char_input_ids_batch, char_input_ids), 0
+                    )
+                    start_ids_batch = torch.cat(
+                        (start_ids_batch, start_ids), 0
+                    )
+                    end_ids_batch = torch.cat(
+                        (end_ids_batch, end_ids), 0
+                    )
+        return (input_ids_batch, attention_mask_batch, segment_ids_batch,
+                char_input_ids_batch, start_ids_batch, end_ids_batch)
 
     def preprocess(self, requests):
         """Basic text preprocessing, based on the user's chocie of application mode.
@@ -160,6 +207,9 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         input_ids_batch = None
         attention_mask_batch = None
         segment_ids_batch = None
+        char_input_ids_batch = None
+        start_ids_batch = None
+        end_ids_batch = None
         indexes = []
         num_texts = 0
         for idx, request_data in enumerate(requests):
@@ -175,13 +225,17 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 # ]
                 json_objs = request_data.get("body")
                 for json_obj in json_objs:
-                    input_ids_batch, attention_mask_batch, segment_ids_batch = self.add_input_text_to_batch(
-                        input_ids_batch,
-                        attention_mask_batch,
-                        segment_ids_batch,
-                        max_length=self.setup_config["max_length"],
-                        request_seq_data=json_obj)
-                    num_texts += 1
+                    input_ids_batch, attention_mask_batch, segment_ids_batch, \
+                        char_input_ids_batch, start_ids_batch, end_ids_batch = self.add_input_text_to_batch(
+                            input_ids_batch,
+                            attention_mask_batch,
+                            segment_ids_batch,
+                            char_input_ids_batch,
+                            start_ids_batch,
+                            end_ids_batch,
+                            max_length=self.setup_config["max_length"],
+                            request_seq_data=json_obj)
+                num_texts += 1
                 indexes.append(num_texts)
             # Handle single request
             # {
@@ -192,25 +246,38 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             # }
             else:
                 # Get request expects every reqeusts has one input string
-                input_ids_batch, attention_mask_batch, segment_ids_batch = self.add_input_text_to_batch(
-                    input_ids_batch,
-                    attention_mask_batch,
-                    segment_ids_batch,
-                    max_seq_length=self.setup_config["max_length"],
-                    request_data=request_data)
+                input_ids_batch, attention_mask_batch, segment_ids_batch, \
+                    char_input_ids_batch, start_ids_batch, end_ids_batch = self.add_input_text_to_batch(
+                        input_ids_batch,
+                        attention_mask_batch,
+                        segment_ids_batch,
+                        char_input_ids_batch,
+                        start_ids_batch,
+                        end_ids_batch,
+                        max_seq_length=self.setup_config["max_length"],
+                        request_data=request_data)
                 num_texts += 1
                 indexes.append(num_texts)
         # Batch definition
         # input_ids_batch, attention_mask_batch, segment_ids_batch, indexes
-        return (input_ids_batch, attention_mask_batch, segment_ids_batch, indexes)
+        if self.include_char_data:
+            return (input_ids_batch, attention_mask_batch, segment_ids_batch,
+                    char_input_ids_batch, start_ids_batch, end_ids_batch,
+                    indexes)
+        else:
+            return (input_ids_batch, attention_mask_batch, segment_ids_batch, indexes)
 
-    def inference(self, input_batch):
+    def inference(self, input_batch_with_index):
         with torch.no_grad():
+            # with index removed
+            indexes = input_batch_with_index[-1]
+            input_batch = input_batch_with_index[:-1]
+            inputs = feature.build_inputs_from_batch(
+                batch=input_batch, include_labels=False, include_char_data=self.include_char_data)
             inferences = inference.run_inference(
-                input_batch,
+                inputs,
                 self.setup_config["mode"],
                 self.model)
-            _, _, _, indexes = input_batch
             formated_outputs = inference.format_outputs(
                 inferences=inferences, id2label=self.id2label)
             # if indexes is passed, merge results (column level inferencing)

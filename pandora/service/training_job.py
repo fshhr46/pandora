@@ -16,7 +16,11 @@ import pandora.dataset.dataset_utils as dataset_utils
 import pandora.tools.runner_utils as runner_utils
 import pandora.tools.common as common
 
-from pandora.packaging.feature import TrainingType
+from pandora.packaging.feature import (
+    TrainingType,
+    MetadataType,
+)
+from pandora.packaging.model import BertBaseModelType
 
 REPORT_DIR_NAME = "predict"
 logger = logging.getLogger(__name__)
@@ -24,9 +28,19 @@ logger = logging.getLogger(__name__)
 
 class TrainingJob(object):
 
-    model_type = "bert"
-    task_name = "sentence"
-    bert_base_model_name = "bert-base-chinese"
+    def _set_mode_type_and_name(
+            self,
+            training_type: TrainingType,
+            meta_data_types: List[str]):
+
+        if training_type == TrainingType.meta_data and \
+                len(meta_data_types) == 1 and \
+                meta_data_types[0] == MetadataType.column_name:
+            self.bert_model_type = BertBaseModelType.char_bert
+            self.bert_base_model_name = "char-bert"
+        else:
+            self.bert_model_type = BertBaseModelType.bert
+            self.bert_base_model_name = "bert-base-chinese"
 
     def __init__(self,
                  job_id,
@@ -35,7 +49,7 @@ class TrainingJob(object):
                  cache_dir,
                  sample_size: int,
                  training_type: TrainingType,
-                 meta_data_types: List[str],) -> None:
+                 meta_data_types: List[str]) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
         self.output_dir = output_dir
@@ -46,14 +60,26 @@ class TrainingJob(object):
         self.training_type = training_type
         self.meta_data_types = meta_data_types
 
+        # Find the right model
+        self._set_mode_type_and_name(
+            self.training_type,
+            self.meta_data_types,
+        )
+
     def __call__(self, *args, **kwds) -> None:
+
+        num_epochs = get_num_epochs(
+            self.training_type,
+            self.meta_data_types,
+            bert_model_type=self.bert_model_type,
+        )
         arg_list = job_runner.get_training_args(
-            task_name=self.task_name,
-            mode_type=self.model_type,
+            bert_model_type=self.bert_model_type,
             bert_base_model_name=self.bert_base_model_name,
             sample_size=self.sample_size,
             training_type=self.training_type,
             meta_data_types=self.meta_data_types,
+            num_epochs=num_epochs,
         )
 
         dir_args = [f"--data_dir={self.data_dir}",
@@ -80,6 +106,28 @@ class TrainingJob(object):
         datasets = [""]
         job_runner.train_eval_test(
             arg_list, resource_dir=resource_dir, datasets=datasets)
+
+
+def get_num_epochs(
+        training_type: TrainingType,
+        meta_data_types: List[str],
+        bert_model_type: BertBaseModelType):
+    # if num_epochs is not passed, set num_epochs by training type
+    if training_type == TrainingType.column_data:
+        num_epochs = 4
+    elif training_type == TrainingType.mixed_data:
+        num_epochs = 2
+    elif training_type == TrainingType.meta_data:
+        if bert_model_type == BertBaseModelType.char_bert and \
+            len(meta_data_types) == 1 and \
+                meta_data_types[0] == MetadataType.column_name:
+            num_epochs = 15
+        else:
+            num_epochs = 30
+    else:
+        raise ValueError
+    logger.info(f"num_epochs: {num_epochs}")
+    return num_epochs
 
 
 def start_training_job(

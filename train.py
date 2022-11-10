@@ -7,6 +7,8 @@ import pandora.packaging.packager as packager
 
 from pandora.dataset.sentence_data import Dataset
 from pandora.packaging.feature import MetadataType, TrainingType
+from pandora.packaging.model import BertBaseModelType
+from pandora.service.training_job import get_num_epochs
 
 
 def main():
@@ -15,9 +17,11 @@ def main():
     resource_dir = os.path.join(home, "workspace", "resource")
     cache_dir = os.path.join(home, ".cache/torch/transformers")
 
-    task_name = "sentence"
-    model_type = "bert"
+    bert_model_type = BertBaseModelType.char_bert
+    bert_model_type = BertBaseModelType.bert
     bert_base_model_name = "bert-base-chinese"
+    bert_base_model_name = "char-bert"
+    bert_base_model_name = "bert-base-uncased"
 
     # Build dataset
     num_data_entry_train = 10
@@ -29,12 +33,20 @@ def main():
     training_type = TrainingType.meta_data
     meta_data_types = [
         MetadataType.column_name,
-        MetadataType.column_comment,
+        # MetadataType.column_comment,
         # MetadataType.column_descripition,
     ]
 
     # Setting num_epochs means choosing the default number based on training_type
     num_epochs = 0
+
+    # if num_epochs is not passed, set num_epochs by training type
+    if num_epochs == 0:
+        num_epochs = get_num_epochs(
+            training_type,
+            meta_data_types,
+            bert_model_type=bert_model_type,
+        )
 
     # dataset_name_prefix = "synthetic_data"
     dataset_name_prefix = f"pandora_demo_1019_fix"
@@ -57,18 +69,17 @@ def main():
     for dataset_name in dataset_names:
         if dataset_name in default_datasets:
             continue
-        dataset_builder.build_dataset(
-            training_type=training_type,
-            dataset_name=dataset_name,
-            num_data_entry_train=num_data_entry_train,
-            num_data_entry_test=num_data_entry_test,
-            ingest_data=False,
-        )
+        # dataset_builder.build_dataset(
+        #     training_type=training_type,
+        #     dataset_name=dataset_name,
+        #     num_data_entry_train=num_data_entry_train,
+        #     num_data_entry_test=num_data_entry_test,
+        #     ingest_data=False,
+        # )
 
     # Set args
     arg_list = job_runner.get_training_args(
-        task_name=task_name,
-        mode_type=model_type,
+        bert_model_type=bert_model_type,
         bert_base_model_name=bert_base_model_name,
         training_type=training_type,
         meta_data_types=meta_data_types,
@@ -88,6 +99,7 @@ def main():
             do_eval=True,
             do_predict=True,
         ))
+    arg_list.append("--overwrite_output_dir")
     resource_dir = os.path.join(Path.home(), "workspace", "resource")
 
     # Start training

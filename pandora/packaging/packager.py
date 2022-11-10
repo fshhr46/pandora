@@ -3,32 +3,28 @@ import json
 import pandora.tools.common as common
 import pathlib
 
-PACKAGE_DIR_NAME = "torchserve_package"
-
-# model dir files
-MODEL_FILE_NAME = "pytorch_model.bin"
-MODEL_CONFIG_FILE_NAME = "config.json"
-VOCAB_FILE_NAME = "vocab.txt"
-INDEX2NAME_FILE_NAME = "index_to_name.json"
-SERUP_CONF_FILE_NAME = "setup_config.json"
-
-MODEL_FILES_TO_COPY = [MODEL_FILE_NAME, MODEL_CONFIG_FILE_NAME,
-                       VOCAB_FILE_NAME, INDEX2NAME_FILE_NAME,
-                       SERUP_CONF_FILE_NAME]
-
-
-# handler and python files
-# PANDORA_DEPENDENCY = "pandora.zip"
-HANDLER_NAME = "handler.py"
-MODEL_NAME = "model.py"
-TOKENIZER_NAME = "tokenizer.py"
-INFERENCE_NAME = "inference.py"
-FEATURE_NAME = "feature.py"
-
-# torchserve related names
-REGISTER_SCRIPT_NAME = "register.sh"
-PACKAGE_SCRIPT_NAME = "package.sh"
-PACKAGING_DONE_FILE = "package.done"
+import pandora.tools.common as common
+from pandora.packaging.constants import (
+    PACKAGE_DIR_NAME,
+    REGISTER_SCRIPT_NAME,
+    FEATURE_NAME,
+    CONSTANT_NAME,
+    MODEL_FILES_TO_COPY,
+    PACKAGING_DONE_FILE,
+    MODEL_FILE_NAME,
+    HANDLER_NAME,
+    MODEL_CONFIG_FILE_NAME,
+    SERUP_CONF_FILE_NAME,
+    INDEX2NAME_FILE_NAME,
+    VOCAB_FILE_NAME,
+    BERT_MODEL_NAME,
+    CHAR_BERT_MODEL_NAME,
+    TOKENIZER_NAME,
+    INFERENCE_NAME,
+    CHARBERT_CHAR_VOCAB,
+    CHARBERT_TERM_VOCAB,
+    PACKAGE_SCRIPT_NAME,
+)
 
 
 def get_package_dir(model_dir: str):
@@ -36,7 +32,8 @@ def get_package_dir(model_dir: str):
 
 
 def done_packaging(model_dir: str):
-    done_file = os.path.join(get_package_dir(model_dir), PACKAGING_DONE_FILE)
+    done_file = os.path.join(get_package_dir(
+        model_dir), PACKAGING_DONE_FILE)
     return os.path.isfile(done_file)
 
 
@@ -63,13 +60,19 @@ class ModelPackager(object):
         # copy register.sh file
         common.copy_file(curr_dir, package_dir, REGISTER_SCRIPT_NAME)
 
-        # copy handler, model and tokenizer
+        # copy handler, model and tokenizer, and other python files
         # TODO: Make a list out of this
         common.copy_file(curr_dir, package_dir, HANDLER_NAME)
-        common.copy_file(curr_dir, package_dir, MODEL_NAME)
+        common.copy_file(curr_dir, package_dir, BERT_MODEL_NAME)
+        common.copy_file(curr_dir, package_dir, CHAR_BERT_MODEL_NAME)
         common.copy_file(curr_dir, package_dir, TOKENIZER_NAME)
         common.copy_file(curr_dir, package_dir, INFERENCE_NAME)
         common.copy_file(curr_dir, package_dir, FEATURE_NAME)
+        common.copy_file(curr_dir, package_dir, CONSTANT_NAME)
+
+        # copy char_bert vocab files
+        common.copy_file(curr_dir, package_dir, CHARBERT_CHAR_VOCAB)
+        common.copy_file(curr_dir, package_dir, CHARBERT_TERM_VOCAB)
 
         # copy pandora as dependency
         # pandora_dir = os.path.dirname(pandora.__file__)
@@ -95,8 +98,11 @@ class ModelPackager(object):
         extra_files = [
             MODEL_CONFIG_FILE_NAME, SERUP_CONF_FILE_NAME,
             INDEX2NAME_FILE_NAME, VOCAB_FILE_NAME,
-            MODEL_NAME, TOKENIZER_NAME,
-            INFERENCE_NAME, FEATURE_NAME]
+            BERT_MODEL_NAME, CHAR_BERT_MODEL_NAME,
+            TOKENIZER_NAME,
+            INFERENCE_NAME, FEATURE_NAME,
+            CONSTANT_NAME,
+            CHARBERT_CHAR_VOCAB, CHARBERT_TERM_VOCAB]
         return f'{" ".join(base_cmd)} {",".join(extra_files)}'
 
     def create_package_script(self, package_dir):

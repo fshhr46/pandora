@@ -10,13 +10,18 @@ from captum.attr import visualization
 from pandora.dataset.sentence_data import Dataset
 
 import pandora.packaging.inference as inference
+from pandora.packaging.model import BertBaseModelType
 import pandora.tools.test_utils as test_utils
 import pandora.service.keywords_job as keywords_job
 
 from pandora.tools.common import logger
 from pandora.callback.progressbar import ProgressBar
 from pandora.tools.common import init_logger
-from pandora.packaging.feature import TrainingType, MetadataType
+from pandora.packaging.feature import (
+    TrainingType,
+    MetadataType,
+    get_text_from_example,
+)
 
 device = test_utils.get_device()
 
@@ -47,11 +52,11 @@ def test_get_insights(
     json_objs = []
     for step, input_batch in enumerate(dataloader):
         input_batch = tuple(t.to(device) for t in input_batch)
-        input_batch_with_index = (
-            input_batch[0], input_batch[1], input_batch[2], [])
+        input_batch = (
+            input_batch[0], input_batch[1], input_batch[2])
         # TODO: Fix hard coded "sequence_classification"
         inferences = inference.run_inference(
-            input_batch=input_batch_with_index,
+            input_batch=input_batch,
             mode=test_utils.HANDLER_MODE,
             model=model)
         pred_results = inference.format_outputs(
@@ -66,7 +71,7 @@ def test_get_insights(
         insights = inference.run_get_insights(
             # configs
             mode=test_utils.HANDLER_MODE,
-            embedding_name="bert",
+            embedding_name=BertBaseModelType.bert,
             # model related
             model=model,
             tokenizer=tokenizer,
@@ -81,7 +86,11 @@ def test_get_insights(
 
             # Read baseline file data
             label = example.labels[0]
-            text = example.text
+            text = get_text_from_example(
+                example,
+                training_type,
+                meta_data_types,
+            )
 
             pred_online = pred_result["class"]
             probability = pred_result["probability"]
