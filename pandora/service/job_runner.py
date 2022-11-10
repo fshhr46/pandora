@@ -84,16 +84,8 @@ def get_training_args(
     max_seq_length = 128
     checkpoint_steps = 500
 
-    # if num_epochs is not passed, set num_epochs by training type
-    if num_epochs == 0:
-        if training_type == TrainingType.column_data:
-            num_epochs = 4
-        elif training_type == TrainingType.mixed_data:
-            num_epochs = 2
-        elif training_type == TrainingType.meta_data:
-            num_epochs = 10
-        else:
-            raise ValueError
+    if num_epochs <= 0:
+        raise ValueError(f"invalid num_epochs {num_epochs}")
 
     arg_list = [f"--bert_model_type={bert_model_type}",
                 f"--model_name_or_path={bert_base_model_name}",

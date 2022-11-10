@@ -67,12 +67,19 @@ class TrainingJob(object):
         )
 
     def __call__(self, *args, **kwds) -> None:
+
+        num_epochs = get_num_epochs(
+            self.training_type,
+            self.meta_data_types,
+            bert_model_type=self.bert_model_type,
+        )
         arg_list = job_runner.get_training_args(
             bert_model_type=self.bert_model_type,
             bert_base_model_name=self.bert_base_model_name,
             sample_size=self.sample_size,
             training_type=self.training_type,
             meta_data_types=self.meta_data_types,
+            num_epochs=num_epochs,
         )
 
         dir_args = [f"--data_dir={self.data_dir}",
@@ -99,6 +106,28 @@ class TrainingJob(object):
         datasets = [""]
         job_runner.train_eval_test(
             arg_list, resource_dir=resource_dir, datasets=datasets)
+
+
+def get_num_epochs(
+        training_type: TrainingType,
+        meta_data_types: List[str],
+        bert_model_type: BertBaseModelType):
+    # if num_epochs is not passed, set num_epochs by training type
+    if training_type == TrainingType.column_data:
+        num_epochs = 4
+    elif training_type == TrainingType.mixed_data:
+        num_epochs = 2
+    elif training_type == TrainingType.meta_data:
+        if bert_model_type == BertBaseModelType.char_bert and \
+            len(meta_data_types) == 1 and \
+                meta_data_types[0] == MetadataType.column_name:
+            num_epochs = 15
+        else:
+            num_epochs = 30
+    else:
+        raise ValueError
+    logger.info(f"num_epochs: {num_epochs}")
+    return num_epochs
 
 
 def start_training_job(

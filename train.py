@@ -8,6 +8,7 @@ import pandora.packaging.packager as packager
 from pandora.dataset.sentence_data import Dataset
 from pandora.packaging.feature import MetadataType, TrainingType
 from pandora.packaging.model import BertBaseModelType
+from pandora.service.training_job import get_num_epochs
 
 
 def main():
@@ -16,8 +17,10 @@ def main():
     resource_dir = os.path.join(home, "workspace", "resource")
     cache_dir = os.path.join(home, ".cache/torch/transformers")
 
+    bert_model_type = BertBaseModelType.char_bert
     bert_model_type = BertBaseModelType.bert
     bert_base_model_name = "bert-base-chinese"
+    bert_base_model_name = "char-bert"
     bert_base_model_name = "bert-base-uncased"
 
     # Build dataset
@@ -36,6 +39,14 @@ def main():
 
     # Setting num_epochs means choosing the default number based on training_type
     num_epochs = 0
+
+    # if num_epochs is not passed, set num_epochs by training type
+    if num_epochs == 0:
+        num_epochs = get_num_epochs(
+            training_type,
+            meta_data_types,
+            bert_model_type=bert_model_type,
+        )
 
     # dataset_name_prefix = "synthetic_data"
     dataset_name_prefix = f"pandora_demo_1019_fix"
@@ -88,7 +99,7 @@ def main():
             do_eval=True,
             do_predict=True,
         ))
-    # arg_list.append("--overwrite_output_dir")
+    arg_list.append("--overwrite_output_dir")
     resource_dir = os.path.join(Path.home(), "workspace", "resource")
 
     # Start training
