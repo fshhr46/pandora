@@ -457,8 +457,8 @@ def train(args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, 
                     logger.info(" ")
                     if args.local_rank == -1:
                         # Only evaluate when single GPU otherwise metrics may not average well
-                        evaluate(args, model, eval_dataset,
-                                 prefix=checkpoint_name)
+                        evaluate(args, bert_model_type, model, eval_dataset,
+                                 batch_collate_fn, prefix=checkpoint_name)
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     # Save model checkpoint
