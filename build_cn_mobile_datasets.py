@@ -180,7 +180,7 @@ if __name__ == '__main__':
         assert sync_resp.status_code == 200, sync_resp.text
     else:
         # raise
-        datasource_id = 189
+        datasource_id = 191
         datasource_name = database_name
 
     dataset = tag_table_columns(
@@ -191,7 +191,17 @@ if __name__ == '__main__':
         datasource_name=datasource_name,
         add_tagging=add_tagging,
     )
-    # poseidon_client.start_training("test_cn_mobile_data", dataset=dataset)
+
+    traning_data_type = "META_DATA"
+    metadata_types = ["COLUMN_NAME", "COLUMN_COMMENT"]
+    description = f"{traning_data_type} | {metadata_types}"
+    poseidon_client.start_training(
+        "cn_mobile_meta_mixed",
+        dataset=dataset,
+        traning_data_type=traning_data_type,
+        metadata_types=metadata_types,
+        description=description,
+    )
     # delete datasource
     # delete_resp = poseidon_client.delete_datasource(
     #     datasource_id=datasource_id)

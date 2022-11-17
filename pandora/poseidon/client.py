@@ -110,6 +110,7 @@ class PoseidonClient(object):
         traning_data_type="META_DATA",
         metadata_types=["COLUMN_COMMENT"],
         model_type="TAG",
+        description="",
     ):
         data = {
             "baseModelId": "1",
@@ -118,6 +119,7 @@ class PoseidonClient(object):
             "traningDataType": traning_data_type,
             "metadataTypes": metadata_types,
             "modelType": model_type,
+            "description": description,
         }
         return requests.post(
             self._get_url(f"gapi/recognition/training/job/initial"),
