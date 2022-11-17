@@ -214,7 +214,7 @@ def ingest_to_mysql(
         # create table
         cursor.execute(f"use {database_name}")
         columns_query = ", \n".join(
-            [f"{col} INT COMMENT '{column_name_2_comment[col]}'" for col in column_names])
+            [f"`{col}` INT COMMENT '{column_name_2_comment[col]}'" for col in column_names])
         sql = f'''CREATE TABLE {table_name} (\n{columns_query}\n)'''
         print(f"creating table with query:\n {sql}")
         cursor.execute(sql)
