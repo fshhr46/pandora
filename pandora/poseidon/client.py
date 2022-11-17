@@ -1,5 +1,8 @@
 import requests
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PoseidonClient(object):
@@ -120,6 +123,133 @@ class PoseidonClient(object):
             self._get_url(f"gapi/recognition/training/job/initial"),
             data=json.dumps(data),
             headers=self._get_headers())
+
+
+def create_tags(
+        labels,
+        existing_tags,
+        host="10.0.1.48",
+        port="33039",
+        user="root",
+        password="Sudodata-123"):
+
+    import mysql.connector
+    connection = mysql.connector.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+    )
+    cursor = connection.cursor()
+    cursor.execute(f"use governance")
+    records_to_insert = []
+    for label in labels:
+        if label in existing_tags:
+            continue
+        record = [None, 1665944320972756876,
+                  1665944320972756876, None, label, "true", label, 1]
+        records_to_insert.append(record)
+
+    if records_to_insert:
+        values_template = ", ".join(["%s"] * 8)
+        mySql_insert_query = f"INSERT INTO tag VALUES({values_template})"
+        cursor.executemany(mySql_insert_query, records_to_insert)
+        connection.commit()
+
+
+def tag_table_columns(
+        poseidon_client,
+        tables_data,
+        tag_name_to_obj,
+        datasource_id,
+        datasource_name,
+        add_tagging=False):
+
+    dataset_tags = {}
+    dataset_tags_data = {}
+
+    # list databases - should have only 1
+    list_dbs_resp = poseidon_client.list_databases(datasource_id=datasource_id)
+    assert list_dbs_resp.status_code == 200, list_dbs_resp.text
+    list_dbs_resp_obj = json.loads(list_dbs_resp.text)
+    assert len(list_dbs_resp_obj["assets"]) == 1
+    db_id = list_dbs_resp_obj["assets"][0]["id"]
+    db_name = list_dbs_resp_obj["assets"][0]["name"]
+
+    # list tables in the DB, should have 78
+    list_tables_resp = poseidon_client.list_tables(
+        datasource_id=datasource_id, db_name=db_name)
+    assert list_tables_resp.status_code == 200, list_tables_resp.text
+    list_tables_resp_obj = json.loads(list_tables_resp.text)
+    assert len(list_tables_resp_obj["assets"]) == len(tables_data), len(
+        list_tables_resp_obj["assets"])
+
+    for asset in list_tables_resp_obj["assets"]:
+        table_asset_id = asset["id"]
+
+        table_name = asset["name"]
+        logger.info(f"tagging columns in table {table_name}")
+        table_data = tables_data[table_name]
+
+        # build column comment 2 column id
+        list_columns_resp = poseidon_client.list_columns(
+            asset_id=table_asset_id)
+        assert list_columns_resp.status_code == 200, list_columns_resp.text
+        list_columns_resp_obj = json.loads(list_columns_resp.text)
+
+        table_taggings = []
+        for column in list_columns_resp_obj["columns"]:
+            column_comment = column["comment"]
+            column_id = column["id"]
+            column_name = column["name"]
+            # column_obj = table_data[column_comment]
+
+            if column_name not in table_data:
+                raise ValueError(
+                    f"column {column_name} not in table_data {table_data}")
+            column_obj = table_data[column_name]
+            column_path = f"{datasource_name}/{db_name}/{table_name}/{column_name}"
+
+            col_labels = column_obj["label"]
+            logger.info(
+                f"===== tagging column_name {column_name}(column_comment: {column_comment}) with tags/labels {col_labels}")
+            # TODO: only support single label for now.
+            if len(col_labels) != 1:
+                raise ValueError(
+                    f"every column {column_name} should only have one label")
+
+            for label in col_labels:
+
+                tag_data = tag_name_to_obj[label]
+                tag_id = tag_data["id"]
+
+                # Create tags
+                if tag_id not in dataset_tags:
+                    dataset_tags[tag_id] = label
+                    dataset_tags_data[tag_id] = {
+                        "data": []
+                    }
+                dataset_tags_data[tag_id]["data"].append(
+                    {"id": column_id, "name": column_name, "path": column_path}
+                )
+
+                tag = {"key": label, "value": "true",
+                       "subjectId": column_id,
+                       "description": label,
+                       "subjectType": "COLUMN"}
+                table_taggings.append(tag)
+
+        if add_tagging:
+            poseidon_client.add_column_tags(tags=table_taggings)
+
+    tags_list = []
+    for tag_id, tag_key in dataset_tags.items():
+        tags_list.append({"id": tag_id, "key": tag_key})
+    dataset = {
+        "tags": tags_list,
+        "tagsData": dataset_tags_data
+    }
+    return dataset
 
 
 def get_client():

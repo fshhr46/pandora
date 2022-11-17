@@ -242,6 +242,52 @@ def ingest_to_mysql(
             print("MySQL connection is closed")
 
 
+def create_tables(
+        host,
+        port,
+        database_name,
+        tables_data):
+
+    # create database
+    create_database(
+        database_name=database_name,
+        host=host,
+        port=port,
+    )
+
+    for table_name, table_data in tables_data.items():
+        # table_name = table["meta_data"]["table_name"]
+
+        logger.info(f"creating table {table_name}")
+        column_names = []
+        column_name_2_comment = {}
+
+        for column_name, column_obj in table_data.items():
+            column_comment = column_obj["meta_data"]["column_comment"]
+
+            column_names.append(column_name)
+            column_name_2_comment[column_name] = column_comment
+
+        logger.info(f"===== creating table {table_name}")
+        logger.info(f"===== column_names\n {column_names}")
+        cleanup_table(
+            table_name=table_name,
+            database_name=database_name,
+            host=host,
+            port=port,
+        )
+        logger.warning(f"deleted table {table_name}")
+
+        ingest_to_mysql(
+            table_name=table_name,
+            database_name=database_name,
+            host=host,
+            port=port,
+            column_names=column_names,
+            column_name_2_comment=column_name_2_comment,
+            dataset=[])
+
+
 def create_database(
     database_name,
     host="10.0.1.178",
