@@ -109,7 +109,7 @@ def get_training_args(
                 f"--logging_steps={checkpoint_steps}",
                 f"--save_steps={checkpoint_steps}",
                 "--seed=42",
-                "--eval_all_checkpoints",
+                # "--eval_all_checkpoints",
                 # "--predict_all_checkpoints",
                 "--overwrite_cache",
                 # "--overwrite_output_dir",
