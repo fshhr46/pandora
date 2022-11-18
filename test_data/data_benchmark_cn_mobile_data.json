@@ -270,7 +270,7 @@
 {"text": "", "label": ["C1-3:消费信息和账单"], "meta_data": {"table_name": "TW_PERS_CSNM_M_0", "column_name": "vpmn_month_fee", "column_comment": "VPMN月租费", "data_type": "DECIMAL", "is_main_key": NaN}}
 {"text": "", "label": ["C1-3:消费信息和账单"], "meta_data": {"table_name": "TW_PERS_CSNM_M_0", "column_name": "mh_value_usr_ind", "column_comment": "中高价值客户标识", "data_type": "STRING", "is_main_key": NaN}}
 {"text": "", "label": ["A1-1:自然人身份标识"], "meta_data": {"table_name": "TW_PERS_REAL_NAME_INFO_D_0", "column_name": "usr_id", "column_comment": "用户编码", "data_type": "STRING", "is_main_key": 1.0}}
-{"text": "", "label": ["A1-2:自然人身份标识"], "meta_data": {"table_name": "TW_PERS_REAL_NAME_INFO_D_0", "column_name": "cust_id", "column_comment": "客户编码", "data_type": "STRING", "is_main_key": NaN}}
+{"text": "", "label": ["A1-1:自然人身份标识"], "meta_data": {"table_name": "TW_PERS_REAL_NAME_INFO_D_0", "column_name": "cust_id", "column_comment": "客户编码", "data_type": "STRING", "is_main_key": NaN}}
 {"text": "", "label": ["A1-2:网络身份标识"], "meta_data": {"table_name": "TW_PERS_REAL_NAME_INFO_D_0", "column_name": "usr_nbr", "column_comment": "用户号码", "data_type": "STRING", "is_main_key": NaN}}
 {"text": "", "label": ["A1-1:自然人身份标识"], "meta_data": {"table_name": "TW_PERS_REAL_NAME_INFO_D_0", "column_name": "usr_id_typ_cd", "column_comment": "使用人证件类型编码", "data_type": "STRING", "is_main_key": NaN}}
 {"text": "", "label": ["A1-1:自然人身份标识"], "meta_data": {"table_name": "TW_PERS_REAL_NAME_INFO_D_0", "column_name": "usr_id_nbr", "column_comment": "使用人证件号码", "data_type": "STRING", "is_main_key": NaN}}
