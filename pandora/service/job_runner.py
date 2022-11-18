@@ -77,10 +77,10 @@ def get_training_args(
     # optional parameters
     sample_size: int = 0,
     num_epochs: int = 0,
+    batch_size: int = 24,
 ) -> List[str]:
 
     # guidence: batch_size * max_seq_length in range[3000, 4000]
-    batch_size = 6
     max_seq_length = 128
     checkpoint_steps = 500
 

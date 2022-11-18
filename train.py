@@ -8,7 +8,7 @@ import pandora.packaging.packager as packager
 from pandora.dataset.sentence_data import Dataset
 from pandora.packaging.feature import MetadataType, TrainingType
 from pandora.packaging.model import BertBaseModelType
-from pandora.service.training_job import get_num_epochs
+from pandora.service.training_job import get_num_epochs, get_batch_size
 
 
 def main():
@@ -43,6 +43,14 @@ def main():
     # if num_epochs is not passed, set num_epochs by training type
     if num_epochs == 0:
         num_epochs = get_num_epochs(
+            training_type,
+            meta_data_types,
+            bert_model_type=bert_model_type,
+        )
+
+    batch_size = 0
+    if batch_size == 0:
+        batch_size = get_batch_size(
             training_type,
             meta_data_types,
             bert_model_type=bert_model_type,
@@ -84,6 +92,7 @@ def main():
         training_type=training_type,
         meta_data_types=meta_data_types,
         num_epochs=num_epochs,
+        batch_size=batch_size,
     )
 
     arg_list.extend(

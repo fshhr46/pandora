@@ -92,11 +92,26 @@ def load_model(device, datasets, model_package_dir, training_type, meta_data_typ
 
     bert_model_type = "bert"
     bert_base_model_name = "bert-base-chinese"
+
+    num_epochs = get_num_epochs(
+        training_type,
+        meta_data_types,
+        bert_model_type=bert_model_type,
+    )
+
+    batch_size = get_batch_size(
+        training_type,
+        meta_data_types,
+        bert_model_type=bert_model_type,
+    )
+
     arg_list = job_runner.get_training_args(
         bert_model_type=bert_model_type,
         bert_base_model_name=bert_base_model_name,
         training_type=training_type,
         meta_data_types=meta_data_types,
+        num_epochs=num_epochs,
+        batch_size=batch_size,
     )
 
     arg_list.extend(

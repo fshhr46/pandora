@@ -73,6 +73,13 @@ class TrainingJob(object):
             self.meta_data_types,
             bert_model_type=self.bert_model_type,
         )
+
+        batch_size = get_batch_size(
+            self.training_type,
+            self.meta_data_types,
+            bert_model_type=self.bert_model_type,
+        )
+
         arg_list = job_runner.get_training_args(
             bert_model_type=self.bert_model_type,
             bert_base_model_name=self.bert_base_model_name,
@@ -80,6 +87,7 @@ class TrainingJob(object):
             training_type=self.training_type,
             meta_data_types=self.meta_data_types,
             num_epochs=num_epochs,
+            batch_size=batch_size,
         )
 
         dir_args = [f"--data_dir={self.data_dir}",
@@ -128,6 +136,28 @@ def get_num_epochs(
         raise ValueError
     logger.info(f"num_epochs: {num_epochs}")
     return num_epochs
+
+
+def get_batch_size(
+        training_type: TrainingType,
+        meta_data_types: List[str],
+        bert_model_type: BertBaseModelType):
+    # if num_epochs is not passed, set num_epochs by training type
+    if training_type == TrainingType.column_data:
+        batch_size = 24
+    elif training_type == TrainingType.mixed_data:
+        batch_size = 24
+    elif training_type == TrainingType.meta_data:
+        if bert_model_type == BertBaseModelType.char_bert and \
+            len(meta_data_types) == 1 and \
+                meta_data_types[0] == MetadataType.column_name:
+            batch_size = 6
+        else:
+            batch_size = 24
+    else:
+        raise ValueError
+    logger.info(f"batch_size: {batch_size}")
+    return batch_size
 
 
 def start_training_job(
