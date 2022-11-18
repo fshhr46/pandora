@@ -5,7 +5,11 @@ from pathlib import Path
 import pandas as pd
 import logging
 
-from pandora.tools.test_utils import create_tables
+from pandora.tools.test_utils import (
+    create_tables,
+    get_test_data_dir,
+)
+
 from pandora.poseidon.client import (
     get_client,
     create_tags,
@@ -94,7 +98,9 @@ def load_data(file_path):
         tables_data[table_name] = table_data
         all_labels.update(table_labels)
 
-    with open("test_data/data_benchmark_cn_mobile_data.json", "w") as f_out:
+    data_json_path = os.path.join(
+        get_test_data_dir(), "data_benchmark_cn_mobile_data.json")
+    with open(data_json_path, "w") as f_out:
         # break large table into smaller ones
         tables_data_batch = {}
         for table_name, table_data in tables_data.items():
@@ -115,16 +121,20 @@ def load_data(file_path):
                     f_out.write("\n")
                 batch_num += 1
     label_list = sorted(list(all_labels))
-    json.dump(label_list, open(
-        "test_data/data_benchmark_cn_mobile_labels.json", "w"), indent=4, ensure_ascii=False)
+    labels_file = os.path.join(
+        get_test_data_dir(), "data_benchmark_cn_mobile_labels.json"
+    )
+    json.dump(label_list, open(labels_file, "w"), indent=4, ensure_ascii=False)
     return tables_data_batch, label_list
 
 
 if __name__ == '__main__':
     run_create_tables = False
     add_tagging = False
-    tables_data, labels = load_data(
-        "./test_data/data_benchmark_cn_mobile.xlsx")
+    raw_data_file = os.path.join(
+        get_test_data_dir(), "data_benchmark_cn_mobile.xlsx"
+    )
+    tables_data, labels = load_data(raw_data_file)
 
     # create tags
     list_tags_resp = poseidon_client.list_tags()

@@ -3,7 +3,11 @@ import os
 from pathlib import Path
 import logging
 
-from pandora.tools.test_utils import create_tables
+import pandora
+from pandora.tools.test_utils import (
+    create_tables,
+    get_test_data_dir,
+)
 from pandora.poseidon.client import (
     get_client,
     create_tags,
@@ -47,7 +51,7 @@ def is_valid_column_name(column_name):
 def load_raw_translations():
     home = str(Path.home())
     comment_translations = os.path.join(
-        home, "Documents/GitHub/pandora/test_data/translations.json")
+        get_test_data_dir(), "translations.json")
     translated_column_comments = json.load(open(comment_translations))
 
     return translated_column_comments
@@ -69,7 +73,9 @@ def load_data(
     duplicated_columns_cn = {}
 
     translated_column_comments = load_raw_translations()
-    with open("test_data/data_benchmark_gov_data.json", "w") as f_out:
+    data_json_path = os.path.join(
+        get_test_data_dir(), "data_benchmark_gov_data.json")
+    with open(data_json_path, "w") as f_out:
         with open(file_path) as f:
             for line in f.readlines():
                 obj = json.loads(line.strip())
@@ -146,12 +152,17 @@ def load_data(
                 json.dump(obj, f_out, ensure_ascii=False)
                 f_out.write("\n")
 
-    # json.dump(tables_data, open(
-    #     "test_data/tables_data.json", "w"), indent=4, ensure_ascii=False)
+    # tables_data_file = os.path.join(
+    #     get_test_data_dir(), "tables_data.json"
+    # )
+    # json.dump(tables_data, open(tables_data_file, "w"),
+    #           indent=4, ensure_ascii=False)
 
     label_list = sorted(list(all_labels))
+    label_json_path = os.path.join(
+        get_test_data_dir(), "data_benchmark_gov_labels.json")
     json.dump(label_list, open(
-        "test_data/data_benchmark_gov_labels.json", "w"), indent=4, ensure_ascii=False)
+        label_json_path, "w"), indent=4, ensure_ascii=False)
 
     # break large table into smaller ones
     tables_data_batch = {}
@@ -172,8 +183,11 @@ def load_data(
             batch_num += 1
 
     # if duplicated_columns_en:
+    #     duplicated_columns_en_file = os.path.join(
+    #         get_test_data_dir(), "duplicated_columns_en.json"
+    #     )
     #     json.dump(duplicated_columns_en, open(
-    #         "test_data/duplicated_columns_en.json", "w"), indent=4, ensure_ascii=False)
+    #         duplicated_columns_en_file, "w"), indent=4, ensure_ascii=False)
     #     raise ValueError(
     #         f"duplicated column translations:\n {json.dumps(duplicated_columns_en, indent=4, ensure_ascii=False)}")
 
@@ -201,8 +215,10 @@ def make_request(url: str, post: bool = False, data=None, headers=None):
 if __name__ == '__main__':
     run_create_tables = False
     add_tagging = False
-    tables_data, labels = load_data(
-        "test_data/data_benchmark_gov.json")
+    raw_data_file = os.path.join(
+        get_test_data_dir(), "data_benchmark_gov.json"
+    )
+    tables_data, labels = load_data(raw_data_file)
     # logger.info(json.dumps(tables, ensure_ascii=True, indent=4))
 
     # create tags

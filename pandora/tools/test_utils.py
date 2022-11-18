@@ -2,9 +2,11 @@ import torch
 import os
 import json
 import pathlib
+from pathlib import Path
 
 from torch.utils.data import DataLoader, SequentialSampler
 
+import pandora
 import pandora.tools.mps_utils as mps_utils
 import pandora.packaging.feature as feature
 import pandora.tools.runner_utils as runner_utils
@@ -355,3 +357,12 @@ def cleanup_table(
     except Exception as e:
         print(f"table {table_name} does not exists")
     connection.commit()
+
+
+def get_test_data_dir():
+    pandora_path = os.path.dirname(pandora.__file__)
+    pandora_work_dir = Path(pandora_path).parent.absolute()
+
+    test_data_dir = os.path.join(
+        pandora_work_dir, "test_data")
+    return test_data_dir
