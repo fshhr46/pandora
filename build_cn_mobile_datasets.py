@@ -193,10 +193,10 @@ if __name__ == '__main__':
     )
 
     traning_data_type = "META_DATA"
-    metadata_types = ["COLUMN_NAME", "COLUMN_COMMENT"]
-    description = f"{traning_data_type} | {metadata_types}"
+    metadata_types = ["COLUMN_NAME"]
+    description = f"{traning_data_type} | {metadata_types} | bert-base-uncased"
     poseidon_client.start_training(
-        "cn_mobile_meta_mixed",
+        "cn_mobile_meta_name",
         dataset=dataset,
         traning_data_type=traning_data_type,
         metadata_types=metadata_types,

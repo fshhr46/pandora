@@ -275,7 +275,16 @@ if __name__ == '__main__':
         datasource_name=datasource_name,
         add_tagging=add_tagging,
     )
-    # poseidon_client.start_training("test_gov_data", dataset=dataset)
+    traning_data_type = "META_DATA"
+    metadata_types = ["COLUMN_NAME"]
+    description = f"{traning_data_type} | {metadata_types} | bert-base-multilingual-uncased | batch_size=24"
+    poseidon_client.start_training(
+        "gov_meta_name",
+        dataset=dataset,
+        traning_data_type=traning_data_type,
+        metadata_types=metadata_types,
+        description=description,
+    )
     # delete datasource
     # delete_resp = poseidon_client.delete_datasource(
     #     datasource_id=datasource_id)
