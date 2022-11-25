@@ -33,12 +33,6 @@ class BertForSentence(BertPreTrainedModel):
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
         logits_p = self.classifier(pooled_output)
-        loss_fct = CrossEntropyLoss()
 
         outputs = (logits_p,) + outputs[2:]
-
-        # When label is not none, it means we are doing prediction
-        if labels is not None:
-            loss = loss_fct(logits_p, labels)
-            outputs = (loss,) + outputs
         return outputs

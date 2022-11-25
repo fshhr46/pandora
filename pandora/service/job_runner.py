@@ -12,6 +12,7 @@ from pandora.packaging.feature import (
     batch_collate_fn_char_bert,
     build_inputs_from_batch,
 )
+from pandora.packaging.losses import LossType
 import errno
 import argparse
 import json
@@ -410,6 +411,7 @@ def train(args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, 
 
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
+    loss_func = LossType.get_loss_func(LossType.x_ent)
     # Added here for reproductibility (even between python 2 and 3)
     common_utils.seed_everything(args.seed)
     for _ in range(int(args.num_train_epochs)):
@@ -424,9 +426,9 @@ def train(args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, 
             include_char_data = bert_model_type == BertBaseModelType.char_bert
             inputs = build_inputs_from_batch(
                 batch=batch, include_labels=True, include_char_data=include_char_data)
-            outputs = model(**inputs)
+            logits = model(**inputs)[0]
+            loss = loss_func.forward(logits, inputs["labels"])
             # model outputs are always tuple in pytorch-transformers (see doc)
-            loss = outputs[0]
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
@@ -504,6 +506,7 @@ def evaluate(args, bert_model_type, model, eval_dataset, batch_collate_fn, prefi
     nb_eval_steps = 0
     pbar = ProgressBar(n_total=len(eval_dataloader), desc="Evaluating")
 
+    loss_func = LossType.get_loss_func(LossType.x_ent)
     for step, batch in enumerate(eval_dataloader):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
@@ -512,15 +515,15 @@ def evaluate(args, bert_model_type, model, eval_dataset, batch_collate_fn, prefi
             include_char_data = bert_model_type == BertBaseModelType.char_bert
             inputs = build_inputs_from_batch(
                 batch=batch, include_labels=True, include_char_data=include_char_data)
-            outputs = model(**inputs)
-            tmp_eval_loss, logits = outputs[:2]
+            logits = model(**inputs)[0]
+            tmp_eval_loss = loss_func.forward(logits, inputs["labels"])
             if args.n_gpu > 1:
                 # mean() to average on multi-gpu parallel evaluating
                 tmp_eval_loss = tmp_eval_loss.mean()
             eval_loss += tmp_eval_loss.item()
         nb_eval_steps += 1
-        preds = np.argmax(logits.cpu().numpy(), axis=1).tolist()
-        out_label_ids = inputs['labels'].cpu().numpy().tolist()
+        # preds = np.argmax(logits.numpy(), axis=1).tolist()
+        # out_label_ids = inputs['labels'].numpy().tolist()
         pbar(step)
     logger.info(' ')
     eval_loss = eval_loss / nb_eval_steps
