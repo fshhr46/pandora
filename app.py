@@ -7,7 +7,7 @@ import json
 import pathlib
 import traceback
 
-from pandora.packaging.feature import TrainingType
+from pandora.packaging.losses import LossType
 from pandora.service.job_utils import DATASET_FILE_NAME, JobType
 
 from pandora.tools.common import logger
@@ -177,6 +177,10 @@ def start_training():
     sample_size = request.args.get("sample_size", default=0, type=int)
     logging.info(f"sample_size is {sample_size}")
 
+    loss_type = request.args.get(
+        "loss_type", default=LossType.x_ent, type=str)
+    logging.info(f"loss_type is {loss_type}")
+
     active_training_jobs = training_job.list_training_jobs()
     has_resource, msg = server.has_enough_resource(len(active_training_jobs))
     if not has_resource:
@@ -188,7 +192,8 @@ def start_training():
         job_id=job_id,
         server_dir=server.output_dir,
         cache_dir=server.cache_dir,
-        sample_size=sample_size)
+        sample_size=sample_size,
+        loss_type=loss_type)
     output = {
         "success": success,
         "message": message

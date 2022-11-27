@@ -21,6 +21,7 @@ from pandora.packaging.feature import (
     MetadataType,
 )
 from pandora.packaging.model import BertBaseModelType
+from pandora.packaging.losses import LossType
 
 REPORT_DIR_NAME = "predict"
 logger = logging.getLogger(__name__)
@@ -49,7 +50,8 @@ class TrainingJob(object):
                  cache_dir,
                  sample_size: int,
                  training_type: TrainingType,
-                 meta_data_types: List[str]) -> None:
+                 meta_data_types: List[str],
+                 loss_type: LossType) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
         self.output_dir = output_dir
@@ -65,6 +67,7 @@ class TrainingJob(object):
             self.training_type,
             self.meta_data_types,
         )
+        self.loss_type = loss_type
 
     def __call__(self, *args, **kwds) -> None:
 
@@ -123,7 +126,8 @@ def start_training_job(
         job_id: str,
         server_dir,
         cache_dir,
-        sample_size: int) -> Tuple[bool, str]:
+        sample_size: int,
+        loss_type) -> Tuple[bool, str]:
     # partitioned data locates in job/datasets/{train|dev|test}.json
     output_dir = job_utils.get_job_output_dir(
         server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
@@ -152,7 +156,8 @@ def start_training_job(
         cache_dir=cache_dir,
         sample_size=sample_size,
         training_type=training_type,
-        meta_data_types=meta_data_types)
+        meta_data_types=meta_data_types,
+        loss_type=loss_type)
     mp.set_start_method("spawn", force=True)
     job_process = mp.Process(
         name=job_utils.get_job_folder_name_by_id(
