@@ -233,8 +233,10 @@ def captum_sequence_forward(input_ids_batch, attention_mask_batch, token_type_id
     Returns:
         list: Prediction Outcome
     """
-    input_batch = (input_ids_batch, attention_mask_batch,
-                   token_type_ids_batch, indexes)
+    input_batch = {"input_ids": input_ids_batch,
+                   "attention_mask": attention_mask_batch,
+                   "token_type_ids": token_type_ids_batch,
+                   }
     inferences = run_inference(input_batch, mode, model)
     return torch.stack(inferences)
 

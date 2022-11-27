@@ -10,7 +10,6 @@ import psutil
 import os
 import argparse
 import tempfile
-import shutil
 from pandora.packaging.feature import TrainingType
 from pandora.service.job_utils import JobType
 
