@@ -71,11 +71,13 @@ def get_model_path(bert_base_model_name, cache_dir):
 
 
 def get_training_args(
+    # model parameters
     bert_model_type: BertBaseModelType,
     bert_base_model_name,
     training_type: TrainingType,
     meta_data_types: List[str],
-    # optional parameters
+    loss_type: LossType,
+    # training parameters
     sample_size: int = 0,
     num_epochs: int = 0,
     batch_size: int = 24,
@@ -91,7 +93,7 @@ def get_training_args(
     arg_list = [f"--bert_model_type={bert_model_type}",
                 f"--model_name_or_path={bert_base_model_name}",
                 "--do_lower_case",
-                "--loss_type=ce",
+                f"--loss_type={loss_type}",
 
                 # Original values: train_max_seq_length=128 and eval_max_seq_length=512
                 # Now setting to the same
@@ -197,6 +199,11 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     args, config, tokenizer, model, model_classes = setup(
         args=args, processor=processor)
     config_class, model_class, tokenizer_class = model_classes
+
+    # save the training args to a json
+    with open(os.path.join(args.output_dir, "training_args.json"), "w") as f:
+        argparse_dict = vars(args)
+        json.dump(argparse_dict, f, indent=4)
 
     # create torchserve config file
     create_setup_config_file(
@@ -411,7 +418,7 @@ def train(args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, 
 
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
-    loss_func = LossType.get_loss_func(LossType.x_ent)
+    loss_func = LossType.get_loss_func(args.loss_type)
     # Added here for reproductibility (even between python 2 and 3)
     common_utils.seed_everything(args.seed)
     for _ in range(int(args.num_train_epochs)):
@@ -506,7 +513,7 @@ def evaluate(args, bert_model_type, model, eval_dataset, batch_collate_fn, prefi
     nb_eval_steps = 0
     pbar = ProgressBar(n_total=len(eval_dataloader), desc="Evaluating")
 
-    loss_func = LossType.get_loss_func(LossType.x_ent)
+    loss_func = LossType.get_loss_func(args.loss_type)
     for step, batch in enumerate(eval_dataloader):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)
@@ -613,40 +620,46 @@ def get_args_parser():
                         ],
                         help="Meta data types selected")
 
-    # Other parameters
-    parser.add_argument('--markup', default='bios',
-                        type=str, choices=['bios', 'bio'])
-    parser.add_argument('--loss_type', default='ce',
-                        type=str, choices=['lsr', 'focal', 'ce'])
-    parser.add_argument("--labels", default="", type=str,
-                        help="Path to a file containing all labels. If not specified, CoNLL-2003 labels are used.", )
+    # Model related parameters
+    parser.add_argument("--do_lower_case", action="store_true",
+                        help="Set this flag if you are using an uncased model.")
+    parser.add_argument('--loss_type', default=LossType.x_ent,
+                        type=str,
+                        choices=[
+                            LossType.x_ent,
+                            LossType.focal_loss,
+                            LossType.lsm_x_ent,
+                        ])
     parser.add_argument("--config_name", default="", type=str,
                         help="Pretrained config name or path if not the same as model_name")
     parser.add_argument("--tokenizer_name", default="", type=str,
                         help="Pretrained tokenizer name or path if not the same as model_name", )
     parser.add_argument("--cache_dir", default="", type=str,
                         help="Where do you want to store the pre-trained models downloaded from s3", )
+
+    # training related configs
     parser.add_argument("--train_max_seq_length", default=128, type=int,
                         help="The maximum total input sequence length after tokenization. Sequences longer "
                              "than this will be truncated, sequences shorter will be padded.", )
     parser.add_argument("--eval_max_seq_length", default=512, type=int,
                         help="The maximum total input sequence length after tokenization. Sequences longer "
                              "than this will be truncated, sequences shorter will be padded.", )
+    parser.add_argument("--per_gpu_train_batch_size", default=8,
+                        type=int, help="Batch size per GPU/CPU for training.")
+    parser.add_argument("--per_gpu_eval_batch_size", default=8,
+                        type=int, help="Batch size per GPU/CPU for evaluation.")
+
+    # Actions to execute: train, eval and test.
     parser.add_argument("--do_train", action="store_true",
                         help="Whether to run training.")
     parser.add_argument("--do_eval", action="store_true",
                         help="Whether to run eval on the dev set.")
     parser.add_argument("--do_predict", action="store_true",
                         help="Whether to run predictions on the test set.")
+
+    # Training hyper parameters to tune
     parser.add_argument("--evaluate_during_training", action="store_true",
                         help="Whether to run evaluation during training at each logging step.", )
-    parser.add_argument("--do_lower_case", action="store_true",
-                        help="Set this flag if you are using an uncased model.")
-
-    parser.add_argument("--per_gpu_train_batch_size", default=8,
-                        type=int, help="Batch size per GPU/CPU for training.")
-    parser.add_argument("--per_gpu_eval_batch_size", default=8,
-                        type=int, help="Batch size per GPU/CPU for evaluation.")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1,
                         help="Number of updates steps to accumulate before performing a backward/update pass.", )
     parser.add_argument("--learning_rate", default=5e-5,
@@ -662,6 +675,7 @@ def get_args_parser():
     parser.add_argument("--max_steps", default=-1, type=int,
                         help="If > 0: set total number of training steps to perform. Override num_train_epochs.", )
 
+    # Checkpointing related configs
     parser.add_argument("--warmup_steps", default=0, type=int,
                         help="Linear warmup over warmup_steps.")
     parser.add_argument("--logging_steps", type=int,
@@ -674,6 +688,8 @@ def get_args_parser():
                         help="Predict all checkpoints starting with the same prefix as model_name ending and ending with step number", )
     parser.add_argument("--predict_checkpoints", type=int, default=0,
                         help="predict checkpoints starting with the same prefix as model_name ending and ending with step number")
+
+    # miscellaneous configs
     parser.add_argument("--no_cuda", action="store_true",
                         help="Avoid using CUDA when available")
     parser.add_argument("--overwrite_output_dir", action="store_true",

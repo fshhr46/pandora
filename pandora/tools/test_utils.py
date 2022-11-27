@@ -10,6 +10,7 @@ import pandora
 import pandora.tools.mps_utils as mps_utils
 import pandora.packaging.feature as feature
 import pandora.tools.runner_utils as runner_utils
+import pandora.tools.training_utils as training_utils
 
 from pandora.tools.common import logger
 from pandora.packaging.feature import (
@@ -86,7 +87,7 @@ def get_test_data():
     return [json.dumps(line, ensure_ascii=False) for line in data]
 
 
-def load_model(device, datasets, model_package_dir, training_type, meta_data_types):
+def load_model_for_test(device, datasets, model_package_dir, training_type, meta_data_types, loss_type):
     import pandora.service.job_runner as job_runner
     home = str(pathlib.Path.home())
     resource_dir = os.path.join(home, "workspace", "resource")
@@ -95,23 +96,26 @@ def load_model(device, datasets, model_package_dir, training_type, meta_data_typ
     bert_model_type = "bert"
     bert_base_model_name = "bert-base-chinese"
 
-    num_epochs = get_num_epochs(
+    num_epochs = training_utils.get_num_epochs(
         training_type,
         meta_data_types,
         bert_model_type=bert_model_type,
     )
 
-    batch_size = get_batch_size(
+    batch_size = training_utils.get_batch_size(
         training_type,
         meta_data_types,
         bert_model_type=bert_model_type,
     )
 
     arg_list = job_runner.get_training_args(
+        # model args
         bert_model_type=bert_model_type,
         bert_base_model_name=bert_base_model_name,
         training_type=training_type,
         meta_data_types=meta_data_types,
+        loss_type=loss_type,
+        # training args
         num_epochs=num_epochs,
         batch_size=batch_size,
     )

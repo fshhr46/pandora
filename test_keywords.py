@@ -22,6 +22,7 @@ from pandora.packaging.feature import (
     MetadataType,
     get_text_from_example,
 )
+from pandora.packaging.losses import LossType
 
 device = test_utils.get_device()
 
@@ -37,12 +38,13 @@ def test_get_insights(
         output_dir=None,
         visualize_output=False):
 
-    _, local_rank, tokenizer, model, processor = test_utils.load_model(
+    _, local_rank, tokenizer, model, processor = test_utils.load_model_for_test(
         device,
         datasets,
         model_package_dir,
         training_type,
         meta_data_types,
+        loss_type=LossType.x_ent,
     )
 
     _, examples, dataloader, id2label, label2id = test_utils.load_dataset(

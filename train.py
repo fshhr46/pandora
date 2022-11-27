@@ -2,13 +2,14 @@ import os
 import shutil
 from pathlib import Path
 
+from pandora.packaging.losses import LossType
 import pandora.service.job_runner as job_runner
 import pandora.packaging.packager as packager
+import pandora.tools.training_utils as training_utils
 
 from pandora.dataset.sentence_data import Dataset
 from pandora.packaging.feature import MetadataType, TrainingType
 from pandora.packaging.model import BertBaseModelType
-from pandora.service.training_job import get_num_epochs, get_batch_size
 
 
 def main():
@@ -42,7 +43,7 @@ def main():
 
     # if num_epochs is not passed, set num_epochs by training type
     if num_epochs == 0:
-        num_epochs = get_num_epochs(
+        num_epochs = training_utils.get_num_epochs(
             training_type,
             meta_data_types,
             bert_model_type=bert_model_type,
@@ -50,7 +51,7 @@ def main():
 
     batch_size = 0
     if batch_size == 0:
-        batch_size = get_batch_size(
+        batch_size = training_utils.get_batch_size(
             training_type,
             meta_data_types,
             bert_model_type=bert_model_type,
@@ -87,10 +88,13 @@ def main():
 
     # Set args
     arg_list = job_runner.get_training_args(
+        # model args
         bert_model_type=bert_model_type,
         bert_base_model_name=bert_base_model_name,
         training_type=training_type,
         meta_data_types=meta_data_types,
+        loss_type=LossType.x_ent,
+        # training args
         num_epochs=num_epochs,
         batch_size=batch_size,
     )

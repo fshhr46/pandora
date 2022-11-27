@@ -10,6 +10,7 @@ import pandora.tools.test_utils as test_utils
 from pandora.tools.common import logger
 from pandora.callback.progressbar import ProgressBar
 from pandora.tools.common import init_logger
+from pandora.packaging.losses import LossType
 
 device = test_utils.get_device()
 
@@ -60,9 +61,21 @@ def test_online(lines):
     return incorrect
 
 
-def test_offline_train(lines, batch_size=100):
-    model_type, local_rank, tokenizer, model, processor = test_utils.load_model(
-        device)
+def test_offline_train(
+        lines,
+        datasets,
+        model_package_dir,
+        training_type,
+        meta_data_types,
+        batch_size=100):
+    model_type, local_rank, tokenizer, model, processor = test_utils.load_model_for_test(
+        device,
+        datasets,
+        model_package_dir,
+        training_type,
+        meta_data_types,
+        loss_type=LossType.x_ent
+    )
     dataset, _, _, id2label, _ = test_utils.load_dataset(
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
 
@@ -102,8 +115,21 @@ def test_offline_train(lines, batch_size=100):
     return incorrect
 
 
-def test_offline(lines, batch_size=20):
-    _, local_rank, tokenizer, model, processor = test_utils.load_model(device)
+def test_offline(
+        lines,
+        datasets,
+        model_package_dir,
+        training_type,
+        meta_data_types,
+        batch_size=20):
+    _, local_rank, tokenizer, model, processor = test_utils.load_model_for_test(
+        device,
+        datasets,
+        model_package_dir,
+        training_type,
+        meta_data_types,
+        loss_type=LossType.x_ent
+    )
     _, _, dataloader, id2label, _ = test_utils.load_dataset(
         local_rank, tokenizer, processor, lines, batch_size=batch_size)
     incorrect = 0
