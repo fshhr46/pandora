@@ -19,9 +19,6 @@ TRAINING_JOB_PREFIX = "PANDORA_TRAINING"
 KEYWORD_JOB_PREFIX = "PANDORA_KEYWORD"
 
 
-logger = logging.getLogger(__name__)
-
-
 class JobStatus(str, Enum):
     not_started = "not_started"
     running = "running"

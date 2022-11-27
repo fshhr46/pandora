@@ -24,7 +24,6 @@ from pandora.packaging.model import BertBaseModelType
 from pandora.packaging.losses import LossType
 
 REPORT_DIR_NAME = "predict"
-logger = logging.getLogger(__name__)
 
 
 class TrainingJob(object):

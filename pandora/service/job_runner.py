@@ -196,14 +196,9 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
         resource_dir=resource_dir,
         datasets=datasets)
 
-    args, config, tokenizer, model, model_classes = setup(
+    args, device, config, tokenizer, model, model_classes = setup(
         args=args, processor=processor)
     config_class, model_class, tokenizer_class = model_classes
-
-    # save the training args to a json
-    with open(os.path.join(args.output_dir, "training_args.json"), "w") as f:
-        argparse_dict = vars(args)
-        json.dump(argparse_dict, f, indent=4)
 
     # create torchserve config file
     create_setup_config_file(
@@ -227,7 +222,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     # Training
     if train_dataset:
         global_step, tr_loss = train(
-            args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn)
+            args, device, bert_model_type, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn)
         logger.info(" global_step = %s, average loss = %s",
                     global_step, tr_loss)
 
@@ -272,8 +267,8 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
             prefix = checkpoint.split(
                 '/')[-1] if checkpoint.find('checkpoint') != -1 else ""
             model = model_class.from_pretrained(checkpoint)
-            model.to(args.device)
-            result = evaluate(args, bert_model_type, model, eval_dataset,
+            model.to(device)
+            result = evaluate(args, device, bert_model_type, model, eval_dataset,
                               batch_collate_fn, prefix=prefix)
             if global_step:
                 result = {"{}_{}".format(
@@ -305,19 +300,19 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
                 '/')[-1] if checkpoint.find('checkpoint') != -1 else ""
             prefix = os.path.join("predict", prefix)
             model = model_class.from_pretrained(checkpoint)
-            model.to(args.device)
+            model.to(device)
 
             report_dir = os.path.join(args.output_dir, prefix)
             if not os.path.exists(report_dir) and args.local_rank in [-1, 0]:
                 os.makedirs(report_dir)
 
         predictions = predict(
+            device=device,
             bert_model_type=bert_model_type,
             model=model,
             id2label=args.id2label,
             test_dataset=test_dataset,
             local_rank=args.local_rank,
-            device=args.device,
             batch_collate_fn=batch_collate_fn,
             prefix=prefix
         )
@@ -332,7 +327,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     return args
 
 
-def train(args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn):
+def train(args, device, bert_model_type, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn):
     """ Train the model """
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(
@@ -429,7 +424,7 @@ def train(args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, 
                 steps_trained_in_current_epoch -= 1
                 continue
             model.train()
-            batch = tuple(t.to(args.device) for t in batch)
+            batch = tuple(t.to(device) for t in batch)
             include_char_data = bert_model_type == BertBaseModelType.char_bert
             inputs = build_inputs_from_batch(
                 batch=batch, include_labels=True, include_char_data=include_char_data)
@@ -490,12 +485,12 @@ def train(args, bert_model_type, train_dataset, eval_dataset, model, tokenizer, 
                     logger.info(
                         "Saving optimizer and scheduler states to %s", output_dir)
         logger.info(" ")
-        if 'cuda' in str(args.device):
+        if 'cuda' in str(device):
             torch.cuda.empty_cache()
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, bert_model_type, model, eval_dataset, batch_collate_fn, prefix=""):
+def evaluate(args, device, bert_model_type, model, eval_dataset, batch_collate_fn, prefix=""):
     eval_output_dir = os.path.join(args.output_dir, prefix)
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
@@ -516,9 +511,9 @@ def evaluate(args, bert_model_type, model, eval_dataset, batch_collate_fn, prefi
     loss_func = LossType.get_loss_func(args.loss_type)
     for step, batch in enumerate(eval_dataloader):
         model.eval()
-        batch = tuple(t.to(args.device) for t in batch)
+        batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
-            batch = tuple(t.to(args.device) for t in batch)
+            batch = tuple(t.to(device) for t in batch)
             include_char_data = bert_model_type == BertBaseModelType.char_bert
             inputs = build_inputs_from_batch(
                 batch=batch, include_labels=True, include_char_data=include_char_data)
@@ -545,12 +540,12 @@ def evaluate(args, bert_model_type, model, eval_dataset, batch_collate_fn, prefi
 
 
 def predict(
+        device,
         bert_model_type,
         model,
         id2label,
         test_dataset,
         local_rank,
-        device,
         batch_collate_fn,
         prefix="",
         batch_size=1):
@@ -752,7 +747,6 @@ def setup(args, processor):
         device = torch.device("cuda", args.local_rank)
         torch.distributed.init_process_group(backend="nccl")
         args.n_gpu = 1
-    args.device = device
     logger.warning(
         "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
         args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16, )
@@ -788,7 +782,11 @@ def setup(args, processor):
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
 
-    model.to(args.device)
+    model.to(device)
     logger.info(
-        f"\n========\nTraining/evaluation parameters {args}\n========\n")
-    return args, config, tokenizer, model, MODEL_CLASSES[args.bert_model_type]
+        f"\n========\nTraining/evaluation parameters:\n {args}\n========\n")
+    # save the training args to a json
+    with open(os.path.join(args.output_dir, "training_args.json"), "w") as f:
+        argparse_dict = vars(args)
+        json.dump(argparse_dict, f, indent=4)
+    return args, device, config, tokenizer, model, MODEL_CLASSES[args.bert_model_type]
