@@ -22,6 +22,7 @@ from pandora.poseidon.client import (
     get_client,
     create_tags,
     tag_table_columns,
+    classify_and_rate_table_columns,
 )
 
 
@@ -33,7 +34,10 @@ def generate_data(
         output_dir,
         generators,
         labels,
+        classification_class_paths,
+        classification_class_path_2_rating,
         column_name_2_label,
+        column_name_2_class_path,
         column_name_2_comment,
         is_test_data=False,
         ingest_data=False):
@@ -42,6 +46,20 @@ def generate_data(
     print(f"column_names_to_include is {column_names_to_include}")
     data_file = os.path.join(output_dir, f"{dataset_name}.json")
     dataset = []
+
+    def _add_classification_rating_data(out_line):
+        class_path = column_name_2_class_path.get(
+            column_name, "")
+        if not class_path:
+            return
+
+        assert class_path in classification_class_paths, f"class_path {class_path} not found"
+        rating_name = classification_class_path_2_rating.get(
+            class_path, "")
+        if class_path:
+            out_line["meta_data"]["class_path"] = class_path
+        if rating_name:
+            out_line["meta_data"]["rating_name"] = rating_name
 
     with open(os.path.join(output_dir, f"{dataset_name}_data_table.json"), "w") as table_fr:
         with open(data_file, "w") as raw_data_fr:
@@ -65,6 +83,7 @@ def generate_data(
 
                         # Handle non-meta_data use case. Write data entries
                         if training_type != TrainingType.meta_data:
+
                             column_comment = column_name_2_comment[column_name]
                             column_description = column_comment
                             # Write training data
@@ -77,6 +96,7 @@ def generate_data(
                                     "column_description": column_description,
                                 }
                             }
+                            _add_classification_rating_data(out_line)
                             json.dump(out_line, raw_data_fr,
                                       ensure_ascii=False)
                             raw_data_fr.write("\n")
@@ -109,6 +129,7 @@ def generate_data(
                         "column_description": column_description,
                     }
                 }
+                _add_classification_rating_data(out_line)
                 json.dump(out_line, raw_data_fr,
                           ensure_ascii=False)
                 raw_data_fr.write("\n")
@@ -204,9 +225,14 @@ def build_dataset(
         training_type,
         dataset_name=table_name_train,
         database_name=database_name,
-        num_data_entry=num_data_entry_train, output_dir=output_dir,
-        generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
+        num_data_entry=num_data_entry_train,
+        output_dir=output_dir,
+        generators=configs.DATA_GENERATORS,
+        labels=configs.CLASSIFICATION_LABELS,
+        classification_class_paths=configs.CLASSIFICATION_CLASS_PATHS,
+        classification_class_path_2_rating=configs.CLASSIFICATION_CLASS_PATH_2_RATING,
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TRAIN,
+        column_name_2_class_path=configs.CLASSIFICATION_RATING_COLUMN_2_CLASSPATH__TRAIN,
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
         is_test_data=False,
         ingest_data=ingest_data)
@@ -222,13 +248,18 @@ def build_dataset(
         training_type,
         dataset_name=table_name_test_1,
         database_name=database_name,
-        num_data_entry=num_data_entry_test, output_dir=output_dir,
-        generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
+        num_data_entry=num_data_entry_test,
+        output_dir=output_dir,
+        generators=configs.DATA_GENERATORS,
+        labels=configs.CLASSIFICATION_LABELS,
+        classification_class_paths=[],
+        classification_class_path_2_rating={},
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST,
+        column_name_2_class_path={},
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
         is_test_data=False,
         ingest_data=ingest_data)
-    # tables_data[table_name_test_1] = load_one_table(data_file_test_1)
+    tables_data[table_name_test_1] = load_one_table(data_file_test_1)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
     data_partitions_test_1 = partition_data(training_type,
                                             output_dir, data_file=data_file_test_1,
@@ -240,13 +271,18 @@ def build_dataset(
         training_type,
         dataset_name=table_name_test_2,
         database_name=database_name,
-        num_data_entry=num_data_entry_test, output_dir=output_dir,
-        generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
+        num_data_entry=num_data_entry_test,
+        output_dir=output_dir,
+        generators=configs.DATA_GENERATORS,
+        labels=configs.CLASSIFICATION_LABELS,
+        classification_class_paths=[],
+        classification_class_path_2_rating={},
         column_name_2_label=configs.CLASSIFICATION_COLUMN_2_LABEL_ID_TEST,
+        column_name_2_class_path={},
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
         is_test_data=False,
         ingest_data=ingest_data)
-    # tables_data[table_name_test_2] = load_one_table(data_file_test_2)
+    tables_data[table_name_test_2] = load_one_table(data_file_test_2)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
     data_partitions_test_2 = partition_data(training_type,
                                             output_dir, data_file=data_file_test_2,
@@ -271,14 +307,18 @@ if __name__ == '__main__':
     database_name = dataset_name_prefix
 
     # Controls
-    run_create_tables = True
+    run_create_tables = False
     add_tagging = True
-    ingest_data = True
+    ingest_data = False
     host = "10.0.1.8"
+
+    training_type = TrainingType.mixed_data
+    metadata_types = []
+    metadata_types = ["COLUMN_NAME"]
 
     poseidon_client = get_client(host=host)
     tables_data = build_dataset(
-        TrainingType.meta_data,
+        training_type=training_type,
         database_name=database_name,
         dataset_name=dataset_name,
         num_data_entry_train=num_data_entry_train,
@@ -287,6 +327,7 @@ if __name__ == '__main__':
     )
 
     labels = [f"{label}_pdr_demo" for label in configs.CLASSIFICATION_LABELS]
+
     # create tags
     list_tags_resp = poseidon_client.list_tags()
     assert list_tags_resp.status_code == 200, list_tags_resp.text
@@ -304,8 +345,14 @@ if __name__ == '__main__':
         "tags"]}
 
     if run_create_tables:
+
         # create datasource
-        collection_id = 2518
+        if host == "10.0.1.8":
+            collection_id = 2518
+        elif host == "10.0.1.48":
+            collection_id = 4
+        else:
+            raise
         create_resp = poseidon_client.create_datasource(
             resource_name=database_name,
             collection_id=collection_id)
@@ -317,7 +364,13 @@ if __name__ == '__main__':
         datasource_name = response_create_obj["name"]
 
     else:
-        datasource_id = 528986
+        # create datasource
+        if host == "10.0.1.8":
+            datasource_id = 528996
+        elif host == "10.0.1.48":
+            datasource_id = 192
+        else:
+            raise
         datasource_name = database_name
 
     # metasync
@@ -326,11 +379,62 @@ if __name__ == '__main__':
     assert sync_resp.status_code == 200, sync_resp.text
 
     # Create taggings
-    dataset = tag_table_columns(
+    tag_dataset = tag_table_columns(
         poseidon_client=poseidon_client,
         tables_data=tables_data,
         tag_name_to_obj=tag_name_to_obj,
         datasource_id=datasource_id,
         datasource_name=datasource_name,
         add_tagging=add_tagging,
+        tables_names_to_tag=[f"{dataset_name}_train"]
     )
+    traning_data_type = training_type.upper()  # "COLUMN_DATA"
+    description = f"{traning_data_type} | {metadata_types} | bert-base-chinese"
+    train_resp = poseidon_client.start_training(
+        f"pandora_demo_{training_type}_1127",
+        dataset=tag_dataset,
+        model_type="TAG",
+        traning_data_type=traning_data_type,
+        metadata_types=metadata_types,
+        description=description,
+    )
+    assert train_resp.status_code == 200, train_resp.text
+
+    # 参考 JR/T 0197-2020 金融数据安全 数据安全分级指南
+    template_id = 3461
+
+    # {"ratingId": "2694", "classificationId": "9696", "subjectType": "COLUMN", "subjectId": "784843", "templateId": "3461"}
+    list_classifications_resp = poseidon_client.list_classifications(
+        template_id=template_id)
+    assert list_classifications_resp.status_code == 200, list_classifications_resp.text
+    class_path_to_obj = {class_obj["namePath"]: class_obj for class_obj in json.loads(list_classifications_resp.text)[
+        "classifications"]}
+
+    list_ratings_resp = poseidon_client.list_ratings(template_id=template_id)
+    assert list_ratings_resp.status_code == 200, list_ratings_resp.text
+    rating_name_to_obj = {rating_obj["name"]: rating_obj for rating_obj in json.loads(list_ratings_resp.text)[
+        "ratings"]}
+
+    class_rate_dataset = classify_and_rate_table_columns(
+        poseidon_client=poseidon_client,
+        template_id=template_id,
+        tables_data=tables_data,
+        class_path_to_obj=class_path_to_obj,
+        rating_name_to_obj=rating_name_to_obj,
+        datasource_id=datasource_id,
+        datasource_name=datasource_name,
+        add_tagging=add_tagging,
+        tables_names_to_tag=[f"{dataset_name}_train"]
+    )
+
+    traning_data_type = training_type.upper()  # "COLUMN_DATA"
+    description = f"{traning_data_type} | {metadata_types} | bert-base-chinese"
+    train_resp = poseidon_client.start_training(
+        f"pandora_demo_{training_type}_1127",
+        dataset=class_rate_dataset,
+        model_type="CLASSIFICATION",
+        traning_data_type=traning_data_type,
+        metadata_types=metadata_types,
+        description=description,
+    )
+    assert train_resp.status_code == 200, train_resp.text

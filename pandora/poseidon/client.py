@@ -76,6 +76,22 @@ class PoseidonClient(object):
             data=json.dumps(data),
             headers=self._get_headers())
 
+    # {"adds": [{"ratingId": "2694", "classificationId": "9696", "subjectType": "COLUMN", "subjectId": "784843", "templateId": "3461"}, {
+    #     "ratingId": "2694", "classificationId": "9683", "subjectType": "COLUMN", "subjectId": "784844", "templateId": "3461"}], "deletes": []}
+    def add_column_classification_ratings(self, classification_ratings):
+        data = {"adds": classification_ratings, "deletes": []}
+        return requests.post(
+            self._get_url(f"gapi/catalog/classification_ratings/bulk_update"),
+            data=json.dumps(data),
+            headers=self._get_headers())
+
+    def delete_column_classification_ratings(self, classification_ratings):
+        data = {"adds": [], "deletes": classification_ratings}
+        return requests.post(
+            self._get_url(f"gapi/catalog/classification_ratings/bulk_update"),
+            data=json.dumps(data),
+            headers=self._get_headers())
+
     def list_databases(self, datasource_id):
         return requests.get(
             self._get_url(
@@ -102,14 +118,29 @@ class PoseidonClient(object):
                 f"gapi/catalog/tags?paginator.notPaging=true&orderByUsedCount=true"),
             headers=self._get_headers())
 
+    # {"classifications": [{"id": "9335", "templateId": "3459", "name": "用户相关数据",
+    #                       "namePath": "/用户相关数据", "description": "", "children": [], "parentId":"0"}]}
+    def list_classifications(self, template_id):
+        return requests.get(
+            self._get_url(
+                f"gapi/scan/template/classification?templateId={template_id}"),
+            headers=self._get_headers())
+
+    # ratings response {"ratings":[{"id":"2690","templateId":"3459","name":"一级数据","description":"","priority":1}]}
+    def list_ratings(self, template_id):
+        return requests.get(
+            self._get_url(
+                f"gapi/scan/template/rating?templateId={template_id}"),
+            headers=self._get_headers())
+
     # ====== Training related APIs
     def start_training(
         self,
         model_name,
         dataset,
+        model_type,
         traning_data_type="META_DATA",
         metadata_types=["COLUMN_COMMENT"],
-        model_type="TAG",
         description="",
     ):
         data = {
@@ -165,7 +196,8 @@ def tag_table_columns(
         tag_name_to_obj,
         datasource_id,
         datasource_name,
-        add_tagging=False):
+        add_tagging=False,
+        tables_names_to_tag=[]):
 
     dataset_tags = {}
     dataset_tags_data = {}
@@ -190,6 +222,9 @@ def tag_table_columns(
         table_asset_id = asset["id"]
 
         table_name = asset["name"]
+        if tables_names_to_tag and table_name not in tables_names_to_tag:
+            logger.info(f"skip tagging table {table_name}")
+            continue
         logger.info(f"tagging columns in table {table_name}")
         table_data = tables_data[table_name]
 
@@ -242,12 +277,119 @@ def tag_table_columns(
                 table_taggings.append(tag)
 
         if add_tagging:
-            poseidon_client.add_column_tags(tags=table_taggings)
+            add_column_tags_resp = poseidon_client.add_column_tags(
+                tags=table_taggings)
+            assert add_column_tags_resp.status_code == 200, add_column_tags_resp.text
 
     tags_list = []
     for tag_id, tag_key in dataset_tags.items():
         tags_list.append({"id": tag_id, "key": tag_key})
     dataset = {
+        "tags": tags_list,
+        "tagsData": dataset_tags_data
+    }
+    return dataset
+
+
+def classify_and_rate_table_columns(
+        poseidon_client,
+        template_id,
+        tables_data,
+        class_path_to_obj,
+        rating_name_to_obj,
+        datasource_id,
+        datasource_name,
+        add_tagging=False,
+        tables_names_to_tag=[]):
+
+    dataset_tags = {}
+    dataset_tags_data = {}
+
+    # list databases - should have only 1
+    list_dbs_resp = poseidon_client.list_databases(datasource_id=datasource_id)
+    assert list_dbs_resp.status_code == 200, list_dbs_resp.text
+    list_dbs_resp_obj = json.loads(list_dbs_resp.text)
+    assert len(list_dbs_resp_obj["assets"]) == 1
+    db_id = list_dbs_resp_obj["assets"][0]["id"]
+    db_name = list_dbs_resp_obj["assets"][0]["name"]
+
+    # list tables in the DB, should have 78
+    list_tables_resp = poseidon_client.list_tables(
+        datasource_id=datasource_id, db_name=db_name)
+    assert list_tables_resp.status_code == 200, list_tables_resp.text
+    list_tables_resp_obj = json.loads(list_tables_resp.text)
+    assert len(list_tables_resp_obj["assets"]) == len(tables_data), len(
+        list_tables_resp_obj["assets"])
+
+    for asset in list_tables_resp_obj["assets"]:
+        table_asset_id = asset["id"]
+
+        table_name = asset["name"]
+        if tables_names_to_tag and table_name not in tables_names_to_tag:
+            logger.info(f"skip tagging table {table_name}")
+            continue
+        logger.info(f"tagging columns in table {table_name}")
+        table_data = tables_data[table_name]
+
+        # build column comment 2 column id
+        list_columns_resp = poseidon_client.list_columns(
+            asset_id=table_asset_id)
+        assert list_columns_resp.status_code == 200, list_columns_resp.text
+        list_columns_resp_obj = json.loads(list_columns_resp.text)
+
+        table_class_ratings = []
+        for column in list_columns_resp_obj["columns"]:
+            column_comment = column["comment"]
+            column_id = column["id"]
+            column_name = column["name"]
+
+            # column_obj = table_data[column_comment]
+
+            if column_name not in table_data:
+                raise ValueError(
+                    f"column {column_name} not in table_data {table_data}")
+            column_obj = table_data[column_name]
+            column_path = f"{datasource_name}/{db_name}/{table_name}/{column_name}"
+
+            col_meta_data = column_obj["meta_data"]
+            class_path = col_meta_data["class_path"]
+            rating_name = col_meta_data["rating_name"]
+
+            logger.info(
+                f"===== tagging column_name {column_name}(column_comment: {column_comment}) with class_path {class_path}")
+            class_data = class_path_to_obj[class_path]
+            rating_data = rating_name_to_obj[rating_name]
+            class_id = class_data["id"]
+            raiting_id = rating_data["id"]
+
+            # Create tags
+            if class_id not in dataset_tags:
+                dataset_tags[class_id] = class_path
+                dataset_tags_data[class_id] = {
+                    "data": []
+                }
+            dataset_tags_data[class_id]["data"].append(
+                {"id": column_id, "name": column_name, "path": column_path}
+            )
+
+            # class_rating = {"key": class_path, "value": "true",
+            #                 "subjectId": column_id,
+            #                 "description": class_path,
+            #                 "subjectType": "COLUMN"}
+            class_rating = {"ratingId": raiting_id, "classificationId": class_id,
+                            "subjectType": "COLUMN", "subjectId": column_id, "templateId": template_id}
+            table_class_ratings.append(class_rating)
+
+        if add_tagging:
+            add_column_classification_ratings_resp = poseidon_client.add_column_classification_ratings(
+                classification_ratings=table_class_ratings)
+            assert add_column_classification_ratings_resp.status_code == 200, add_column_classification_ratings_resp.text
+
+    tags_list = []
+    for tag_id, tag_key in dataset_tags.items():
+        tags_list.append({"id": tag_id, "key": tag_key})
+    dataset = {
+        "templateId": template_id,
         "tags": tags_list,
         "tagsData": dataset_tags_data
     }
