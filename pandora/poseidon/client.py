@@ -254,8 +254,8 @@ def tag_table_columns(
     return dataset
 
 
-def get_client():
-    return PoseidonClient(host="10.0.1.48", port="7758")
+def get_client(host="10.0.1.48", port="7758"):
+    return PoseidonClient(host=host, port=port)
 
 
 if __name__ == '__main__':

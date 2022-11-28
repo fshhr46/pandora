@@ -13,6 +13,17 @@ import pandora.dataset.dataset_utils as dataset_utils
 from pandora.packaging.feature import TrainingType
 import pandora.tools.test_utils as test_utils
 
+# import pandora.dataset.configs as configs
+import pandora.dataset.configs_demo as configs
+import pandora.dataset.configs_demo_2 as configs
+import pandora.dataset.configs_demo_3 as configs
+
+from pandora.poseidon.client import (
+    get_client,
+    create_tags,
+    tag_table_columns,
+)
+
 
 def generate_data(
         training_type,
@@ -130,7 +141,8 @@ def generate_data(
             port=port,
             column_names=column_names_to_include,
             column_name_2_comment=column_name_2_comment,
-            dataset=dataset)
+            dataset=dataset,
+            data_type="VARCHAR(100)")
     return data_file
 
 
@@ -155,6 +167,18 @@ def partition_data(training_type, output_dir, data_file, data_ratios, seed):
     return data_partitions
 
 
+def load_one_table(file_path):
+    table_data = {}
+    with open(file_path) as f:
+        for line in f.readlines():
+            column_obj = json.loads(line.strip())
+            column_name = column_obj["meta_data"]["column_name"]
+            column_obj["label"] = [
+                f"{label}_pdr_demo" for label in column_obj["label"]]
+            table_data[column_name] = column_obj
+    return table_data
+
+
 def build_dataset(
     training_type,
     database_name='pandora',
@@ -166,6 +190,7 @@ def build_dataset(
     # output_dir = os.path.join(
     #     pathlib.Path.home(), "workspace", "resource", "outputs", "bert-base-chinese", "synthetic_data", "datasets", "synthetic_data")
 
+    tables_data = {}
     output_dir = os.path.join(
         pathlib.Path.home(), "workspace", "resource", "datasets", dataset_name)
     print(f"dataset output_dir is {output_dir}")
@@ -174,13 +199,10 @@ def build_dataset(
     # Create train / eval data
     seed = 42
 
-    # import pandora.dataset.configs as configs
-    import pandora.dataset.configs_demo as configs
-    import pandora.dataset.configs_demo_2 as configs
-
+    table_name_train = f"{dataset_name}_train"
     data_file_train = generate_data(
         training_type,
-        dataset_name=f"{dataset_name}_train",
+        dataset_name=table_name_train,
         database_name=database_name,
         num_data_entry=num_data_entry_train, output_dir=output_dir,
         generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
@@ -188,15 +210,17 @@ def build_dataset(
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
         is_test_data=False,
         ingest_data=ingest_data)
+    tables_data[table_name_train] = load_one_table(data_file_train)
     data_ratios_train = {"train": 0.8, "dev": 0.2, "test": 0.0}
     data_partitions_train_dev = partition_data(training_type,
                                                output_dir, data_file=data_file_train,
                                                data_ratios=data_ratios_train, seed=seed)
 
     # Create test data
+    table_name_test_1 = f"{dataset_name}_test_1"
     data_file_test_1 = generate_data(
         training_type,
-        dataset_name=f"{dataset_name}_test_1",
+        dataset_name=table_name_test_1,
         database_name=database_name,
         num_data_entry=num_data_entry_test, output_dir=output_dir,
         generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
@@ -204,15 +228,17 @@ def build_dataset(
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
         is_test_data=False,
         ingest_data=ingest_data)
+    # tables_data[table_name_test_1] = load_one_table(data_file_test_1)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
     data_partitions_test_1 = partition_data(training_type,
                                             output_dir, data_file=data_file_test_1,
                                             data_ratios=data_ratios_test, seed=seed)
 
     # Create 2nd test data
+    table_name_test_2 = f"{dataset_name}_test_2"
     data_file_test_2 = generate_data(
         training_type,
-        dataset_name=f"{dataset_name}_test_2",
+        dataset_name=table_name_test_2,
         database_name=database_name,
         num_data_entry=num_data_entry_test, output_dir=output_dir,
         generators=configs.DATA_GENERATORS, labels=configs.CLASSIFICATION_LABELS,
@@ -220,6 +246,7 @@ def build_dataset(
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
         is_test_data=False,
         ingest_data=ingest_data)
+    # tables_data[table_name_test_2] = load_one_table(data_file_test_2)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
     data_partitions_test_2 = partition_data(training_type,
                                             output_dir, data_file=data_file_test_2,
@@ -233,20 +260,77 @@ def build_dataset(
     # dump output
     dataset_utils.write_partitions(
         data_partitions, output_dir)
+    return tables_data
 
 
 if __name__ == '__main__':
-    dataset_name_prefix = f"pandora_demo_1019"
+    dataset_name_prefix = f"pandora_demo_1127"
     num_data_entry_train = 100
-    num_data_entry_test = 100
+    num_data_entry_test = 10
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
-    database_name = 'pandora'
+    database_name = dataset_name_prefix
 
-    build_dataset(
+    # Controls
+    run_create_tables = True
+    add_tagging = True
+    ingest_data = True
+    host = "10.0.1.8"
+
+    poseidon_client = get_client(host=host)
+    tables_data = build_dataset(
         TrainingType.meta_data,
         database_name=database_name,
         dataset_name=dataset_name,
         num_data_entry_train=num_data_entry_train,
         num_data_entry_test=num_data_entry_test,
-        ingest_data=True,
+        ingest_data=ingest_data,
+    )
+
+    labels = [f"{label}_pdr_demo" for label in configs.CLASSIFICATION_LABELS]
+    # create tags
+    list_tags_resp = poseidon_client.list_tags()
+    assert list_tags_resp.status_code == 200, list_tags_resp.text
+    existing_tags = {tag["key"]: tag for tag in json.loads(list_tags_resp.text)[
+        "tags"]}
+
+    create_tags(
+        host=host,
+        labels=labels, existing_tags=existing_tags)
+
+    # Get updated tags
+    list_tags_resp = poseidon_client.list_tags()
+    assert list_tags_resp.status_code == 200, list_tags_resp.text
+    tag_name_to_obj = {tag["key"]: tag for tag in json.loads(list_tags_resp.text)[
+        "tags"]}
+
+    if run_create_tables:
+        # create datasource
+        collection_id = 2518
+        create_resp = poseidon_client.create_datasource(
+            resource_name=database_name,
+            collection_id=collection_id)
+        assert create_resp.status_code == 200, create_resp.text
+
+        # get datasource ID
+        response_create_obj = json.loads(create_resp.text)
+        datasource_id = response_create_obj["id"]
+        datasource_name = response_create_obj["name"]
+
+    else:
+        datasource_id = 528986
+        datasource_name = database_name
+
+    # metasync
+    sync_resp = poseidon_client.do_meta_sync(
+        datasource_id=datasource_id, path=database_name)
+    assert sync_resp.status_code == 200, sync_resp.text
+
+    # Create taggings
+    dataset = tag_table_columns(
+        poseidon_client=poseidon_client,
+        tables_data=tables_data,
+        tag_name_to_obj=tag_name_to_obj,
+        datasource_id=datasource_id,
+        datasource_name=datasource_name,
+        add_tagging=add_tagging,
     )
