@@ -42,11 +42,6 @@ def generate_data(
         is_test_data=False,
         ingest_data=False):
 
-    column_names_to_include = sorted(column_name_2_label.keys())
-    print(f"column_names_to_include is {column_names_to_include}")
-    data_file = os.path.join(output_dir, f"{dataset_name}.json")
-    dataset = []
-
     def _add_classification_rating_data(out_line):
         class_path = column_name_2_class_path.get(
             column_name, "")
@@ -61,6 +56,15 @@ def generate_data(
         if rating_name:
             out_line["meta_data"]["rating_name"] = rating_name
 
+    column_names_to_include = sorted(column_name_2_label.keys())
+    print(f"column_names_to_include is {column_names_to_include}")
+    data_file = os.path.join(output_dir, f"{dataset_name}.json")
+
+    # skip generating data
+    if not ingest_data:
+        return data_file
+
+    dataset = []
     with open(os.path.join(output_dir, f"{dataset_name}_data_table.json"), "w") as table_fr:
         with open(data_file, "w") as raw_data_fr:
             for _ in range(num_data_entry):
@@ -140,7 +144,7 @@ def generate_data(
     host = "10.0.1.178"
     port = "7733"
     # and then check the response...
-    if ingest_data and os.system("ping -c 1 " + host) == 0:
+    if os.system("ping -c 1 " + host) == 0:
         print("ingesting data to mysql")
         test_utils.create_database(
             database_name=database_name,
@@ -310,7 +314,7 @@ if __name__ == '__main__':
     run_create_tables = False
     add_tagging = True
     ingest_data = False
-    host = "10.0.1.8"
+    host = "10.0.1.48"
 
     training_type = TrainingType.mixed_data
     metadata_types = []
@@ -344,15 +348,19 @@ if __name__ == '__main__':
     tag_name_to_obj = {tag["key"]: tag for tag in json.loads(list_tags_resp.text)[
         "tags"]}
 
-    if run_create_tables:
+    # create datasource
+    if host == "10.0.1.8":
+        collection_id = 2518
+        datasource_id = 528996
+        template_id = 3461
+    elif host == "10.0.1.48":
+        collection_id = 4
+        datasource_id = 197
+        template_id = 5
+    else:
+        raise
 
-        # create datasource
-        if host == "10.0.1.8":
-            collection_id = 2518
-        elif host == "10.0.1.48":
-            collection_id = 4
-        else:
-            raise
+    if run_create_tables:
         create_resp = poseidon_client.create_datasource(
             resource_name=database_name,
             collection_id=collection_id)
@@ -364,13 +372,6 @@ if __name__ == '__main__':
         datasource_name = response_create_obj["name"]
 
     else:
-        # create datasource
-        if host == "10.0.1.8":
-            datasource_id = 528996
-        elif host == "10.0.1.48":
-            datasource_id = 192
-        else:
-            raise
         datasource_name = database_name
 
     # metasync
@@ -401,8 +402,6 @@ if __name__ == '__main__':
     assert train_resp.status_code == 200, train_resp.text
 
     # 参考 JR/T 0197-2020 金融数据安全 数据安全分级指南
-    template_id = 3461
-
     # {"ratingId": "2694", "classificationId": "9696", "subjectType": "COLUMN", "subjectId": "784843", "templateId": "3461"}
     list_classifications_resp = poseidon_client.list_classifications(
         template_id=template_id)

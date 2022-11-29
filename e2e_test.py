@@ -91,7 +91,7 @@ def prepare_job_data(training_type: str, job_id, job_type, file_path=None):
                 f"{get_url()}/ingest-dataset?id={job_id}&job_type={job_type}", post=True, json_data=dataset)["success"]
     else:
         assert make_request(
-            f"{get_url()}/testdata?id={job_id}&job_type={job_type}&file_name={training_type}.json", post=True)["success"]
+            f"{get_url()}/testdata?id={job_id}&job_type={job_type}&file_name={training_type}_new.json", post=True)["success"]
 
 
 def test_training_failed(training_type):
@@ -311,6 +311,7 @@ def test_keywords(training_type: str, model_name: str):
         f"{get_url()}/get-keywords?id={job_id}", post=False)
 
 
+# python3 e2e_test.py --host=5y72098x40.zicp.fun --port=38888 --management_port=38081 --command_port=38083 --model_store=/home/haoranhuang/torchserve/model-store --torchserve_host=5y72098x40.zicp.fun
 # python3 app.py --host=0.0.0.0 --port=38888 --log_level=DEBUG --log_dir=$HOME/pandora_outputs --output_dir=$HOME/pandora_outputs --data_dir=$HOME/workspace/resource/datasets/sentence --cache_dir=$HOME/.cache/torch/transformers
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
