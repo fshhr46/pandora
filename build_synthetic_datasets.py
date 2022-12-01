@@ -22,7 +22,6 @@ from pandora.poseidon.client import (
     get_client,
     create_tags,
     tag_table_columns,
-    classify_and_rate_table_columns,
 )
 
 
@@ -263,7 +262,7 @@ def build_dataset(
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
         is_test_data=False,
         ingest_data=ingest_data)
-    tables_data[table_name_test_1] = load_one_table(data_file_test_1)
+    # tables_data[table_name_test_1] = load_one_table(data_file_test_1)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
     data_partitions_test_1 = partition_data(training_type,
                                             output_dir, data_file=data_file_test_1,
@@ -286,7 +285,7 @@ def build_dataset(
         column_name_2_comment=configs.CLASSIFICATION_COLUMN_2_COMMENT,
         is_test_data=False,
         ingest_data=ingest_data)
-    tables_data[table_name_test_2] = load_one_table(data_file_test_2)
+    # tables_data[table_name_test_2] = load_one_table(data_file_test_2)
     data_ratios_test = {"train": 0.0, "dev": 0.0, "test": 1.0}
     data_partitions_test_2 = partition_data(training_type,
                                             output_dir, data_file=data_file_test_2,
@@ -311,18 +310,14 @@ if __name__ == '__main__':
     database_name = dataset_name_prefix
 
     # Controls
-    run_create_tables = False
+    run_create_tables = True
     add_tagging = True
-    ingest_data = False
-    host = "10.0.1.48"
-
-    training_type = TrainingType.mixed_data
-    metadata_types = []
-    metadata_types = ["COLUMN_NAME"]
+    ingest_data = True
+    host = "10.0.1.8"
 
     poseidon_client = get_client(host=host)
     tables_data = build_dataset(
-        training_type=training_type,
+        TrainingType.meta_data,
         database_name=database_name,
         dataset_name=dataset_name,
         num_data_entry_train=num_data_entry_train,
@@ -331,7 +326,6 @@ if __name__ == '__main__':
     )
 
     labels = [f"{label}_pdr_demo" for label in configs.CLASSIFICATION_LABELS]
-
     # create tags
     list_tags_resp = poseidon_client.list_tags()
     assert list_tags_resp.status_code == 200, list_tags_resp.text
@@ -348,19 +342,9 @@ if __name__ == '__main__':
     tag_name_to_obj = {tag["key"]: tag for tag in json.loads(list_tags_resp.text)[
         "tags"]}
 
-    # create datasource
-    if host == "10.0.1.8":
-        collection_id = 2518
-        datasource_id = 528996
-        template_id = 3461
-    elif host == "10.0.1.48":
-        collection_id = 4
-        datasource_id = 197
-        template_id = 5
-    else:
-        raise
-
     if run_create_tables:
+        # create datasource
+        collection_id = 2518
         create_resp = poseidon_client.create_datasource(
             resource_name=database_name,
             collection_id=collection_id)
@@ -372,6 +356,7 @@ if __name__ == '__main__':
         datasource_name = response_create_obj["name"]
 
     else:
+        datasource_id = 528986
         datasource_name = database_name
 
     # metasync
@@ -380,60 +365,12 @@ if __name__ == '__main__':
     assert sync_resp.status_code == 200, sync_resp.text
 
     # Create taggings
-    tag_dataset = tag_table_columns(
+    dataset = tag_table_columns(
         poseidon_client=poseidon_client,
         tables_data=tables_data,
         tag_name_to_obj=tag_name_to_obj,
         datasource_id=datasource_id,
         datasource_name=datasource_name,
         add_tagging=add_tagging,
-        tables_names_to_tag=[f"{dataset_name}_train"]
-    )
-    traning_data_type = training_type.upper()  # "COLUMN_DATA"
-    description = f"{traning_data_type} | {metadata_types} | bert-base-chinese"
-    train_resp = poseidon_client.start_training(
-        f"pandora_demo_{training_type}_1127",
-        dataset=tag_dataset,
-        model_type="TAG",
-        traning_data_type=traning_data_type,
-        metadata_types=metadata_types,
-        description=description,
-    )
-    assert train_resp.status_code == 200, train_resp.text
-
-    # 参考 JR/T 0197-2020 金融数据安全 数据安全分级指南
-    # {"ratingId": "2694", "classificationId": "9696", "subjectType": "COLUMN", "subjectId": "784843", "templateId": "3461"}
-    list_classifications_resp = poseidon_client.list_classifications(
-        template_id=template_id)
-    assert list_classifications_resp.status_code == 200, list_classifications_resp.text
-    class_path_to_obj = {class_obj["namePath"]: class_obj for class_obj in json.loads(list_classifications_resp.text)[
-        "classifications"]}
-
-    list_ratings_resp = poseidon_client.list_ratings(template_id=template_id)
-    assert list_ratings_resp.status_code == 200, list_ratings_resp.text
-    rating_name_to_obj = {rating_obj["name"]: rating_obj for rating_obj in json.loads(list_ratings_resp.text)[
-        "ratings"]}
-
-    class_rate_dataset = classify_and_rate_table_columns(
-        poseidon_client=poseidon_client,
-        template_id=template_id,
-        tables_data=tables_data,
-        class_path_to_obj=class_path_to_obj,
-        rating_name_to_obj=rating_name_to_obj,
-        datasource_id=datasource_id,
-        datasource_name=datasource_name,
-        add_tagging=add_tagging,
-        tables_names_to_tag=[f"{dataset_name}_train"]
-    )
-
-    traning_data_type = training_type.upper()  # "COLUMN_DATA"
-    description = f"{traning_data_type} | {metadata_types} | bert-base-chinese"
-    train_resp = poseidon_client.start_training(
-        f"pandora_demo_{training_type}_1127",
-        dataset=class_rate_dataset,
-        model_type="CLASSIFICATION",
-        traning_data_type=traning_data_type,
-        metadata_types=metadata_types,
-        description=description,
     )
     assert train_resp.status_code == 200, train_resp.text
