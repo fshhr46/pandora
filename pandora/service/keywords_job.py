@@ -153,6 +153,10 @@ def get_status(server_dir: str, job_id: str) -> JobStatus:
             return JobStatus.not_started
 
 
+def get_job_progress(server_dir: str, job_id: str) -> float:
+    return None
+
+
 def get_keywords(server_dir: str, job_id: str):
     keyword_file_path = get_keyword_file_path(server_dir, job_id)
     if os.path.isfile(keyword_file_path):

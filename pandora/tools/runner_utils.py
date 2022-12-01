@@ -12,6 +12,7 @@ import pandora.tools.report as report
 from pandora.tools.common import json_to_text
 
 
+import pandora.dataset.dataset_utils as dataset_utils
 from pandora.packaging.model import BertBaseModelType
 from pandora.packaging.feature import (
     convert_example_to_feature,
@@ -82,6 +83,7 @@ def prepare_data(args,
                  bert_model_type: BertBaseModelType):
     train_dataset = eval_dataset = test_dataset = None
     train_examples = eval_examples = test_examples = None
+    train_dist = eval_dist = test_dist = None
 
     # char bert setup
     if bert_model_type == BertBaseModelType.char_bert:
@@ -97,13 +99,17 @@ def prepare_data(args,
                 sample_size=args.sample_size)
         train_dataset, train_examples = load_and_cache_examples(
             args, tokenizer, data_type='train',  evaluate=False, processor=processor, char2ids_dict=char2ids_dict, sampler=sampler)
+        train_dist = dataset_utils.calculate_label_distribution(train_examples)
     if args.do_eval:
         eval_dataset, eval_examples = load_and_cache_examples(
             args, tokenizer, data_type='dev', evaluate=True, processor=processor, char2ids_dict=char2ids_dict)
+        eval_dist = dataset_utils.calculate_label_distribution(eval_examples)
 
     if args.do_predict:
         test_dataset, test_examples = load_and_cache_examples(
             args, tokenizer, data_type="test", evaluate=True, processor=processor, char2ids_dict=char2ids_dict)
+        test_dist = dataset_utils.calculate_label_distribution(test_examples)
+
     return {
         "datasets": {
             "train": train_dataset,
@@ -115,6 +121,11 @@ def prepare_data(args,
             "eval": eval_examples,
             "test": test_examples,
         },
+        "distributions": {
+            "train": train_dist,
+            "eval": eval_dist,
+            "test": test_dist,
+        }
     }
 
 

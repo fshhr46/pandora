@@ -3,6 +3,8 @@ import json
 from dataclasses import dataclass
 import os
 from typing import Dict, List
+import pandas as pd
+import numpy as np
 
 
 class DataEntryEncoder(json.JSONEncoder):
@@ -46,6 +48,17 @@ def split_dataset(all_samples, data_ratios, seed) -> Dict:
         "test": all_samples[num_train_samples + num_dev_samples:]
     }
     return data_partitions
+
+
+def calculate_label_distribution(samples):
+    label_records = []
+    for sample in samples:
+        label = sample.get_label()
+        label_records.append(label)
+    df = pd.DataFrame.from_records(
+        np.array(label_records, dtype=[('col_1', "U200")]))
+    distribution = df.groupby("col_1")["col_1"].count() / len(df)
+    return distribution.to_dict()
 
 
 def write_partitions(data_partitions, output_dir):

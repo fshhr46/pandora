@@ -103,7 +103,18 @@ def get_log_path(output_dir, job_type):
     return os.path.join(output_dir, f'{job_type}_job.log')
 
 
-# TODO: Unify this setup config with model config
+def get_loss_file_path(output_dir):
+    return os.path.join(output_dir, f'training_loss.log')
+
+
+def get_dataset_profile_path(output_dir):
+    return os.path.join(output_dir, f'dataset_profile.json')
+
+
+def get_training_args_file_path(output_dir):
+    return os.path.join(output_dir, f'training_args.json')
+
+
 def create_setup_config_file(
         package_dir,
         setup_config_file_name,
@@ -113,6 +124,7 @@ def create_setup_config_file(
         meta_data_types,
         eval_max_seq_length,
         num_labels: str):
+    # TODO: Unify this setup config with model config
     setup_conf = {
         "bert_base_model_name": bert_base_model_name,
         "bert_model_type": bert_model_type,

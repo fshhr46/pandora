@@ -50,3 +50,24 @@ def get_batch_size(
         raise ValueError
     logger.info(f"batch_size: {batch_size}")
     return batch_size
+
+
+def get_mode_type_and_name(
+        training_type: TrainingType,
+        meta_data_types: List[str]):
+
+    # Set base model name
+    if training_type == TrainingType.meta_data and \
+            len(meta_data_types) == 1 and \
+            meta_data_types[0] == MetadataType.column_name:
+        bert_base_model_name = "char-bert"
+    else:
+        bert_base_model_name = "bert-base-chinese"
+
+    # Set base model type
+    if bert_base_model_name == "char-bert":
+        bert_model_type = BertBaseModelType.char_bert
+    else:
+        bert_model_type = BertBaseModelType.bert
+
+    return bert_model_type, bert_base_model_name

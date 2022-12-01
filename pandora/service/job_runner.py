@@ -46,6 +46,9 @@ from pandora.packaging.char_bert_model import CharBertForSequenceClassification
 from pandora.service.job_utils import (
     JobType,
     get_log_path,
+    get_loss_file_path,
+    get_dataset_profile_path,
+    get_training_args_file_path,
     get_all_checkpoints,
     create_setup_config_file,
 )
@@ -219,10 +222,24 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     train_dataset, eval_dataset, test_dataset = dataset_partitions[
         "train"], dataset_partitions["eval"], dataset_partitions["test"]
     examples = data["examples"]
+
+    # save the dataset profile
+    data_distributions = data["distributions"]
+
+    with open(get_dataset_profile_path(args.output_dir), "w") as f:
+        profile = {
+            "num_examples": {
+                partition_name: len(data_entries) for partition_name, data_entries in examples.items()
+            },
+            "distributions": data_distributions,
+        }
+        json.dump(profile, f, indent=4)
+
     # Training
     if train_dataset:
         global_step, tr_loss = train(
-            args, device, bert_model_type, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn)
+            args, device, bert_model_type,
+            data_distributions, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn)
         logger.info(" global_step = %s, average loss = %s",
                     global_step, tr_loss)
 
@@ -268,7 +285,9 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
                 '/')[-1] if checkpoint.find('checkpoint') != -1 else ""
             model = model_class.from_pretrained(checkpoint)
             model.to(device)
-            result = evaluate(args, device, bert_model_type, model, eval_dataset,
+            result = evaluate(args, device, bert_model_type,
+                              data_distributions,
+                              model, eval_dataset,
                               batch_collate_fn, prefix=prefix)
             if global_step:
                 result = {"{}_{}".format(
@@ -327,7 +346,16 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     return args
 
 
-def train(args, device, bert_model_type, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn):
+def train(
+        args,
+        device,
+        bert_model_type,
+        data_distributions,
+        train_dataset,
+        eval_dataset,
+        model,
+        tokenizer,
+        batch_collate_fn):
     """ Train the model """
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(
@@ -413,84 +441,109 @@ def train(args, device, bert_model_type, train_dataset, eval_dataset, model, tok
 
     tr_loss, logging_loss = 0.0, 0.0
     model.zero_grad()
-    loss_func = LossType.get_loss_func(args.loss_type)
+
+    loss_func = LossType.get_loss_func(
+        args.loss_type,
+        device=device,
+        # TODO: Disable alphas in focal loss
+        config={
+            # "data_distributions": data_distributions,
+            # "label2id": args.label2id,
+        })
     # Added here for reproductibility (even between python 2 and 3)
     common_utils.seed_everything(args.seed)
-    for _ in range(int(args.num_train_epochs)):
-        pbar = ProgressBar(n_total=len(train_dataloader), desc='Training')
-        for step, batch in enumerate(train_dataloader):
-            # Skip past any already trained steps if resuming training
-            if steps_trained_in_current_epoch > 0:
-                steps_trained_in_current_epoch -= 1
-                continue
-            model.train()
-            batch = tuple(t.to(device) for t in batch)
-            include_char_data = bert_model_type == BertBaseModelType.char_bert
-            inputs = build_inputs_from_batch(
-                batch=batch, include_labels=True, include_char_data=include_char_data)
-            logits = model(**inputs)[0]
-            loss = loss_func.forward(logits, inputs["labels"])
-            # model outputs are always tuple in pytorch-transformers (see doc)
-            if args.n_gpu > 1:
-                loss = loss.mean()  # mean() to average on multi-gpu parallel training
-            if args.gradient_accumulation_steps > 1:
-                loss = loss / args.gradient_accumulation_steps
-            if args.fp16:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-            pbar(step, {'loss': loss.item()})
-            tr_loss += loss.item()
-            if (step + 1) % args.gradient_accumulation_steps == 0:
+    with open(get_loss_file_path(args.output_dir), "w") as loss_f:
+        for epoch_num in range(int(args.num_train_epochs)):
+            logger.info("  Running training for epoch %d", epoch_num)
+            train_pbar_desc = f'Training - Epoch: {epoch_num}/{int(args.num_train_epochs)}'
+            pbar = ProgressBar(n_total=len(
+                train_dataloader), desc=train_pbar_desc)
+            for step, batch in enumerate(train_dataloader):
+                # Skip past any already trained steps if resuming training
+                if steps_trained_in_current_epoch > 0:
+                    steps_trained_in_current_epoch -= 1
+                    continue
+                model.train()
+                batch = tuple(t.to(device) for t in batch)
+                include_char_data = bert_model_type == BertBaseModelType.char_bert
+                inputs = build_inputs_from_batch(
+                    batch=batch, include_labels=True, include_char_data=include_char_data)
+                logits = model(**inputs)[0]
+                loss = loss_func.forward(logits, inputs["labels"])
+                # model outputs are always tuple in pytorch-transformers (see doc)
+                if args.n_gpu > 1:
+                    loss = loss.mean()  # mean() to average on multi-gpu parallel training
+                if args.gradient_accumulation_steps > 1:
+                    loss = loss / args.gradient_accumulation_steps
                 if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(
-                        amp.master_params(optimizer), args.max_grad_norm)
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
                 else:
-                    torch.nn.utils.clip_grad_norm_(
-                        model.parameters(), args.max_grad_norm)
-                scheduler.step()  # Update learning rate schedule
-                optimizer.step()
-                model.zero_grad()
-                global_step += 1
+                    loss.backward()
+                loss_obj = {'loss': loss.item()}
+                pbar(step, loss_obj)
+                loss_f.write(f"{json.dumps(loss_obj)}\n")
+                tr_loss += loss.item()
+                if (step + 1) % args.gradient_accumulation_steps == 0:
+                    if args.fp16:
+                        torch.nn.utils.clip_grad_norm_(
+                            amp.master_params(optimizer), args.max_grad_norm)
+                    else:
+                        torch.nn.utils.clip_grad_norm_(
+                            model.parameters(), args.max_grad_norm)
+                    scheduler.step()  # Update learning rate schedule
+                    optimizer.step()
+                    model.zero_grad()
+                    global_step += 1
 
-                # Printing logging steps
-                checkpoint_name = "checkpoint-{}".format(global_step)
-                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                    # Log metrics
-                    logger.info(" ")
-                    if args.local_rank == -1:
-                        # Only evaluate when single GPU otherwise metrics may not average well
-                        evaluate(args, device, bert_model_type, model, eval_dataset,
-                                 batch_collate_fn, prefix=checkpoint_name)
+                    # Printing logging steps
+                    checkpoint_name = "checkpoint-{}".format(global_step)
+                    if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                        # Log metrics
+                        logger.info(" ")
+                        if args.local_rank == -1:
+                            # Only evaluate when single GPU otherwise metrics may not average well
+                            evaluate(args, device, bert_model_type,
+                                     data_distributions,
+                                     model, eval_dataset,
+                                     batch_collate_fn, prefix=checkpoint_name)
 
-                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
-                    # Save model checkpoint
-                    output_dir = os.path.join(
-                        args.output_dir, checkpoint_name)
-                    if not os.path.exists(output_dir):
-                        os.makedirs(output_dir)
-                    # Take care of distributed/parallel training
-                    model_to_save = (model.module if hasattr(
-                        model, "module") else model)
-                    model_to_save.save_pretrained(output_dir)
-                    torch.save(args, os.path.join(
-                        output_dir, "training_args.bin"))
-                    tokenizer.save_vocabulary(output_dir)
-                    logger.info("Saving model checkpoint to %s", output_dir)
-                    torch.save(optimizer.state_dict(), os.path.join(
-                        output_dir, "optimizer.pt"))
-                    torch.save(scheduler.state_dict(), os.path.join(
-                        output_dir, "scheduler.pt"))
-                    logger.info(
-                        "Saving optimizer and scheduler states to %s", output_dir)
-        logger.info(" ")
-        if 'cuda' in str(device):
-            torch.cuda.empty_cache()
+                    if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
+                        # Save model checkpoint
+                        output_dir = os.path.join(
+                            args.output_dir, checkpoint_name)
+                        if not os.path.exists(output_dir):
+                            os.makedirs(output_dir)
+                        # Take care of distributed/parallel training
+                        model_to_save = (model.module if hasattr(
+                            model, "module") else model)
+                        model_to_save.save_pretrained(output_dir)
+                        torch.save(args, os.path.join(
+                            output_dir, "training_args.bin"))
+                        tokenizer.save_vocabulary(output_dir)
+                        logger.info(
+                            "Saving model checkpoint to %s", output_dir)
+                        torch.save(optimizer.state_dict(), os.path.join(
+                            output_dir, "optimizer.pt"))
+                        torch.save(scheduler.state_dict(), os.path.join(
+                            output_dir, "scheduler.pt"))
+                        logger.info(
+                            "Saving optimizer and scheduler states to %s", output_dir)
+            logger.info(" ")
+            if 'cuda' in str(device):
+                torch.cuda.empty_cache()
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, device, bert_model_type, model, eval_dataset, batch_collate_fn, prefix=""):
+def evaluate(
+        args,
+        device,
+        bert_model_type,
+        data_distributions,
+        model,
+        eval_dataset,
+        batch_collate_fn,
+        prefix=""):
     eval_output_dir = os.path.join(args.output_dir, prefix)
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
@@ -508,7 +561,14 @@ def evaluate(args, device, bert_model_type, model, eval_dataset, batch_collate_f
     nb_eval_steps = 0
     pbar = ProgressBar(n_total=len(eval_dataloader), desc="Evaluating")
 
-    loss_func = LossType.get_loss_func(args.loss_type)
+    loss_func = LossType.get_loss_func(
+        args.loss_type,
+        device=device,
+        # TODO: Disable alphas in focal loss
+        config={
+            # "data_distributions": data_distributions,
+            # "label2id": args.label2id,
+        })
     for step, batch in enumerate(eval_dataloader):
         model.eval()
         batch = tuple(t.to(device) for t in batch)
@@ -786,7 +846,7 @@ def setup(args, processor):
     logger.info(
         f"\n========\nTraining/evaluation parameters:\n {args}\n========\n")
     # save the training args to a json
-    with open(os.path.join(args.output_dir, "training_args.json"), "w") as f:
+    with open(get_training_args_file_path(args.output_dir), "w") as f:
         argparse_dict = vars(args)
         json.dump(argparse_dict, f, indent=4)
     return args, device, config, tokenizer, model, MODEL_CLASSES[args.bert_model_type]

@@ -162,8 +162,13 @@ def get_status():
         server_dir=server.output_dir,
         job_id=job_id,
     )
+    progress = _get_job_module(job_type).get_job_progress(
+        server_dir=server.output_dir,
+        job_id=job_id,
+    )
     output = {
-        "status": status
+        "status": status,
+        "progress": progress,
     }
     return jsonify(output)
 
@@ -178,7 +183,7 @@ def start_training():
     logging.info(f"sample_size is {sample_size}")
 
     loss_type = request.args.get(
-        "loss_type", default=LossType.x_ent, type=str)
+        "loss_type", default=LossType.focal_loss, type=str)
     logging.info(f"loss_type is {loss_type}")
 
     active_training_jobs = training_job.list_training_jobs()

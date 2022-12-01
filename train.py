@@ -33,8 +33,8 @@ def main():
     training_type = TrainingType.mixed_data
     training_type = TrainingType.meta_data
     meta_data_types = [
-        MetadataType.column_name,
-        # MetadataType.column_comment,
+        # MetadataType.column_name,
+        MetadataType.column_comment,
         # MetadataType.column_descripition,
     ]
 
@@ -67,6 +67,8 @@ def main():
         Dataset.column_data
     ]
     dataset_names = [dataset_name]
+    dataset_names = ["poseidon_cn_mobile_data"]
+    dataset_names = ["poseidon_gov_test_data"]
     output_dir = os.path.join(
         resource_dir,
         "outputs",
@@ -93,7 +95,7 @@ def main():
         bert_base_model_name=bert_base_model_name,
         training_type=training_type,
         meta_data_types=meta_data_types,
-        loss_type=LossType.x_ent,
+        loss_type=LossType.focal_loss,
         # training args
         num_epochs=num_epochs,
         batch_size=batch_size,

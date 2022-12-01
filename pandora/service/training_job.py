@@ -33,14 +33,10 @@ class TrainingJob(object):
             training_type: TrainingType,
             meta_data_types: List[str]):
 
-        if training_type == TrainingType.meta_data and \
-                len(meta_data_types) == 1 and \
-                meta_data_types[0] == MetadataType.column_name:
-            self.bert_model_type = BertBaseModelType.char_bert
-            self.bert_base_model_name = "char-bert"
-        else:
-            self.bert_model_type = BertBaseModelType.bert
-            self.bert_base_model_name = "bert-base-chinese"
+        self.bert_model_type, self.bert_base_model_name = training_utils.get_mode_type_and_name(
+            training_type,
+            meta_data_types
+        )
 
     def __init__(self,
                  job_id,
@@ -269,6 +265,33 @@ def get_status(server_dir: str, job_id: str) -> JobStatus:
                 return JobStatus.terminated
         else:
             return JobStatus.not_started
+
+
+def get_job_progress(server_dir: str, job_id: str) -> float:
+    if is_job_running(job_id=job_id):
+        output_dir = job_utils.get_job_output_dir(server_dir,
+                                                  prefix=job_utils.TRAINING_JOB_PREFIX,
+                                                  job_id=job_id)
+        loss_file_path = job_utils.get_loss_file_path(output_dir)
+        if os.path.exists(loss_file_path):
+            with open(job_utils.get_dataset_profile_path(output_dir)) as data_profile_f:
+                dataset_profile = json.load(data_profile_f)
+            with open(job_utils.get_training_args_file_path(output_dir)) as training_args_f:
+                training_args = json.load(training_args_f)
+            count = 0
+            with open(loss_file_path) as loss_f:
+                for _, _ in enumerate(loss_f):
+                    count += 1
+            total_num_entries = dataset_profile["num_examples"]["train"]
+            num_batches = (total_num_entries *
+                           training_args["num_train_epochs"] // training_args["per_gpu_train_batch_size"]) + 1
+            progress = 1.0 * count / num_batches
+            logger.info(f"job progress is {progress}")
+            return progress
+        else:
+            return 0.0
+    else:
+        return None
 
 
 def get_report_output_dir(server_dir: str, job_id: str) -> str:

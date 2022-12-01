@@ -68,6 +68,13 @@ class InputExample(object):
         """Serializes this instance to a JSON string."""
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
+    def get_label(self):
+        # TODO: Support multi-labels
+        if self.labels:
+            return self.labels[0]
+        else:
+            return None
+
 
 class InputFeatures(object):
     """A single set of features of data."""
