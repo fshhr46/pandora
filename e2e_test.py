@@ -192,7 +192,7 @@ def test_training_success(training_type: str, test_keyword: bool = False):
 
     # start job
     assert make_request(
-        f"{get_url()}/start?id={job_id}&training_type={training_type}&sample_size={sample_size}", post=True)["success"]
+        f"{get_url()}/start?id={job_id}&training_type={training_type}&sample_size={sample_size}&loss_type=x_ent", post=True)["success"]
     logging.info("waiting for job to be started")
 
     # Check job status changed from running to completed.

@@ -4,6 +4,8 @@ from pathlib import Path
 import logging
 
 import pandora
+
+from pandora.packaging.losses import LossType
 from pandora.tools.test_utils import (
     create_tables,
     get_test_data_dir,
@@ -276,11 +278,13 @@ if __name__ == '__main__':
         add_tagging=add_tagging,
     )
     traning_data_type = "META_DATA"
-    metadata_types = ["COLUMN_NAME"]
-    description = f"{traning_data_type} | {metadata_types} | bert-base-multilingual-uncased | batch_size=24"
+    metadata_types = ["COLUMN_COMMENT"]
+    loss_type = LossType.x_ent
+    description = f"{traning_data_type} | {metadata_types} | bert-base-chinese | {loss_type}"
     poseidon_client.start_training(
         "gov_meta_name",
         dataset=dataset,
+        model_type="TAG",
         traning_data_type=traning_data_type,
         metadata_types=metadata_types,
         description=description,

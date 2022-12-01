@@ -461,7 +461,7 @@ def train(args, device, bert_model_type, train_dataset, eval_dataset, model, tok
                     logger.info(" ")
                     if args.local_rank == -1:
                         # Only evaluate when single GPU otherwise metrics may not average well
-                        evaluate(args, bert_model_type, model, eval_dataset,
+                        evaluate(args, device, bert_model_type, model, eval_dataset,
                                  batch_collate_fn, prefix=checkpoint_name)
 
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
