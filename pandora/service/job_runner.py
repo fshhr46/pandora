@@ -4,6 +4,9 @@ import pandora.tools.mps_utils as mps_utils
 import pandora.tools.runner_utils as runner_utils
 import pandora.tools.common as common_utils
 import pandora.packaging.constants as constants
+
+import pandora.service.job_utils as job_utils
+
 from pandora.tools.common import init_logger, logger
 from pandora.packaging.cache_configs import BERT_PRETRAINED_CONFIG_ARCHIVE_MAP
 from pandora.packaging.model import BertForSentence
@@ -80,6 +83,7 @@ def get_training_args(
     training_type: TrainingType,
     meta_data_types: List[str],
     loss_type: LossType,
+    num_folds: int,
     # training parameters
     sample_size: int = 0,
     num_epochs: int = 0,
@@ -108,6 +112,9 @@ def get_training_args(
                 f"--per_gpu_eval_batch_size={batch_size}",
 
                 "--learning_rate=3e-5",
+
+                # k-fold validation
+                f"--num_folds={num_folds}",
 
                 # changed from 4 -> 2
                 f"--num_train_epochs={num_epochs}",
@@ -152,8 +159,6 @@ def get_default_dirs(
     bert_base_model_name,
     datasets,
 ) -> List[str]:
-    if mps_utils.has_mps:
-        assert os.getenv("PYTORCH_ENABLE_MPS_FALLBACK") == "1"
 
     datasets_str = ", ".join(datasets)
     logger.info(f"datasets are:\n\t {datasets_str}")
@@ -182,7 +187,7 @@ def get_default_dirs(
     return args
 
 
-def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
+def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
     parser = get_args_parser()
     args = parser.parse_args(arg_list)
     training_type = args.training_type
@@ -193,19 +198,23 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
         meta_data_types = []
 
     batch_collate_fn = batch_collate_fn_char_bert if bert_model_type == BertBaseModelType.char_bert else batch_collate_fn_bert
+
+    num_folds = args.num_folds
     processor = runner_utils.get_data_processor(
         training_type=training_type,
         meta_data_types=meta_data_types,
         resource_dir=resource_dir,
-        datasets=datasets)
+        datasets=datasets,
+        num_folds=num_folds)
+    label_list = processor.get_labels()
 
-    args, device, config, tokenizer, model, model_classes = setup(
-        args=args, processor=processor)
-    config_class, model_class, tokenizer_class = model_classes
+    output_dir = args.output_dir
+    args, device, config, tokenizer, model, model_classes = setup_args(
+        args=args, output_dir=output_dir, label_list=label_list)
 
     # create torchserve config file
     create_setup_config_file(
-        args.output_dir,
+        output_dir,
         constants.SERUP_CONF_FILE_NAME,
         bert_base_model_name,
         bert_model_type,
@@ -213,11 +222,102 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
         meta_data_types,
         args.eval_max_seq_length,
         len(args.id2label))
-    data = runner_utils.prepare_data(
+
+    # perform cross-validation
+    if num_folds > 0:
+        k_reports = {}
+        k_report_all_data = {}
+        k_report_by_class_data = {}
+        # Running k-fold validation. prepare k_th fold data
+        for kth_fold in range(num_folds):
+            k_th_folder_name = f"fold_{kth_fold}"
+            kth_output_dir = os.path.join(output_dir, k_th_folder_name)
+            if not os.path.exists(kth_output_dir):
+                os.mkdir(kth_output_dir)
+            kth_fold_data = runner_utils.prepare_data(
+                args,
+                kth_output_dir,
+                tokenizer,
+                processor=processor,
+                bert_model_type=bert_model_type,
+                k_th_folder_name=k_th_folder_name)
+            train_eval_test(
+                args=args,
+                output_dir=kth_output_dir,
+                config=config,
+                tokenizer=tokenizer,
+                model=model,
+                device=device,
+                bert_model_type=bert_model_type,
+                training_type=training_type,
+                meta_data_types=meta_data_types,
+                model_classes=model_classes,
+                batch_collate_fn=batch_collate_fn,
+                data=kth_fold_data,
+                label_list=label_list)
+            kth_report_dir = job_utils.get_report_output_dir(kth_output_dir)
+            if not os.path.isdir(kth_report_dir):
+                return {}
+            kth_output = job_utils.load_model_report(kth_report_dir, True)
+            k_reports[kth_fold] = kth_output
+            k_report_all_data[kth_fold] = kth_output["data"]["report_all_data"]
+            k_report_by_class_data[kth_fold] = kth_output["data"]["report_by_class_data"]
+        # build X validation report
+        x_val_report_dir = os.path.join(output_dir, "x_val_report")
+        if not os.path.exists(x_val_report_dir):
+            os.mkdir(x_val_report_dir)
+        with open(os.path.join(x_val_report_dir, "k_reports.json"), "w") as f:
+            json.dump(k_reports, f, indent=4, ensure_ascii=False)
+        with open(os.path.join(x_val_report_dir, "k_report_all_data.json"), "w") as f:
+            json.dump(k_report_all_data, f, indent=4, ensure_ascii=False)
+        with open(os.path.join(x_val_report_dir, "k_report_by_class_data.json"), "w") as f:
+            json.dump(k_report_by_class_data, f, indent=4, ensure_ascii=False)
+
+    # Running final training
+    data_train = runner_utils.prepare_data(
         args,
+        output_dir,
         tokenizer,
         processor=processor,
-        bert_model_type=bert_model_type)
+        bert_model_type=bert_model_type,
+        k_th_folder_name="")
+    args = train_eval_test(
+        args=args,
+        output_dir=output_dir,
+        config=config,
+        tokenizer=tokenizer,
+        model=model,
+        device=device,
+        bert_model_type=bert_model_type,
+        training_type=training_type,
+        meta_data_types=meta_data_types,
+        model_classes=model_classes,
+        batch_collate_fn=batch_collate_fn,
+        data=data_train,
+        label_list=label_list)
+    return args
+
+
+def train_eval_test(
+    args,
+    output_dir,
+    device,
+    config,
+    tokenizer,
+    model,
+    # model types
+    bert_model_type,
+    training_type,
+    meta_data_types,
+    # model classes
+    model_classes,
+    batch_collate_fn,
+    # data related
+    data,
+    label_list,
+):
+    config_class, model_class, tokenizer_class = model_classes
+
     dataset_partitions = data["datasets"]
     train_dataset, eval_dataset, test_dataset = dataset_partitions[
         "train"], dataset_partitions["eval"], dataset_partitions["test"]
@@ -226,7 +326,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     # save the dataset profile
     data_distributions = data["distributions"]
 
-    with open(get_dataset_profile_path(args.output_dir), "w") as f:
+    with open(get_dataset_profile_path(output_dir), "w") as f:
         profile = {
             "num_examples": {
                 partition_name: len(data_entries) for partition_name, data_entries in examples.items()
@@ -238,7 +338,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     # Training
     if train_dataset:
         global_step, tr_loss = train(
-            args, device, bert_model_type,
+            args, output_dir, device, bert_model_type,
             data_distributions, train_dataset, eval_dataset, model, tokenizer, batch_collate_fn)
         logger.info(" global_step = %s, average loss = %s",
                     global_step, tr_loss)
@@ -248,33 +348,33 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     # local rank = -1 means distributed training is disabled.
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         # Create output directory if needed
-        if not os.path.exists(args.output_dir) and args.local_rank in [-1, 0]:
-            os.makedirs(args.output_dir)
-        logger.info("Saving model checkpoint to %s", args.output_dir)
+        if not os.path.exists(output_dir) and args.local_rank in [-1, 0]:
+            os.makedirs(output_dir)
+        logger.info("Saving model checkpoint to %s", output_dir)
         # Save a trained model, configuration and tokenizer using `save_pretrained()`.
         # They can then be reloaded using `from_pretrained()`
         model_to_save = (
             model.module if hasattr(model, "module") else model
         )  # Take care of distributed/parallel training
-        model_to_save.save_pretrained(args.output_dir)
-        tokenizer.save_vocabulary(args.output_dir)
+        model_to_save.save_pretrained(output_dir)
+        tokenizer.save_vocabulary(output_dir)
 
         # Good practice: save your training arguments together with the trained model
         # save as binary
-        torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
+        torch.save(args, os.path.join(output_dir, "training_args.bin"))
 
         # save as json
-        with open(os.path.join(args.output_dir, constants.INDEX2NAME_FILE_NAME), "w") as id2label_f:
+        with open(os.path.join(output_dir, constants.INDEX2NAME_FILE_NAME), "w") as id2label_f:
             json.dump(args.id2label, id2label_f, indent=4, ensure_ascii=False)
 
     # Evaluation
     results = {}
     if eval_dataset and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(
-            args.output_dir, do_lower_case=args.do_lower_case)
-        checkpoints = [args.output_dir]
+            output_dir, do_lower_case=args.do_lower_case)
+        checkpoints = [output_dir]
         if args.eval_all_checkpoints:
-            checkpoints = get_all_checkpoints(args.output_dir)
+            checkpoints = get_all_checkpoints(output_dir)
             logging.getLogger("transformers.modeling_utils").setLevel(
                 logging.WARN)  # Reduce logging
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
@@ -285,7 +385,8 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
                 '/')[-1] if checkpoint.find('checkpoint') != -1 else ""
             model = model_class.from_pretrained(checkpoint)
             model.to(device)
-            result = evaluate(args, device, bert_model_type,
+            result = evaluate(args, output_dir,
+                              device, bert_model_type,
                               data_distributions,
                               model, eval_dataset,
                               batch_collate_fn, prefix=prefix)
@@ -293,7 +394,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
                 result = {"{}_{}".format(
                     global_step, k): v for k, v in result.items()}
             results.update(result)
-        output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
+        output_eval_file = os.path.join(output_dir, "eval_results.txt")
         with open(output_eval_file, "w") as writer:
             for key in sorted(results.keys()):
                 writer.write("{} = {}\n".format(key, str(results[key])))
@@ -301,10 +402,10 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
     # Predict
     if test_dataset and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(
-            args.output_dir, do_lower_case=args.do_lower_case)
-        checkpoints = [args.output_dir]
+            output_dir, do_lower_case=args.do_lower_case)
+        checkpoints = [output_dir]
         if args.predict_all_checkpoints or args.predict_checkpoints > 0:
-            checkpoints = get_all_checkpoints(args.output_dir)
+            checkpoints = get_all_checkpoints(output_dir)
             logging.getLogger("transformers.modeling_utils").setLevel(
                 logging.WARN)  # Reduce logging
 
@@ -321,7 +422,7 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
             model = model_class.from_pretrained(checkpoint)
             model.to(device)
 
-            report_dir = os.path.join(args.output_dir, prefix)
+            report_dir = os.path.join(output_dir, prefix)
             if not os.path.exists(report_dir) and args.local_rank in [-1, 0]:
                 os.makedirs(report_dir)
 
@@ -342,12 +443,13 @@ def train_eval_test(arg_list, resource_dir: str, datasets: List[str]):
             meta_data_types,
             predictions,
             report_dir,
-            processor=processor)
+            label_list=label_list)
     return args
 
 
 def train(
         args,
+        output_dir,
         device,
         bert_model_type,
         data_distributions,
@@ -480,7 +582,7 @@ def train(
             else:
                 loss.backward()
             loss_obj = {'loss': loss.item()}
-            with open(get_loss_file_path(args.output_dir), "a+") as loss_f:
+            with open(get_loss_file_path(output_dir), "a+") as loss_f:
                 loss_f.write(f"{json.dumps(loss_obj)}\n")
             pbar(step, loss_obj)
             tr_loss += loss.item()
@@ -501,9 +603,10 @@ def train(
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     logger.info(" ")
-                    if args.local_rank == -1:
+                    if eval_dataset and args.local_rank == -1:
                         # Only evaluate when single GPU otherwise metrics may not average well
-                        evaluate(args, device, bert_model_type,
+                        evaluate(args, output_dir,
+                                 device, bert_model_type,
                                  data_distributions,
                                  model, eval_dataset,
                                  batch_collate_fn, prefix=checkpoint_name)
@@ -511,7 +614,7 @@ def train(
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     # Save model checkpoint
                     output_dir = os.path.join(
-                        args.output_dir, checkpoint_name)
+                        output_dir, checkpoint_name)
                     if not os.path.exists(output_dir):
                         os.makedirs(output_dir)
                     # Take care of distributed/parallel training
@@ -537,6 +640,7 @@ def train(
 
 def evaluate(
         args,
+        output_dir,
         device,
         bert_model_type,
         data_distributions,
@@ -544,7 +648,7 @@ def evaluate(
         eval_dataset,
         batch_collate_fn,
         prefix=""):
-    eval_output_dir = os.path.join(args.output_dir, prefix)
+    eval_output_dir = os.path.join(output_dir, prefix)
     if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
         os.makedirs(eval_output_dir)
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
@@ -660,6 +764,11 @@ def get_args_parser():
     # data related parameters
     parser.add_argument("--sample_size", type=int, default=0,
                         help="number of samples for each class")
+    parser.add_argument("--num_folds", type=int, default=1,
+                        help="number of folds for performing k-fold cross validations. \
+                            This is disabled by default (when setting to 0). \
+                            When enabled, --do_eval flag will be ignored and evaluation step \
+                            will be skipped.")
     parser.add_argument("--training_type", type=str, required=True,
                         choices=[
                             TrainingType.meta_data,
@@ -767,18 +876,18 @@ def get_args_parser():
     return parser
 
 
-def setup(args, processor):
+def setup_args(args, output_dir, label_list):
     # check if output dir already exists and override is not set
-    log_path = get_log_path(args.output_dir, job_type=JobType.training)
+    log_path = get_log_path(output_dir, job_type=JobType.training)
     if os.path.exists(log_path) and args.do_train and not args.overwrite_output_dir:
         raise ValueError(
             "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
-                args.output_dir))
+                output_dir))
 
     init_logger(log_file=log_path)
     # create output dirs
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     # Setup distant debugging if needed
     if args.server_ip and args.server_port:
@@ -813,7 +922,6 @@ def setup(args, processor):
 
     # Set seed
     common_utils.seed_everything(args.seed)
-    label_list = processor.get_labels()
     args.id2label = {i: label for i, label in enumerate(label_list)}
     args.label2id = {label: i for i, label in enumerate(label_list)}
     num_labels = len(label_list)
@@ -846,7 +954,7 @@ def setup(args, processor):
     logger.info(
         f"\n========\nTraining/evaluation parameters:\n {args}\n========\n")
     # save the training args to a json
-    with open(get_training_args_file_path(args.output_dir), "w") as f:
+    with open(get_training_args_file_path(output_dir), "w") as f:
         argparse_dict = vars(args)
         json.dump(argparse_dict, f, indent=4)
     return args, device, config, tokenizer, model, MODEL_CLASSES[args.bert_model_type]

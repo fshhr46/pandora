@@ -18,6 +18,8 @@ DATASET_FILE_NAME = "dataset.json"
 TRAINING_JOB_PREFIX = "PANDORA_TRAINING"
 KEYWORD_JOB_PREFIX = "PANDORA_KEYWORD"
 
+REPORT_DIR_NAME = "predict"
+
 
 class JobStatus(str, Enum):
     not_started = "not_started"
@@ -113,6 +115,34 @@ def get_dataset_profile_path(output_dir):
 
 def get_training_args_file_path(output_dir):
     return os.path.join(output_dir, f'training_args.json')
+
+
+def get_report_output_dir(output_dir) -> str:
+    return os.path.join(output_dir, REPORT_DIR_NAME)
+
+
+def load_model_report(report_dir, include_data):
+    output = {}
+    paths = {}
+    data = {}
+    output["paths"] = paths
+    output["data"] = data
+
+    report_all_path = os.path.join(report_dir, "report_all.json")
+    if os.path.isfile(report_all_path):
+        paths["report_all_path"] = report_all_path
+        if include_data:
+            with open(report_all_path, encoding="utf-8") as f:
+                data["report_all_data"] = json.load(f)
+
+    report_by_class_path = os.path.join(report_dir, "report.json")
+    if os.path.isfile(report_by_class_path):
+        paths["report_by_class_path"] = report_by_class_path
+        if include_data:
+            with open(report_by_class_path, encoding="utf-8") as f:
+                data["report_by_class_data"] = json.load(f)
+            output["data"] = data
+    return output
 
 
 def create_setup_config_file(
