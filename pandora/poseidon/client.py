@@ -76,19 +76,31 @@ class PoseidonClient(object):
             data=json.dumps(data),
             headers=self._get_headers())
 
-    # {"adds": [{"ratingId": "2694", "classificationId": "9696", "subjectType": "COLUMN", "subjectId": "784843", "templateId": "3461"}, {
-    #     "ratingId": "2694", "classificationId": "9683", "subjectType": "COLUMN", "subjectId": "784844", "templateId": "3461"}], "deletes": []}
-    def add_column_classification_ratings(self, classification_ratings):
-        data = {"adds": classification_ratings, "deletes": []}
+    # {
+    #   "adds": [{
+    #       "subjectType": "COLUMN",
+    #       "subjectId": "784843",
+    #       "relatedSubjectId": "9696",
+    #       "relatedSubjectType": "CLASSIFICATION"
+    #    }, {
+    #       "subjectType": "COLUMN",
+    #       "subjectId": "784844",
+    #       "relatedSubjectId": "2694",
+    #       "relatedSubjectType": "RATING"
+    #    }],
+    #    "deletes": []
+    # }
+    def add_subject2subject(self, subjects):
+        data = {"adds": subjects, "deletes": []}
         return requests.post(
-            self._get_url(f"gapi/catalog/classification_ratings/bulk_update"),
+            self._get_url(f"/gapi/catalog/subject/bulk_update"),
             data=json.dumps(data),
             headers=self._get_headers())
 
-    def delete_column_classification_ratings(self, classification_ratings):
-        data = {"adds": [], "deletes": classification_ratings}
+    def delete_subject2subject(self, subjects):
+        data = {"adds": [], "deletes": subjects}
         return requests.post(
-            self._get_url(f"gapi/catalog/classification_ratings/bulk_update"),
+            self._get_url(f"/gapi/catalog/subject/bulk_update"),
             data=json.dumps(data),
             headers=self._get_headers())
 
@@ -337,7 +349,7 @@ def classify_and_rate_table_columns(
         assert list_columns_resp.status_code == 200, list_columns_resp.text
         list_columns_resp_obj = json.loads(list_columns_resp.text)
 
-        table_class_ratings = []
+        subject2subject = []
         for column in list_columns_resp_obj["columns"]:
             column_comment = column["comment"]
             column_id = column["id"]
@@ -376,14 +388,22 @@ def classify_and_rate_table_columns(
             #                 "subjectId": column_id,
             #                 "description": class_path,
             #                 "subjectType": "COLUMN"}
-            class_rating = {"ratingId": raiting_id, "classificationId": class_id,
-                            "subjectType": "COLUMN", "subjectId": column_id, "templateId": template_id}
-            table_class_ratings.append(class_rating)
+            subject2subject.append({
+                "subjectId": column_id,
+                "subjectType": "COLUMN",
+                "relatedSubjectId": class_id,
+                "relatedSubjectType": "CLASSIFICATION",
+            })
+            subject2subject.append({
+                "subjectId": column_id,
+                "subjectType": "COLUMN",
+                "relatedSubjectId": raiting_id,
+                "relatedSubjectType": "RATING",
+            })
 
         if add_tagging:
-            add_column_classification_ratings_resp = poseidon_client.add_column_classification_ratings(
-                classification_ratings=table_class_ratings)
-            assert add_column_classification_ratings_resp.status_code == 200, add_column_classification_ratings_resp.text
+            add_subject2subject_resp = poseidon_client.add_subject2subject(subjects=subject2subject)
+            assert add_subject2subject_resp.status_code == 200, add_subject2subject_resp.text
 
     tags_list = []
     for tag_id, tag_key in dataset_tags.items():
