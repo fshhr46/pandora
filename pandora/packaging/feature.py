@@ -29,7 +29,7 @@ class ModelTaskType(str, Enum):
     def __str__(self):
         return str(self.value)
     tag = "tag"  # tagging model
-    classification = "classification"  # classification_ratings model
+    classification = "classification"  # classification model
 
 
 class TrainingType(str, Enum):
