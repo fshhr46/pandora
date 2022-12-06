@@ -100,6 +100,7 @@ def run_get_insights(
         # Original API def
         input_batch,
         target: int,
+        include_char_data: bool,
         n_steps=50):
     """This function initialize and calls the layer integrated gradient to get word importance
     of the input text if captum explanation has been selected through setup_config
@@ -111,11 +112,24 @@ def run_get_insights(
         (list): Returns a list of importances and words.
     """
 
-    input_ids_batch, attention_mask_batch, token_type_ids_batch, indexes = input_batch
+    if include_char_data:
+        input_ids_batch, attention_mask_batch, token_type_ids_batch, \
+            char_input_ids_batch, start_ids_batch, end_ids_batch, \
+            indexes = input_batch
+        additional_forward_args = (
+            attention_mask_batch, token_type_ids_batch,
+            char_input_ids_batch, start_ids_batch, end_ids_batch,
+            indexes, mode, model)
+        forward_func = captum_sequence_forward_char_bert
+    else:
+        input_ids_batch, attention_mask_batch, token_type_ids_batch, indexes = input_batch
+        additional_forward_args = (
+            attention_mask_batch, token_type_ids_batch, indexes, mode, model)
+        forward_func = captum_sequence_forward
     embedding_layer = getattr(model, embedding_name)
     embeddings = embedding_layer.embeddings
     lig = LayerIntegratedGradients(
-        forward_func=captum_sequence_forward,
+        forward_func=forward_func,
         layer=embeddings)
     batch_size, _ = input_ids_batch.shape
 
@@ -136,8 +150,7 @@ def run_get_insights(
             inputs=input_ids_batch,
             baselines=ref_input_ids_batch,
             target=target,
-            additional_forward_args=(
-                attention_mask_batch, token_type_ids_batch, indexes, mode, model),
+            additional_forward_args=additional_forward_args,
             # Setting this slows down the processing as it splits the example batch
             # into examples and process one at a time
             # internal_batch_size=batch_size,
@@ -236,6 +249,32 @@ def captum_sequence_forward(input_ids_batch, attention_mask_batch, token_type_id
     input_batch = {"input_ids": input_ids_batch,
                    "attention_mask": attention_mask_batch,
                    "token_type_ids": token_type_ids_batch,
+                   }
+    inferences = run_inference(input_batch, mode, model)
+    return torch.stack(inferences)
+
+
+def captum_sequence_forward_char_bert(
+    input_ids_batch, attention_mask_batch, token_type_ids_batch,
+        char_input_ids_batch, start_ids_batch, end_ids_batch,
+        indexes, mode: str, model):
+    """This function is used to get the predictions from the model and this function
+    can be used independent of the type of the BERT Task.
+    Args:
+        inputs (list): Input for Predictions
+        attention_mask (list, optional): The attention mask is a binary tensor indicating the position
+         of the padded indices so that the model does not attend to them, it defaults to None.
+        position (int, optional): Position depends on the BERT Task.
+        model ([type], optional): Name of the model, it defaults to None.
+    Returns:
+        list: Prediction Outcome
+    """
+    input_batch = {"input_ids": input_ids_batch,
+                   "attention_mask": attention_mask_batch,
+                   "token_type_ids": token_type_ids_batch,
+                   "char_input_ids": char_input_ids_batch,
+                   "start_ids": start_ids_batch,
+                   "end_ids": end_ids_batch,
                    }
     inferences = run_inference(input_batch, mode, model)
     return torch.stack(inferences)

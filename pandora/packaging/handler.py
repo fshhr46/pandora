@@ -313,4 +313,5 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 # input related
                 input_batch=input_batch,
                 target=target_id,
-                n_steps=self.n_steps)
+                n_steps=self.n_steps,
+                include_char_data=self.include_char_data)

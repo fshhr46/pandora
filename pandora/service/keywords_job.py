@@ -282,7 +282,9 @@ def extract_keywords(
                     logger.info(obj)
                     json_objs.append(obj)
 
-        label_2_keywords = build_keyword_dict(json_objs)
+        # 只有中文模型才使用jieba分词器
+        use_jieba = model_name == "bert-base-chinese"
+        label_2_keywords = build_keyword_dict(json_objs, use_jieba)
         # output_file = os.path.join(output_dir, "keywords.json")
         with open(keyword_file_path, 'w') as f:
             json.dump(label_2_keywords, f, ensure_ascii=False)
@@ -370,13 +372,14 @@ def build_keyword_dict(json_objs, use_jieba=True, do_average=False):
 
         per_label_attributions = label_to_keyword_attrs[label]
         per_label_counts = label_to_keyword_count[label]
-        # 词粒度
+        # 词粒度(中文)
         if use_jieba:
             sentence = obj["text"]
             segs = list(pseg.cut(sentence, use_paddle=True))
             # tokens = [entry[0] for entry in attributions_sorted_by_index]
             assert sum([len(seg.word) for seg in segs]) == len(sentence)
             index = 0
+            # logger.info(segs)
             for seg in segs:
                 # Filter word types that doesn't matter
                 if filter_by_word_type(seg.flag):
@@ -384,8 +387,10 @@ def build_keyword_dict(json_objs, use_jieba=True, do_average=False):
                     continue
                 seg_attribution = 0
                 # logger.info(seg)
+                # logger.info(attributions_sorted_by_index)
                 # logger.info(attributions_sorted_by_index[index])
                 for i in range(len(seg.word)):
+                    # logger.info(index)
                     seg_attribution += attributions_sorted_by_index[index][2]
                     index += 1
                 per_label_attributions[seg.word] = per_label_attributions.get(
@@ -393,7 +398,7 @@ def build_keyword_dict(json_objs, use_jieba=True, do_average=False):
                 per_label_counts[seg.word] = per_label_counts.get(
                     seg.word, 0) + 1
         else:
-            # 字粒度
+            # 字(token)粒度(英文)
             for entry in obj["sorted_attributions"]:
                 word, _, attribution = entry
                 per_label_attributions[word] = per_label_attributions.get(
