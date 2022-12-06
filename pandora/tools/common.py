@@ -22,7 +22,7 @@ def print_config(config):
     return
 
 
-def init_logger(log_file=None, log_file_level=logging.NOTSET):
+def init_logger(log_file=None, log_file_level=logging.INFO):
     '''
     Example:
         >>> init_logger(log_file)
@@ -44,6 +44,17 @@ def init_logger(log_file=None, log_file_level=logging.NOTSET):
         # file_handler.setFormatter(log_format)
         logger.addHandler(file_handler)
     return logger
+
+
+def remove_logfile_handler(log_file=None):
+    if isinstance(log_file, Path):
+        log_file = str(log_file)
+
+    if log_file and log_file != '':
+        file_handler = logging.FileHandler(log_file)
+        handlers
+        logger.removeHandler(file_handler)
+        file_handler.close()
 
 
 def seed_everything(seed=1029):

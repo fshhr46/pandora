@@ -4,7 +4,11 @@ import json
 import requests
 import jieba
 import jieba.posseg as pseg
-from pandora.tools.common import init_logger, logger
+from pandora.tools.common import (
+    init_logger,
+    remove_logfile_handler,
+    logger
+)
 
 
 from typing import Dict, Tuple, List
@@ -12,7 +16,6 @@ from typing import Dict, Tuple, List
 import torch
 import torch.multiprocessing as mp
 
-from pandora.tools.common import logger
 from pandora.packaging.feature import (
     TrainingType,
     create_example,
@@ -48,6 +51,12 @@ class KeywordExtractionJob(object):
         self.model_name = model_name
         self.model_version = model_version
 
+        self.log_path = job_utils.get_log_path(output_dir, JobType.keywords)
+        with open(self.log_path, "w") as f:
+            f.write("")
+        # TODO: Fix logger issue. log file was not delete-able
+        # init_logger(log_file=self.log_path)
+
     def __call__(self, *args, **kwds) -> None:
         extract_keywords(
             output_dir=self.output_dir,
@@ -58,6 +67,7 @@ class KeywordExtractionJob(object):
             keyword_file_path=self.keyword_file_path,
             model_name=self.model_name,
             model_version=self.model_version)
+        # remove_logfile_handler(log_file=self.log_path)
 
 
 def start_keyword_extraction_job(
@@ -75,7 +85,6 @@ def start_keyword_extraction_job(
 
     output_dir = job_utils.get_job_output_dir(
         server_dir, prefix=job_utils.KEYWORD_JOB_PREFIX, job_id=job_id)
-    log_path = job_utils.get_log_path(output_dir, JobType.keywords)
 
     dataset_path = job_utils.get_dataset_file_path(
         server_dir, job_utils.KEYWORD_JOB_PREFIX, job_id)
@@ -85,7 +94,6 @@ def start_keyword_extraction_job(
     if not os.path.isfile(dataset_path):
         return False, f"dataset file {dataset_path} not exists", ""
 
-    init_logger(log_file=log_path)
     logger.info("start running extract_keywords")
 
     _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(

@@ -65,16 +65,16 @@ def get_dataset_file_path(server_dir: str, prefix: str, job_id: str) -> str:
 def list_running_jobs(prefix: str = None) -> Dict[str, mp.Process]:
     all_processes = mp.active_children()
 
-    training_jobs = all_processes
+    running_jobs = all_processes
     if prefix:
-        training_jobs = list(filter(lambda process: process.name.startswith(
-            prefix), training_jobs))
+        running_jobs = list(filter(lambda process: process.name.startswith(
+            prefix), running_jobs))
         logger.info(
-            f"Found {len(all_processes)} running processes, {training_jobs} are training jobs")
+            f"Found {len(all_processes)} running processes, {running_jobs} are {prefix} jobs")
     else:
         logger.info(
             f"Found {len(all_processes)} running processes.")
-    output_dic = {job.name: job for job in training_jobs}
+    output_dic = {job.name: job for job in running_jobs}
     return output_dic
 
 
