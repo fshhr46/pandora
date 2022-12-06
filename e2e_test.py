@@ -94,7 +94,7 @@ def prepare_job_data(training_type: str, job_id, job_type, file_path=None):
             f"{get_url()}/testdata?id={job_id}&job_type={job_type}&file_name={training_type}_new.json", post=True)["success"]
 
 
-def test_training_failed(training_type):
+def test_training_failed(training_type, test_file_name):
 
     job_type = JobType.training
     # generate job ID
@@ -106,8 +106,9 @@ def test_training_failed(training_type):
         f"{get_url()}/start?id={job_id}&training_type={training_type}", post=True)["success"]
 
     # prepare datadir
-    prepare_job_data(training_type=training_type,
-                     job_id=job_id, job_type=job_type)
+    prepare_job_data(training_type=training_type, job_id=job_id, job_type=job_type, file_path=os.path.join(
+        "test_data",  test_file_name))
+
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
@@ -174,7 +175,7 @@ def test_training_failed(training_type):
         f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.not_started
 
 
-def test_training_success(training_type: str, test_keyword: bool = False):
+def test_training_success(training_type: str, test_file_name, test_keyword: bool = False):
     sample_size = 10
     if training_type == TrainingType.meta_data:
         sample_size = 0
@@ -186,7 +187,7 @@ def test_training_success(training_type: str, test_keyword: bool = False):
 
     # prepare datadir
     prepare_job_data(training_type=training_type, job_id=job_id, job_type=job_type, file_path=os.path.join(
-        "test_data",  f"{training_type}.json"))
+        "test_data",  test_file_name))
     assert make_request(
         f"{get_url()}/partition?id={job_id}", post=True)["success"]
 
@@ -255,7 +256,7 @@ def test_training_success(training_type: str, test_keyword: bool = False):
             assert checks < max_checks, "timeout, job is not completed"
 
         # Run test
-        test_keywords(training_type, job_id)
+        test_keywords(training_type, test_file_name, job_id)
 
         # Delete
         delete_resp = requests.delete(
@@ -272,7 +273,7 @@ def test_training_success(training_type: str, test_keyword: bool = False):
         f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.not_started
 
 
-def test_keywords(training_type: str, model_name: str):
+def test_keywords(training_type: str, test_file_name, model_name: str):
     sample_size = 10
     # generate job ID
     job_id = time.time_ns()
@@ -285,7 +286,7 @@ def test_keywords(training_type: str, model_name: str):
 
     # prepare datadir
     prepare_job_data(training_type=training_type, job_id=job_id, job_type=job_type, file_path=os.path.join(
-        "test_data",  f"{training_type}.json"))
+        "test_data",  test_file_name))
 
     # start job
     assert make_request(
@@ -356,11 +357,23 @@ if __name__ == '__main__':
                 server_process.start()
                 logging.info("waiting for server to be ready")
                 time.sleep(3)
-            test_training_failed(training_type=TrainingType.mixed_data)
-            test_training_success(training_type=TrainingType.mixed_data)
+            test_training_failed(
+                training_type=TrainingType.mixed_data,
+                test_file_name="mixed_data.json")
+            # test bert-base-chinese with mixed_data
             test_training_success(
-                training_type=TrainingType.meta_data, test_keyword=True)
-            # test_keywords(training_type=TrainingType.meta_data)
+                training_type=TrainingType.mixed_data,
+                test_file_name="mixed_data.json")
+            # test bert-base-chinese with meta_data
+            test_training_success(
+                training_type=TrainingType.meta_data,
+                test_file_name="meta_data.json",
+                test_keyword=True)
+            # test char-bert with meta_data
+            test_training_success(
+                training_type=TrainingType.meta_data,
+                test_file_name="meta_data_col_name.json",
+                test_keyword=True)
         finally:
             logging.info("start killing processes")
             kill_proc_tree(os.getpid())
