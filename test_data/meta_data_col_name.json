@@ -1,0 +1,319 @@
+{
+    "model_type": "tag",
+    "data_type": "meta_data",
+    "metadata_type": [
+        "column_name"
+    ],
+    "dataset_config": {
+        "id": 324,
+        "tag_ids": [
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+        ]
+    },
+    "tags": {
+        "19": {
+            "id": 19,
+            "name": "个人信息"
+        },
+        "20": {
+            "id": 20,
+            "name": "身份信息"
+        },
+        "21": {
+            "id": 21,
+            "name": "业务信息"
+        },
+        "22": {
+            "id": 22,
+            "name": "营收信息"
+        },
+        "23": {
+            "id": 23,
+            "name": "联系信息"
+        },
+        "24": {
+            "id": 24,
+            "name": "销量信息"
+        }
+    },
+    "column_data": {
+        "22201": {
+            "column_id": 22201,
+            "column_name": "acc_open_date",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "开户日期",
+                "column_name": "acc_open_date"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                21
+            ]
+        },
+        "22202": {
+            "column_id": 22202,
+            "column_name": "age",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "年龄",
+                "column_name": "age"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                19
+            ]
+        },
+        "22203": {
+            "column_id": 22203,
+            "column_name": "birthday",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "出生日期",
+                "column_name": "birthday"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                19
+            ]
+        },
+        "22204": {
+            "column_id": 22204,
+            "column_name": "cert_type",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "证件类型",
+                "column_name": "cert_type"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                20
+            ]
+        },
+        "22205": {
+            "column_id": 22205,
+            "column_name": "email_add",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "邮箱地址",
+                "column_name": "email_add"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                20
+            ]
+        },
+        "22206": {
+            "column_id": 22206,
+            "column_name": "gender",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "性别",
+                "column_name": "gender"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                19
+            ]
+        },
+        "22207": {
+            "column_id": 22207,
+            "column_name": "gender_digit",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "性别",
+                "column_name": "gender_digit"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                19
+            ]
+        },
+        "22208": {
+            "column_id": 22208,
+            "column_name": "home_add",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "居住地址",
+                "column_name": "home_add"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                23
+            ]
+        },
+        "22209": {
+            "column_id": 22209,
+            "column_name": "id",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "证件号码",
+                "column_name": "id"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                20
+            ]
+        },
+        "22210": {
+            "column_id": 22210,
+            "column_name": "id_head_6",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "证件号码前六位",
+                "column_name": "id_head_6"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                20
+            ]
+        },
+        "22211": {
+            "column_id": 22211,
+            "column_name": "is_active_acc",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "活跃账户",
+                "column_name": "is_active_acc"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                21
+            ]
+        },
+        "22212": {
+            "column_id": 22212,
+            "column_name": "name_cn",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "中文姓名",
+                "column_name": "name_cn"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                19
+            ]
+        },
+        "22213": {
+            "column_id": 22213,
+            "column_name": "phone_number",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "电话号码",
+                "column_name": "phone_number"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                20
+            ]
+        },
+        "22214": {
+            "column_id": 22214,
+            "column_name": "q1_2022_rev",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "2022年1季度营收",
+                "column_name": "q1_2022_rev"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                22
+            ]
+        },
+        "22215": {
+            "column_id": 22215,
+            "column_name": "q1_2022_rev_growth",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "2022年1季度营收增长",
+                "column_name": "q1_2022_rev_growth"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                22
+            ]
+        },
+        "22216": {
+            "column_id": 22216,
+            "column_name": "q1_2022_sales",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "2022年1季度销售额",
+                "column_name": "q1_2022_sales"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                24
+            ]
+        },
+        "22217": {
+            "column_id": 22217,
+            "column_name": "q1_2022_sales_growth",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "2022年1季度销售额增长",
+                "column_name": "q1_2022_sales_growth"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                24
+            ]
+        },
+        "22218": {
+            "column_id": 22218,
+            "column_name": "service_type",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "套餐类型",
+                "column_name": "service_type"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                21
+            ]
+        },
+        "22219": {
+            "column_id": 22219,
+            "column_name": "total_2022_rev_growth",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "2022年全年营收增长",
+                "column_name": "total_2022_rev_growth"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                22
+            ]
+        },
+        "22220": {
+            "column_id": 22220,
+            "column_name": "total_2022_sales_growth",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "2022年全年销售额增长",
+                "column_name": "total_2022_sales_growth"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                24
+            ]
+        },
+        "22221": {
+            "column_id": 22221,
+            "column_name": "work_postal_code",
+            "metadata": {
+                "column_descripition": "",
+                "column_comment": "工作地邮编",
+                "column_name": "work_postal_code"
+            },
+            "recognition_data": [],
+            "tag_ids": [
+                23
+            ]
+        }
+    }
+}
