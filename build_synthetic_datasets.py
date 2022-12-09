@@ -17,6 +17,7 @@ import pandora.tools.test_utils as test_utils
 import pandora.dataset.configs_demo as configs
 import pandora.dataset.configs_demo_2 as configs
 import pandora.dataset.configs_demo_3 as configs
+import pandora.dataset.configs_demo_4 as configs
 
 from pandora.poseidon.client import (
     get_client,
@@ -303,7 +304,7 @@ def build_dataset(
 
 
 if __name__ == '__main__':
-    dataset_name_prefix = f"pandora_demo_1127"
+    dataset_name_prefix = f"pandora_demo_1209"
     num_data_entry_train = 100
     num_data_entry_test = 10
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
