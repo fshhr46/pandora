@@ -214,7 +214,8 @@ def partition_dataset():
     else:
         json_data = {}
     logging.info(f"json input is {json_data}")
-    min_samples = json_data.get("min_samples", 10)
+    # TODO: Fix Hard coded min_samples to be 1.
+    min_samples = json_data.get("min_samples", 1)
 
     # TODO: enable this in production
     num_folds = json_data.get("num_folds", 0)
