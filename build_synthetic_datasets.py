@@ -16,8 +16,8 @@ import pandora.tools.test_utils as test_utils
 # import pandora.dataset.configs as configs
 import pandora.dataset.configs_demo as configs
 import pandora.dataset.configs_demo_2 as configs
-import pandora.dataset.configs_demo_3 as configs
 import pandora.dataset.configs_demo_4 as configs
+import pandora.dataset.configs_demo_3 as configs
 
 from pandora.poseidon.client import (
     get_client,
@@ -304,17 +304,17 @@ def build_dataset(
 
 
 if __name__ == '__main__':
-    dataset_name_prefix = f"pandora_demo_1209"
+    dataset_name_prefix = f"pandora_demo_1213"
     num_data_entry_train = 100
     num_data_entry_test = 10
     dataset_name = f"{dataset_name_prefix}_{num_data_entry_train}_{num_data_entry_test}"
     database_name = dataset_name_prefix
 
     # Controls
-    run_create_tables = True
+    run_create_tables = False
     add_tagging = True
-    ingest_data = True
-    host = "10.0.1.8"
+    ingest_data = False
+    host = "10.0.1.48"
 
     poseidon_client = get_client(host=host)
     tables_data = build_dataset(
@@ -345,7 +345,7 @@ if __name__ == '__main__':
 
     if run_create_tables:
         # create datasource
-        collection_id = 2518
+        collection_id = 1
         create_resp = poseidon_client.create_datasource(
             resource_name=database_name,
             collection_id=collection_id)
@@ -357,7 +357,7 @@ if __name__ == '__main__':
         datasource_name = response_create_obj["name"]
 
     else:
-        datasource_id = 528986
+        datasource_id = 204
         datasource_name = database_name
 
     # metasync
