@@ -215,9 +215,6 @@ def partition_dataset():
         json_data = {}
     logging.info(f"json input is {json_data}")
     min_samples = json_data.get("min_samples", 10)
-
-    # TODO: enable this in production
-    num_folds = json_data.get("num_folds", 0)
     data_ratios = json_data.get(
         "data_ratios", {"train": 0.6, "dev": 0.2, "test": 0.2})
     logging.info(f"min_samples is {min_samples}")
@@ -244,7 +241,6 @@ def partition_dataset():
         job_id=job_id,
         min_samples=min_samples,
         data_ratios=data_ratios,
-        num_folds=num_folds,
     )
     output = {
         "success": success,
@@ -364,4 +360,4 @@ def get_arg_parser():
 if __name__ == '__main__':
     parser = get_arg_parser()
     args = parser.parse_args()
-    server.run(args, args.output_dir)
+    server.run(args)

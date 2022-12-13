@@ -23,6 +23,8 @@ from pandora.packaging.feature import (
 from pandora.packaging.model import BertBaseModelType
 from pandora.packaging.losses import LossType
 
+REPORT_DIR_NAME = "predict"
+
 
 class TrainingJob(object):
 
@@ -44,8 +46,7 @@ class TrainingJob(object):
                  sample_size: int,
                  training_type: TrainingType,
                  meta_data_types: List[str],
-                 loss_type: LossType,
-                 num_folds: int) -> None:
+                 loss_type: LossType) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
         self.output_dir = output_dir
@@ -62,9 +63,6 @@ class TrainingJob(object):
             self.meta_data_types,
         )
         self.loss_type = loss_type
-
-        # Whether to perform cross validation
-        self.num_folds = num_folds
 
     def __call__(self, *args, **kwds) -> None:
 
@@ -88,7 +86,6 @@ class TrainingJob(object):
             training_type=self.training_type,
             meta_data_types=self.meta_data_types,
             loss_type=self.loss_type,
-            num_folds=self.num_folds,
             # training args
             num_epochs=num_epochs,
             batch_size=batch_size,
@@ -100,7 +97,6 @@ class TrainingJob(object):
         arg_list.extend(dir_args)
 
         # set actions
-        # Only do eval when cross_validation is disabled.
         arg_list.extend(
             job_runner.set_actions(
                 do_train=True,
@@ -117,7 +113,7 @@ class TrainingJob(object):
         # and os.path.join("1", "dataset", "2")
         # returns "1/dataset/2"
         datasets = [""]
-        job_runner.run_e2e_modeling(
+        job_runner.train_eval_test(
             arg_list, resource_dir=resource_dir, datasets=datasets)
 
 
@@ -141,18 +137,12 @@ def start_training_job(
         logger.info(message)
         return False, message
 
-    # load dataset file
     dataset_path = job_utils.get_dataset_file_path(
         server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
     if not os.path.isfile(dataset_path):
         return False, {}, f"dataset file {dataset_path} not exists"
     _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
         dataset_path)
-
-    # load partition file
-    data_partition_args = dataset_utils.get_data_partition_args_file_path(
-        output_dir)
-    num_folds = data_partition_args["num_folds"]
 
     job = TrainingJob(
         job_id=job_id,
@@ -162,8 +152,7 @@ def start_training_job(
         sample_size=sample_size,
         training_type=training_type,
         meta_data_types=meta_data_types,
-        loss_type=loss_type,
-        num_folds=num_folds)
+        loss_type=loss_type)
     mp.set_start_method("spawn", force=True)
     job_process = mp.Process(
         name=job_utils.get_job_folder_name_by_id(
@@ -192,7 +181,6 @@ def partition_dataset(
         job_id: str,
         min_samples: int,
         data_ratios: List,
-        num_folds: int,
         seed: int = 42) -> Tuple[bool, Dict, str]:
     dataset_path = job_utils.get_dataset_file_path(
         server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
@@ -210,7 +198,6 @@ def partition_dataset(
             output_dir=partition_dir,
             min_samples=min_samples,
             data_ratios=data_ratios,
-            num_folds=num_folds,
             seed=seed)
 
         if not result["valid_tags"]:
@@ -223,12 +210,30 @@ def partition_dataset(
 
 
 def get_report(server_dir: str, job_id: str, include_data: bool = True) -> str:
-    output_dir = job_utils.get_job_output_dir(
-        server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
-    report_dir = job_utils.get_report_output_dir(output_dir)
+    report_dir = get_report_output_dir(server_dir, job_id)
+
+    output = {}
     if not os.path.isdir(report_dir):
         return {}
-    output = job_utils.load_model_report(report_dir, include_data)
+    paths = {}
+    data = {}
+    output["paths"] = paths
+    output["data"] = data
+
+    report_all_path = os.path.join(report_dir, "report_all.json")
+    if os.path.isfile(report_all_path):
+        paths["report_all_path"] = report_all_path
+        if include_data == True:
+            with open(report_all_path, encoding="utf-8") as f:
+                data["report_all_data"] = json.load(f)
+
+    report_by_class_path = os.path.join(report_dir, "report.json")
+    if os.path.isfile(report_by_class_path):
+        paths["report_by_class_path"] = report_by_class_path
+        if include_data:
+            with open(report_by_class_path, encoding="utf-8") as f:
+                data["report_by_class_data"] = json.load(f)
+            output["data"] = data
     return output
 
 
@@ -250,7 +255,7 @@ def get_status(server_dir: str, job_id: str) -> JobStatus:
             output_dir, job_type=JobType.training)
         if os.path.exists(output_dir) and os.path.isfile(log_path):
             # report generation marks training is at least completed
-            report_dir = job_utils.get_report_output_dir(output_dir)
+            report_dir = get_report_output_dir(server_dir, job_id)
             if os.path.isdir(report_dir):
                 # check if packing is done
                 if packager.done_packaging(output_dir):
@@ -287,6 +292,12 @@ def get_job_progress(server_dir: str, job_id: str) -> float:
             return 0.0
     else:
         return None
+
+
+def get_report_output_dir(server_dir: str, job_id: str) -> str:
+    output_dir = job_utils.get_job_output_dir(
+        server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
+    return os.path.join(output_dir, REPORT_DIR_NAME)
 
 
 def is_job_running(job_id: str) -> bool:
