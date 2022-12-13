@@ -20,9 +20,9 @@ def main():
 
     bert_model_type = BertBaseModelType.char_bert
     bert_model_type = BertBaseModelType.bert
+    bert_base_model_name = "bert-base-chinese"
     bert_base_model_name = "char-bert"
     bert_base_model_name = "bert-base-uncased"
-    bert_base_model_name = "bert-base-chinese"
 
     # Build dataset
     num_data_entry_train = 10
@@ -67,10 +67,8 @@ def main():
         Dataset.column_data
     ]
     dataset_names = [dataset_name]
-    dataset_names = ["poseidon_gov_test_data"]
     dataset_names = ["poseidon_cn_mobile_data"]
-    dataset_names = ["meta_data"]
-    dataset_names = ["mixed_data"]
+    dataset_names = ["poseidon_gov_test_data"]
     output_dir = os.path.join(
         resource_dir,
         "outputs",
@@ -90,8 +88,7 @@ def main():
         #     ingest_data=False,
         # )
 
-    # Set dataset and model args
-    num_folds = 3
+    # Set args
     arg_list = job_runner.get_training_args(
         # model args
         bert_model_type=bert_model_type,
@@ -99,7 +96,6 @@ def main():
         training_type=training_type,
         meta_data_types=meta_data_types,
         loss_type=LossType.focal_loss,
-        num_folds=num_folds,
         # training args
         num_epochs=num_epochs,
         batch_size=batch_size,
@@ -112,7 +108,6 @@ def main():
             bert_base_model_name=bert_base_model_name,
             datasets=dataset_names,
         ))
-
     arg_list.extend(
         job_runner.set_actions(
             do_train=True,
@@ -123,8 +118,8 @@ def main():
     resource_dir = os.path.join(Path.home(), "workspace", "resource")
 
     # Start training
-    args = job_runner.run_e2e_modeling(arg_list, resource_dir=resource_dir,
-                                       datasets=dataset_names)
+    args = job_runner.train_eval_test(arg_list, resource_dir=resource_dir,
+                                      datasets=dataset_names)
 
     # packaging
     pkger = packager.ModelPackager(

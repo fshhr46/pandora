@@ -148,50 +148,27 @@ def partition_poseidon_dataset(
         output_dir: str,
         min_samples: int,
         data_ratios: Dict,
-        num_folds: int,
         seed: int):
 
     # load dataset file
     valid_tag_ids, invalid_tag_ids, tags_by_id, data_by_tag_ids, dataset = load_poseidon_dataset(
         dataset_path)
 
-    # save data partition args
-    data_partition_args = {
-        "dataset_path": dataset_path,
-        "output_dir": output_dir,
-        "min_samples": min_samples,
-        "data_ratios": data_ratios,
-        "num_folds": dataset_path,
-        "seed": seed
-    }
-    os.makedirs(output_dir, exist_ok=True)
-    with open(dataset_utils.get_data_partition_args_file_path(output_dir), "w") as f:
-        json.dump(data_partition_args, f)
+    # get training type
+    training_type = TrainingType(dataset["data_type"])
+    logger.info(f"training_type is {training_type}")
 
     # added up partitions for all tags and columns
-    partitions_train, partitions_dev, partitions_test = [], [], []
-    if num_folds == 0:
-        k_partitions_train, k_partitions_dev, k_partitions_test = None, None, None
-    else:
-        k_partitions_train, k_partitions_dev, k_partitions_test = {}, {}, {}
-        for k in range(num_folds):
-            k_partitions_train[k], k_partitions_dev[k], k_partitions_test[k] = \
-                [], [], []
-        # TODO: Fix hacky hard coded index 0
-        # partitions_train, partitions_dev, partitions_test = \
-        #     k_partitions_train[0], k_partitions_dev[0], k_partitions_test[0]
-    data_partitions_all = {
-        "train": partitions_train,
-        "dev": partitions_dev,
-        "test": partitions_test,
-    }
-    final_labels = []
+    partitions_train = []
+    partitions_dev = []
+    partitions_test = []
 
     # outputs
     valid_tags = []
     invalid_tags = [PartitionResult(invalid_tag_id, "", TagValidationResultType.tag_not_found)
                     for invalid_tag_id in invalid_tag_ids]
     # check tags
+    final_labels = []
     for valid_tag_id in valid_tag_ids:
         tag_name = tags_by_id[valid_tag_id]["name"]
         # Chec if dataset has any column ID belongs to the current tag.
@@ -202,11 +179,8 @@ def partition_poseidon_dataset(
         else:
             # get column data, validate and write data by tag
             tag_data = data_by_tag_ids[valid_tag_id]
-
-            # When num_folds == 0, it means it is not doing cross-validation.
-            valid, data_partitions, distribution = _validate_and_partition_tag_data_column_data(
-                tag_data, min_samples=min_samples, data_ratios=data_ratios, seed=seed)
-            # get column data, validate and write data by tag
+            valid, data_partitions, distribution = _validate_and_partition_tag_data(
+                tag_data, training_type, min_samples, data_ratios=data_ratios, seed=seed)
             tag_dir = os.path.join(output_dir, str(valid_tag_id))
             os.makedirs(tag_dir, exist_ok=True)
             dataset_utils.write_partitions(data_partitions, tag_dir)
@@ -229,6 +203,7 @@ def partition_poseidon_dataset(
                 # add label
                 final_labels.append(
                     create_unique_label_name(tag_name=tag_name, tag_id=valid_tag_id))
+            else:
                 result = PartitionResult(
                     valid_tag_id,
                     tag_name,
@@ -236,62 +211,18 @@ def partition_poseidon_dataset(
                     distribution)
                 invalid_tags.append(result)
 
-            if num_folds > 0:
-                valid, k_data_partitions, distribution = _validate_and_partition_tag_data_meta_data(
-                    tag_data, num_folds=num_folds, data_ratios=data_ratios, seed=seed)
-
-                for k, data_partitions in k_data_partitions.items():
-                    tag_dir = os.path.join(
-                        output_dir, f"fold_{k}", str(valid_tag_id))
-                    os.makedirs(tag_dir, exist_ok=True)
-                    dataset_utils.write_partitions(data_partitions, tag_dir)
-
-                    # create result objects.
-                    if valid:
-                        # build overall partition
-                        k_partitions_train[k].extend(data_partitions["train"])
-                        k_partitions_dev[k].extend(data_partitions["dev"])
-                        k_partitions_test[k].extend(data_partitions["test"])
-
-                        # create valid result
-                        result = PartitionResult(
-                            valid_tag_id,
-                            tag_name,
-                            TagValidationResultType.valid,
-                            distribution)
-                        valid_tags.append(result)
-
-                    else:
-                        result = PartitionResult(
-                            valid_tag_id,
-                            tag_name,
-                            TagValidationResultType.not_enough_data,
-                            distribution)
-                        invalid_tags.append(result)
-
-                # write merged partitions
-                for k in range(num_folds):
-                    kth_data_partitions_all = {
-                        "train": k_partitions_train[k],
-                        "dev": k_partitions_dev[k],
-                        "test": k_partitions_test[k],
-                    }
-                    kth_fold_output_dir = os.path.join(
-                        output_dir, f"fold_{k}")
-                    dataset_utils.write_partitions(
-                        kth_data_partitions_all, output_dir=kth_fold_output_dir)
-                    # dump labels
-                    dataset_utils.write_labels(
-                        output_dir=kth_fold_output_dir, labels=final_labels)
-
     # write merged partitions
+    data_partitions_all = {
+        "train": partitions_train,
+        "dev": partitions_dev,
+        "test": partitions_test,
+    }
     dataset_utils.write_partitions(
         data_partitions_all, output_dir=output_dir)
-    dataset_utils.write_labels(
-        output_dir=output_dir, labels=final_labels)
-
     distribution = get_partition_distribution(
         data_partitions=data_partitions_all)
+    # dump labels
+    dataset_utils.write_labels(output_dir=output_dir, labels=final_labels)
     summary = {
         # TODO: Use dataclass
         "distribution": distribution,
@@ -337,55 +268,25 @@ def create_unique_label_name(tag_name, tag_id):
     return f"{tag_name}"
 
 
-def _get_tag_data_samples(tag_data):
+def _validate_and_partition_tag_data(tag_data, training_type, min_samples, data_ratios: List, seed: int) -> Tuple[bool, Dict, PartitionDistribution]:
     # TODO: provide multiple partition/selection functions
-    tag_samples = []
+    all_samples = []
     for col_id, col_data in tag_data.items():
-        tag_samples.extend(col_data)
-    return tag_samples
+        all_samples.extend(col_data)
 
-
-def _validate_and_partition_tag_data_column_data(tag_data, min_samples, data_ratios: List, seed: int) -> Tuple[bool, Dict, PartitionDistribution]:
-    # Validation
-    tag_samples = _get_tag_data_samples(tag_data)
-    num_samples = len(tag_samples)
-    valid = num_samples >= min_samples
-    if valid:
-        data_partitions = dataset_utils.split_dataset(
-            all_samples=tag_samples, data_ratios=data_ratios, seed=seed)
-    else:
-        logger.info(
-            f"num_samples({num_samples}) must NOT be smaller than min_samples {min_samples}")
+    # TODO: get a better strategy for meta_data training
+    if training_type == TrainingType.meta_data:
         data_partitions = {
-            "train": [],
-            "dev": [],
-            "test": [],
+            "train": all_samples,
+            "dev": all_samples,
+            "test": all_samples
         }
-    data_distributions = get_partition_distribution(
-        data_partitions=data_partitions)
-    return valid, data_partitions, data_distributions
+        return True, data_partitions, get_partition_distribution(data_partitions)
 
-
-def _validate_and_partition_tag_data_meta_data(tag_data, num_folds, data_ratios: List, seed: int) -> Tuple[bool, Dict, PartitionDistribution]:
-    # Validation
-    tag_samples = _get_tag_data_samples(tag_data)
-    num_samples = len(tag_samples)
-    valid = num_samples >= num_folds
-    if valid:
-        k_fold_data_partitions = dataset_utils.split_dataset_k_folds(
-            all_samples=tag_samples, data_ratios=data_ratios, seed=seed, num_folds=num_folds)
-    else:
-        logger.info(
-            f"num_samples({num_samples}) must NOT be smaller than num_folds {num_folds}")
-        k_fold_data_partitions = {
-            k: {
-                "train": [],
-                "dev": [],
-                "test": [],
-            } for k in range(num_folds)
-        }
-    data_distributions = get_partition_distribution(k_fold_data_partitions[0])
-    return valid, k_fold_data_partitions, data_distributions
+    valid = len(all_samples) >= min_samples
+    data_partitions = dataset_utils.split_dataset(
+        all_samples=all_samples, data_ratios=data_ratios, seed=seed)
+    return valid, data_partitions, get_partition_distribution(data_partitions=data_partitions)
 
 
 def get_partition_distribution(data_partitions):

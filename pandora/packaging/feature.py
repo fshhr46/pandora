@@ -365,10 +365,6 @@ def convert_example_to_feature(
 
 
 def convert_features_to_dataset(local_rank, features, evaluate, include_char_data):
-    # Empty dataset
-    if not features:
-        return None
-
     if local_rank == 0 and not evaluate:
         # Make sure only the first process in distributed training process the dataset, and the others will use the cache
         torch.distributed.barrier()
@@ -458,69 +454,41 @@ class SentenceProcessor(DataProcessor):
             training_type: TrainingType,
             meta_data_types: List[MetadataType],
             resource_dir,
-            datasets: List[str],
-            num_folds: int) -> None:
+            datasets: List[str]) -> None:
         super().__init__()
         self.training_type = training_type
         self.meta_data_types = meta_data_types
         self.resource_dir = resource_dir
         self.datasets = datasets
-        self.num_folds = num_folds
 
-    def _get_examples_all_dir(self, data_dir, partition, k_th_folder_name="") -> List[InputExample]:
+    def _get_examples_all_dir(self, data_dir, partition) -> List[InputExample]:
         all_examples = []
-        # trick here: when os.path.join("a", "", "b") returns "a/b"
         for dataset in self.datasets:
             all_examples.extend(
-                self.create_examples(
-                    self._read_json(
-                        os.path.join(
-                            data_dir,
-                            dataset,
-                            k_th_folder_name,
-                            f"{partition}.json")), partition)
+                self.create_examples(self._read_json(
+                    os.path.join(data_dir, dataset, f"{partition}.json")), partition)
             )
         return all_examples
 
-    def get_train_examples(self, data_dir, k_th_folder_name="") -> List[InputExample]:
+    def get_train_examples(self, data_dir) -> List[InputExample]:
         """See base class."""
-        examples = self._get_examples_all_dir(
-            data_dir, "train", k_th_folder_name)
-        # when cross-validation is enabled:
-        # train partition should be train examples + eval examples
-        if self.num_folds > 0 and not k_th_folder_name:
-            examples.extend(self._get_examples_all_dir(
-                data_dir, "dev", k_th_folder_name))
-        return examples
+        return self._get_examples_all_dir(data_dir, "train")
 
-    def get_dev_examples(self, data_dir, k_th_folder_name="") -> List[InputExample]:
+    def get_dev_examples(self, data_dir) -> List[InputExample]:
         """See base class."""
-        # when cross-validation is enabled (num_folds > 0):
-        #  - training data: eval partition should be empty as eval partition is merged into training partition.
-        #  - k_fold data: eval partition should be empty as eval partition is used as test partition.
-        if self.num_folds > 0:
-            return []
-        return self._get_examples_all_dir(data_dir, "dev", k_th_folder_name)
+        return self._get_examples_all_dir(data_dir, "dev")
 
-    def get_test_examples(self, data_dir, k_th_folder_name="") -> List[InputExample]:
+    def get_test_examples(self, data_dir) -> List[InputExample]:
         """See base class."""
-        # when cross-validation is enabled (num_folds > 0):
-        #  - training data: use test partition for testing.
-        #  - k_fold data: use dev partition for testing.
-        if self.num_folds > 0 and k_th_folder_name:
-            return self._get_examples_all_dir(data_dir, "dev", k_th_folder_name)
-        else:
-            return self._get_examples_all_dir(data_dir, "test", k_th_folder_name)
+        return self._get_examples_all_dir(data_dir, "test")
 
     def get_labels(self):
         """See base class."""
         all_labels = []
         for dataset in self.datasets:
-            # TODO: This is hacky relying on "dataset" variable being a empty string
-            # This mean it is running a job from poseidon.
             if dataset:
                 data_dir = os.path.join(self.resource_dir, "datasets")
-            # This mean it is running a job from a manully triggered recipe.
+            # TODO: This is hacky relying on "dataset" variable being a empty string
             else:
                 data_dir = self.resource_dir
             label_file = open(os.path.join(

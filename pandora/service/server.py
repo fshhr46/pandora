@@ -21,9 +21,9 @@ class Server(object):
             logger.info(message)
             return False, message
 
-    def run(self, args, output_dir) -> None:
+    def run(self, args) -> None:
         # dirs
-        self.output_dir = output_dir
+        self.output_dir = args.output_dir
 
         if args.max_jobs:
             self.max_jobs = args.max_jobs

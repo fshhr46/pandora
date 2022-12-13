@@ -45,7 +45,7 @@ def start_test_server(host, port, output_dir):
     ]
     parser = app.get_arg_parser()
     args = parser.parse_args(arg_list)
-    app.server.run(args, args.output_dir)
+    app.server.run(args)
 
 
 def make_request(url: str, post: bool = False, json_data=None, data=None, json_output=True):
