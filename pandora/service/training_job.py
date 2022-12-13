@@ -135,13 +135,6 @@ def start_training_job(
     if not os.path.isdir(partition_dir):
         return False, f"no dataset found in {partition_dir}"
 
-    # load partition file
-    data_partition_args_file_path = dataset_utils.get_data_partition_args_file_path(
-        partition_dir)
-    with open(data_partition_args_file_path) as data_partition_args_f:
-        data_partition_args = json.load(data_partition_args_f)
-    num_folds = data_partition_args["num_folds"]
-
     status = get_status(server_dir=server_dir, job_id=job_id)
     if status != JobStatus.not_started:
         message = f"You can only start a job with {JobStatus.not_started} status. current status {status}."
@@ -155,6 +148,11 @@ def start_training_job(
         return False, {}, f"dataset file {dataset_path} not exists"
     _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
         dataset_path)
+
+    # load partition file
+    data_partition_args = dataset_utils.get_data_partition_args_file_path(
+        output_dir)
+    num_folds = data_partition_args["num_folds"]
 
     job = TrainingJob(
         job_id=job_id,
