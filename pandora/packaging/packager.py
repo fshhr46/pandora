@@ -58,7 +58,20 @@ class ModelPackager(object):
 
         curr_dir = str(pathlib.Path(os.path.dirname(__file__)).absolute())
         # copy register.sh file
-        common.copy_file(curr_dir, package_dir, REGISTER_SCRIPT_NAME)
+        ts_url = os.environ.get("TORCHSERVE_URL")
+        # replace ts_url
+        if ts_url:
+            default_ts_url = "localhost:8081"
+            old_reg_file = os.path.join(curr_dir, REGISTER_SCRIPT_NAME)
+            new_reg_file = os.path.join(package_dir, REGISTER_SCRIPT_NAME)
+            with open(old_reg_file) as f_in:
+                with open(new_reg_file, "w") as f_out:
+                    for line in f_in.readlines():
+                        if default_ts_url in line:
+                            line = line.replace(default_ts_url, ts_url)
+                        f_out.write(line)
+        else:
+            common.copy_file(curr_dir, package_dir, REGISTER_SCRIPT_NAME)
 
         # copy handler, model and tokenizer, and other python files
         # TODO: Make a list out of this
