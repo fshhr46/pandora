@@ -35,6 +35,7 @@ from pandora.callback.progressbar import ProgressBar
 # model types
 from pandora.packaging.feature import MetadataType, TrainingType
 from pandora.packaging.model import BertBaseModelType
+from pandora.packaging.classifier import ClassifierType
 
 # Model shared
 from transformers import BertConfig
@@ -81,6 +82,7 @@ def get_training_args(
     bert_model_type: BertBaseModelType,
     bert_base_model_name,
     training_type: TrainingType,
+    classifier_type: ClassifierType,
     meta_data_types: List[str],
     loss_type: LossType,
     num_folds: int,
@@ -133,6 +135,7 @@ def get_training_args(
             f"--sample_size={sample_size}",
         )
     arg_list.append(f"--training_type={training_type}")
+    arg_list.append(f"--classifier_type={classifier_type}")
     for meta_data_type in meta_data_types:
         arg_list.append(f"--meta_data_type={meta_data_type}")
     return arg_list
@@ -209,7 +212,8 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
     label_list = processor.get_labels()
 
     output_dir = args.output_dir
-    args, device, config, tokenizer, model, model_classes = setup_args(
+    classifier_type = args.classifier_type
+    args, device, config, tokenizer, model, classifier_cls, model_classes = setup_args(
         args=args, output_dir=output_dir, label_list=label_list)
 
     # create torchserve config file
@@ -218,6 +222,7 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
         constants.SERUP_CONF_FILE_NAME,
         bert_base_model_name,
         bert_model_type,
+        classifier_type,
         args.training_type,
         meta_data_types,
         args.eval_max_seq_length,
@@ -286,6 +291,7 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
         output_dir=output_dir,
         config=config,
         tokenizer=tokenizer,
+        classifier_cls=classifier_cls,
         model=model,
         device=device,
         bert_model_type=bert_model_type,
@@ -304,6 +310,7 @@ def train_eval_test(
     device,
     config,
     tokenizer,
+    classifier_cls,
     model,
     # model types
     bert_model_type,
@@ -316,7 +323,7 @@ def train_eval_test(
     data,
     label_list,
 ):
-    config_class, model_class, tokenizer_class = model_classes
+    _, model_class, tokenizer_class = model_classes
 
     dataset_partitions = data["datasets"]
     train_dataset, eval_dataset, test_dataset = dataset_partitions[
@@ -383,7 +390,8 @@ def train_eval_test(
                 "-")[-1] if len(checkpoints) > 1 else ""
             prefix = checkpoint.split(
                 '/')[-1] if checkpoint.find('checkpoint') != -1 else ""
-            model = model_class.from_pretrained(checkpoint)
+            model = model_class.from_pretrained(
+                checkpoint, classifier_cls=classifier_cls)
             model.to(device)
             result = evaluate(args, output_dir,
                               device, bert_model_type,
@@ -419,7 +427,8 @@ def train_eval_test(
             prefix = checkpoint.split(
                 '/')[-1] if checkpoint.find('checkpoint') != -1 else ""
             prefix = os.path.join("predict", prefix)
-            model = model_class.from_pretrained(checkpoint)
+            model = model_class.from_pretrained(
+                checkpoint, classifier_cls=classifier_cls)
             model.to(device)
 
             report_dir = os.path.join(output_dir, prefix)
@@ -776,6 +785,12 @@ def get_args_parser():
                             TrainingType.mixed_data
                         ],
                         help="Training type selected in TrainingType")
+    parser.add_argument("--classifier_type", type=str, required=True,
+                        choices=[
+                            ClassifierType.linear,
+                            ClassifierType.doc,
+                        ],
+                        help="Classifier type selected in ClassifierType")
     parser.add_argument("--meta_data_type", action="append", type=str, required=False,
                         choices=[
                             MetadataType.column_name,
@@ -783,7 +798,6 @@ def get_args_parser():
                             MetadataType.column_descripition,
                         ],
                         help="Meta data types selected")
-
     # Model related parameters
     parser.add_argument("--do_lower_case", action="store_true",
                         help="Set this flag if you are using an uncased model.")
@@ -794,10 +808,6 @@ def get_args_parser():
                             LossType.focal_loss,
                             LossType.lsm_x_ent,
                         ])
-    parser.add_argument("--config_name", default="", type=str,
-                        help="Pretrained config name or path if not the same as model_name")
-    parser.add_argument("--tokenizer_name", default="", type=str,
-                        help="Pretrained tokenizer name or path if not the same as model_name", )
     parser.add_argument("--cache_dir", default="", type=str,
                         help="Where do you want to store the pre-trained models downloaded from s3", )
 
@@ -938,14 +948,17 @@ def setup_args(args, output_dir, label_list):
 
     model_path = get_model_path(
         args.model_name_or_path, cache_dir=args.cache_dir)
-    config = config_class.from_pretrained(args.config_name if args.config_name else model_path,
+    config = config_class.from_pretrained(model_path,
                                           num_labels=num_labels, loss_type=args.loss_type,
                                           cache_dir=args.cache_dir if args.cache_dir else None, )
-    tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name if args.tokenizer_name else model_path,
+    tokenizer = tokenizer_class.from_pretrained(model_path,
                                                 do_lower_case=args.do_lower_case,
                                                 cache_dir=args.cache_dir if args.cache_dir else None, )
+    classifier_cls = ClassifierType.get_classifier_cls(
+        classifier_type=args.classifier_type)
     model = model_class.from_pretrained(model_path, from_tf=False,
-                                        config=config, cache_dir=args.cache_dir if args.cache_dir else None, )
+                                        config=config, classifier_cls=classifier_cls,
+                                        cache_dir=args.cache_dir if args.cache_dir else None, )
     if args.local_rank == 0:
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
@@ -957,4 +970,4 @@ def setup_args(args, output_dir, label_list):
     with open(get_training_args_file_path(output_dir), "w") as f:
         argparse_dict = vars(args)
         json.dump(argparse_dict, f, indent=4)
-    return args, device, config, tokenizer, model, MODEL_CLASSES[args.bert_model_type]
+    return args, device, config, tokenizer, model, classifier_cls, MODEL_CLASSES[args.bert_model_type]

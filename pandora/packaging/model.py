@@ -1,4 +1,3 @@
-from torch.nn import CrossEntropyLoss
 from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertModel
 import torch.nn as nn
 from enum import Enum
@@ -15,12 +14,17 @@ class BertBaseModelType(str, Enum):
 
 
 class BertForSentence(BertPreTrainedModel):
-    def __init__(self, config):
+
+    def __init__(self, config, classifier_cls):
+
         super(BertForSentence, self).__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.classifier = classifier_cls(
+            config.hidden_size,
+            config.num_labels
+        )
         self.init_weights()
 
     def forward(

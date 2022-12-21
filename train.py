@@ -9,6 +9,7 @@ import pandora.tools.training_utils as training_utils
 
 from pandora.dataset.sentence_data import Dataset
 from pandora.packaging.feature import MetadataType, TrainingType
+from pandora.packaging.classifier import ClassifierType
 from pandora.packaging.model import BertBaseModelType
 
 
@@ -28,10 +29,14 @@ def main():
     num_data_entry_train = 10
     num_data_entry_test = 10
 
+    # Classifier
+    classifier_type = ClassifierType.linear
+
     # Training args
     training_type = TrainingType.column_data
     training_type = TrainingType.mixed_data
     training_type = TrainingType.meta_data
+
     meta_data_types = [
         # MetadataType.column_name,
         MetadataType.column_comment,
@@ -99,6 +104,7 @@ def main():
         training_type=training_type,
         meta_data_types=meta_data_types,
         loss_type=LossType.focal_loss,
+        classifier_type=classifier_type,
         num_folds=num_folds,
         # training args
         num_epochs=num_epochs,

@@ -20,6 +20,7 @@ from pandora.packaging.constants import (
     BERT_MODEL_NAME,
     CHAR_BERT_MODEL_NAME,
     TOKENIZER_NAME,
+    CLASSIFIER_NAME,
     INFERENCE_NAME,
     CHARBERT_CHAR_VOCAB,
     CHARBERT_TERM_VOCAB,
@@ -79,6 +80,7 @@ class ModelPackager(object):
         common.copy_file(curr_dir, package_dir, BERT_MODEL_NAME)
         common.copy_file(curr_dir, package_dir, CHAR_BERT_MODEL_NAME)
         common.copy_file(curr_dir, package_dir, TOKENIZER_NAME)
+        common.copy_file(curr_dir, package_dir, CLASSIFIER_NAME)
         common.copy_file(curr_dir, package_dir, INFERENCE_NAME)
         common.copy_file(curr_dir, package_dir, FEATURE_NAME)
         common.copy_file(curr_dir, package_dir, CONSTANT_NAME)
@@ -113,6 +115,7 @@ class ModelPackager(object):
             INDEX2NAME_FILE_NAME, VOCAB_FILE_NAME,
             BERT_MODEL_NAME, CHAR_BERT_MODEL_NAME,
             TOKENIZER_NAME,
+            CLASSIFIER_NAME,
             INFERENCE_NAME, FEATURE_NAME,
             CONSTANT_NAME,
             CHARBERT_CHAR_VOCAB, CHARBERT_TERM_VOCAB]

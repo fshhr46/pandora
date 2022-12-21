@@ -20,6 +20,7 @@ from model import (
 )
 from char_bert_model import CharBertForSequenceClassification
 from transformers import BertTokenizer
+from classifier import ClassifierType
 
 logger = logging.getLogger(__name__)
 logger.info("Transformers version %s", transformers.__version__)
@@ -77,15 +78,22 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         # Loading the model and tokenizer from checkpoint and config files based on the user's choice of mode
         # further setup config can be added.
         if self.setup_config["save_mode"] == "pretrained":
+            classifier_type = self.setup_config["classifier_type"]
+            classifier_cls = ClassifierType.get_classifier_cls(
+                classifier_type=classifier_type,
+            )
             if self.bert_model_type == BertBaseModelType.char_bert:
+                # Note that charbert has 2 times the hidden size
+                # Load model
                 self.model = CharBertForSequenceClassification.from_pretrained(
-                    model_dir)
+                    model_dir, classifier_cls)
+                # Load tokenizer
                 self.tokenizer = BertTokenizer.from_pretrained(
                     model_dir, do_lower_case=self.setup_config["do_lower_case"])
             else:
                 # Load model
                 self.model = BertForSentence.from_pretrained(
-                    model_dir)
+                    model_dir, classifier_cls)
                 # Load tokenizer
                 self.tokenizer = SentenceTokenizer.from_pretrained(
                     model_dir, do_lower_case=self.setup_config["do_lower_case"])

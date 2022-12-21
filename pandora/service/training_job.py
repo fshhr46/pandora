@@ -21,6 +21,7 @@ from pandora.packaging.feature import (
     MetadataType,
 )
 from pandora.packaging.model import BertBaseModelType
+from pandora.packaging.classifier import ClassifierType
 from pandora.packaging.losses import LossType
 
 
@@ -45,6 +46,7 @@ class TrainingJob(object):
                  training_type: TrainingType,
                  meta_data_types: List[str],
                  loss_type: LossType,
+                 classifier_type: ClassifierType,
                  num_folds: int) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
@@ -62,6 +64,7 @@ class TrainingJob(object):
             self.meta_data_types,
         )
         self.loss_type = loss_type
+        self.classifier_type = classifier_type
 
         # Whether to perform cross validation
         self.num_folds = num_folds
@@ -84,6 +87,7 @@ class TrainingJob(object):
             # model args
             bert_model_type=self.bert_model_type,
             bert_base_model_name=self.bert_base_model_name,
+            classifier_type=self.classifier_type,
             sample_size=self.sample_size,
             training_type=self.training_type,
             meta_data_types=self.meta_data_types,
@@ -156,6 +160,8 @@ def start_training_job(
     _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
         dataset_path)
 
+    # Classifier type
+    classifier_type = ClassifierType.linear
     job = TrainingJob(
         job_id=job_id,
         data_dir=partition_dir,
@@ -163,6 +169,7 @@ def start_training_job(
         cache_dir=cache_dir,
         sample_size=sample_size,
         training_type=training_type,
+        classifier_type=classifier_type,
         meta_data_types=meta_data_types,
         loss_type=loss_type,
         num_folds=num_folds)

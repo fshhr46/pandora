@@ -150,6 +150,7 @@ def create_setup_config_file(
         setup_config_file_name,
         bert_base_model_name,
         bert_model_type,
+        classifier_type,
         training_type,
         meta_data_types,
         eval_max_seq_length,
@@ -158,6 +159,7 @@ def create_setup_config_file(
     setup_conf = {
         "bert_base_model_name": bert_base_model_name,
         "bert_model_type": bert_model_type,
+        "classifier_type": classifier_type,
         "mode": "sequence_classification",
         "training_type": training_type,
         "meta_data_types": meta_data_types,
