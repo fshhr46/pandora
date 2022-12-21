@@ -36,7 +36,7 @@ class BertForSentence(BertPreTrainedModel):
                             token_type_ids=token_type_ids)
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
-        logits_p = self.classifier(pooled_output)
+        logits_p, sigmoid = self.classifier(pooled_output)
 
-        outputs = (logits_p,) + outputs[2:]
+        outputs = (logits_p, sigmoid, ) + outputs[2:]
         return outputs

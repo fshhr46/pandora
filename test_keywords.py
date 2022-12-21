@@ -57,12 +57,12 @@ def test_get_insights(
         input_batch = (
             input_batch[0], input_batch[1], input_batch[2])
         # TODO: Fix hard coded "sequence_classification"
-        inferences = inference.run_inference(
+        logits_list, sigmoids_list = inference.run_inference(
             input_batch=input_batch,
             mode=test_utils.HANDLER_MODE,
             model=model)
         pred_results = inference.format_outputs(
-            inferences=inferences, id2label=id2label)
+            logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=id2label)
 
         sub_examples = examples[step * batch_size: (step+1) * batch_size]
         assert len(pred_results) == len(sub_examples)

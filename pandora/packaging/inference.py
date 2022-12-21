@@ -8,30 +8,46 @@ from captum.attr import LayerIntegratedGradients
 logger = logging.getLogger(__name__)
 
 
-def _format_output(logits, id2label):
+def _format_output(logits, sigmoids, id2label, doc_threshold):
+    # When using DOC, sigmoids is already calculated
     y_hat = logits.argmax(0).item()
     y_softmax = torch.softmax(logits, 0).tolist()
-    y_sigmoid = torch.sigmoid(logits).tolist()
     predicted_idx = y_hat
     num_labels = len(id2label)
+
+    # Determine whether it is unknwon class.
+    y_sigmoid = sigmoids
+    if sigmoids:
+        # check if all sigmoids
+        is_unknown_class = (sigmoids > doc_threshold).all()
+    else:
+        is_unknown_class = False
 
     named_softmax = {}
     named_sigmoid = {}
     for idx in range(num_labels):
         name = id2label[idx]
         named_softmax[name] = y_softmax[idx]
-        named_sigmoid[name] = y_sigmoid[idx]
+        if y_sigmoid:
+            named_sigmoid[name] = y_sigmoid[idx]
     return {
         "class": id2label[predicted_idx],
         "target": predicted_idx,
         "probability": named_softmax[id2label[predicted_idx]],
         "softmax": named_softmax,
         "sigmoid": named_sigmoid,
+        "is_unknown_class": is_unknown_class,
     }
 
 
-def format_outputs(inferences, id2label):
-    return [_format_output(inference, id2label) for inference in inferences]
+def format_outputs(logits_list, sigmoids_list, id2label, doc_threshold=0.5):
+    # When sigmoids is passed, use it to determine unknown class.
+    if sigmoids_list:
+        return [_format_output(logits, sigmoids, id2label, doc_threshold=doc_threshold)
+                for logits, sigmoids in zip(logits_list, sigmoids_list)]
+    else:
+        return [_format_output(logits, None, id2label, doc_threshold=doc_threshold)
+                for logits in logits_list]
 
 
 def run_inference(inputs, mode: str, model):
@@ -45,19 +61,22 @@ def run_inference(inputs, mode: str, model):
         list : It returns a list of the predicted value (list of logits) for the input text
     """
     # token_type_ids, labels are place holders
-    inferences = []
+    logits_list = []
+    sigmoids_list = None
     # Handling inference for sequence_classification.
     if mode == "sequence_classification":
-        outputs = model(**inputs)
-        logits_batch = outputs[0]
+        logits_batch, sigmoids_batch = model(**inputs)[:2]
+        if sigmoids_batch:
+            sigmoids_list = []
 
         num_preds, num_classes = logits_batch.shape
         for i in range(num_preds):
-            inference = logits_batch[i]
-            inferences.append(inference)
+            logits_list.append(logits_batch[i])
+            if sigmoids_batch:
+                sigmoids_list.append(sigmoids_batch[i])
     else:
         raise NotImplementedError
-    return inferences
+    return logits_list, sigmoids_list
 
 
 def merge_outputs(formated_outputs, indexes):
@@ -250,8 +269,8 @@ def captum_sequence_forward(input_ids_batch, attention_mask_batch, token_type_id
                    "attention_mask": attention_mask_batch,
                    "token_type_ids": token_type_ids_batch,
                    }
-    inferences = run_inference(input_batch, mode, model)
-    return torch.stack(inferences)
+    logits_list, sigmoids_list = run_inference(input_batch, mode, model)
+    return torch.stack(logits_list)
 
 
 def captum_sequence_forward_char_bert(
@@ -276,8 +295,8 @@ def captum_sequence_forward_char_bert(
                    "start_ids": start_ids_batch,
                    "end_ids": end_ids_batch,
                    }
-    inferences = run_inference(input_batch, mode, model)
-    return torch.stack(inferences)
+    logits_list, sigmoids_list = run_inference(input_batch, mode, model)
+    return torch.stack(logits_list)
 
 
 def summarize_attributions(attributions, batch_size):

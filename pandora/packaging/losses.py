@@ -12,7 +12,6 @@ class LossType(str, Enum):
         return str(self.value)
     x_ent = "x_ent"
     focal_loss = "focal_loss"
-    lsm_x_ent = "lsm_x_ent"
 
     @classmethod
     def get_loss_func(cls, loss_type, device, config={}):
@@ -36,8 +35,6 @@ class LossType(str, Enum):
             else:
                 alphas = None
             loss_func = FocalLoss(alphas=alphas)
-        elif loss_type == cls.lsm_x_ent:
-            loss_func = LabelSmoothingCrossEntropy(**config)
         else:
             raise ValueError(f"unknown loss_type {loss_type}")
         return loss_func
@@ -46,13 +43,26 @@ class LossType(str, Enum):
 class FocalLoss(nn.Module):
     '''Multi-class Focal loss implementation'''
 
-    def __init__(self, gamma=2, alphas=None, ignore_index=-100):
+    def __init__(self, gamma=2, alphas=None, reduction='mean', ignore_index=-100):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
         self.alphas = alphas
+        self.reduction = reduction
         self.ignore_index = ignore_index
 
     def forward(self, input, target):
+        """
+        input: [N, C]
+        target: [N, ]
+        """
+        ce_loss = F.cross_entropy(
+            input, target, reduction=self.reduction, weight=self.alphas)
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
+        return focal_loss
+
+    # Deprecated
+    def forward_old(self, input, target):
         """
         input: [N, C]
         target: [N, ]
@@ -63,23 +73,3 @@ class FocalLoss(nn.Module):
         loss = F.nll_loss(logpt, target, self.alphas,
                           ignore_index=self.ignore_index)
         return loss
-
-
-class LabelSmoothingCrossEntropy(nn.Module):
-    def __init__(self, eps=0.1, reduction='mean', ignore_index=-100):
-        super(LabelSmoothingCrossEntropy, self).__init__()
-        self.eps = eps
-        self.reduction = reduction
-        self.ignore_index = ignore_index
-
-    def forward(self, output, target):
-        c = output.size()[-1]
-        log_preds = F.log_softmax(output, dim=-1)
-        if self.reduction == 'sum':
-            loss = -log_preds.sum()
-        else:
-            loss = -log_preds.sum(dim=-1)
-            if self.reduction == 'mean':
-                loss = loss.mean()
-        return loss*self.eps/c + (1-self.eps) * F.nll_loss(log_preds, target, reduction=self.reduction,
-                                                           ignore_index=self.ignore_index)

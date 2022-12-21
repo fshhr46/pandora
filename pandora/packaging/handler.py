@@ -282,12 +282,12 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
             input_batch = input_batch_with_index[:-1]
             inputs = feature.build_inputs_from_batch(
                 batch=input_batch, include_labels=False, include_char_data=self.include_char_data)
-            inferences = inference.run_inference(
+            logits_list, sigmoids_list = inference.run_inference(
                 inputs,
                 self.setup_config["mode"],
                 self.model)
             formated_outputs = inference.format_outputs(
-                inferences=inferences, id2label=self.id2label)
+                logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=self.id2label)
             # if indexes is passed, merge results (column level inferencing)
             if indexes:
                 formated_outputs = inference.merge_outputs(

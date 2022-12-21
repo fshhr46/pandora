@@ -140,12 +140,12 @@ def test_offline(
         input_batch = (
             input_batch[0], input_batch[1], input_batch[2])
         # TODO: Fix hard coded "sequence_classification"
-        inferences = inference.run_inference(
+        logits_list, sigmoids_list = inference.run_inference(
             input_batch=input_batch,
             mode=test_utils.HANDLER_MODE,
             model=model)
         results = inference.format_outputs(
-            inferences=inferences, id2label=id2label)
+            logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=id2label)
 
         sub_lines = lines[step * batch_size: (step+1) * batch_size]
         assert len(results) == len(sub_lines)

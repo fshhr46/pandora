@@ -579,8 +579,8 @@ def train(
             include_char_data = bert_model_type == BertBaseModelType.char_bert
             inputs = build_inputs_from_batch(
                 batch=batch, include_labels=True, include_char_data=include_char_data)
-            logits = model(**inputs)[0]
-            loss = loss_func.forward(logits, inputs["labels"])
+            logits, sigmoids = model(**inputs)[:2]
+            loss = loss_func(logits, inputs["labels"])
             # model outputs are always tuple in pytorch-transformers (see doc)
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -691,8 +691,8 @@ def evaluate(
             include_char_data = bert_model_type == BertBaseModelType.char_bert
             inputs = build_inputs_from_batch(
                 batch=batch, include_labels=True, include_char_data=include_char_data)
-            logits = model(**inputs)[0]
-            tmp_eval_loss = loss_func.forward(logits, inputs["labels"])
+            logits, sigmoids = model(**inputs)[:2]
+            tmp_eval_loss = loss_func(logits, inputs["labels"])
             if args.n_gpu > 1:
                 # mean() to average on multi-gpu parallel evaluating
                 tmp_eval_loss = tmp_eval_loss.mean()
@@ -743,12 +743,12 @@ def predict(
             batch=batch, include_labels=False, include_char_data=include_char_data)
         with torch.no_grad():
             # TODO: Fix hard coded "sequence_classification"
-            inferences = inference.run_inference(
+            logits_list, sigmoids_list = inference.run_inference(
                 inputs,
                 "sequence_classification",
                 model)
             preds = inference.format_outputs(
-                inferences=inferences, id2label=id2label)
+                logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=id2label)
             for pred in preds:
                 tags = [pred["class"]]
                 json_d = {}
@@ -807,7 +807,6 @@ def get_args_parser():
                         choices=[
                             LossType.x_ent,
                             LossType.focal_loss,
-                            LossType.lsm_x_ent,
                         ])
     parser.add_argument("--cache_dir", default="", type=str,
                         help="Where do you want to store the pre-trained models downloaded from s3", )
