@@ -251,6 +251,7 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
                 output_dir=kth_output_dir,
                 config=config,
                 tokenizer=tokenizer,
+                classifier_cls=classifier_cls,
                 model=model,
                 device=device,
                 bert_model_type=bert_model_type,

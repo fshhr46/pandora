@@ -96,7 +96,7 @@ def main():
         # )
 
     # Set dataset and model args
-    num_folds = 3
+    num_folds = 0
     arg_list = job_runner.get_training_args(
         # model args
         bert_model_type=bert_model_type,
