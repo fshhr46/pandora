@@ -97,7 +97,8 @@ def main():
 
     # Set dataset and model args
     num_folds = 0
-    doc_pos_weight = 0.5
+    use_doc = True
+    doc_threshold = 0.5
     arg_list = job_runner.get_training_args(
         # model args
         bert_model_type=bert_model_type,
@@ -106,7 +107,8 @@ def main():
         meta_data_types=meta_data_types,
         loss_type=LossType.focal_loss,
         classifier_type=classifier_type,
-        doc_pos_weight=doc_pos_weight,
+        use_doc=use_doc,
+        doc_threshold=doc_threshold,
         num_folds=num_folds,
         # training args
         num_epochs=num_epochs,

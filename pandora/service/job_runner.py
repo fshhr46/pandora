@@ -851,6 +851,9 @@ def get_args_parser():
     parser.add_argument("--use_doc", action="store_true",
                         help="Whether to use DOD algorithm to calculate the loss."
                              "See calculate_doc_loss", )
+    parser.add_argument("--doc_threshold", default=0.5, type=float,
+                        help="DOC threshold to determine whether to reject the"
+                        " predicted class in prediction.")
     parser.add_argument("--cache_dir", default="", type=str,
                         help="Where do you want to store the pre-trained models downloaded from s3", )
 

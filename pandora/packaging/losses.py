@@ -68,8 +68,8 @@ class LossFuncBase(nn.Module):
 
 
 class CrossEntropyLoss(LossFuncBase):
-    def __init__(self, *args, **kwargs):
-        super(CrossEntropyLoss, self).__init__(*args, **kwargs)
+    def __init__(self, use_doc, *args, **kwargs):
+        super(CrossEntropyLoss, self).__init__(use_doc, *args, **kwargs)
 
     def forward(self, input, target):
         """
@@ -85,8 +85,8 @@ class CrossEntropyLoss(LossFuncBase):
 class FocalLoss(LossFuncBase):
     '''Multi-class Focal loss implementation'''
 
-    def __init__(self, gamma=2, alphas=None, *args, **kwargs):
-        super(FocalLoss, self).__init__(*args, **kwargs)
+    def __init__(self, use_doc, gamma=2, alphas=None, *args, **kwargs):
+        super(FocalLoss, self).__init__(use_doc, *args, **kwargs)
         self.gamma = gamma
         self.alphas = alphas
 
