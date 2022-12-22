@@ -15,12 +15,13 @@ def _format_output(logits, sigmoids, id2label, doc_pos_weight):
     predicted_idx = y_hat
     num_labels = len(id2label)
 
-    # Determine whether it is unknwon class.
-    if sigmoids is not None:
-        # check if all sigmoids
-        is_unknown_class = (sigmoids > doc_pos_weight).all().item()
+    if sigmoids is None:
+        reject_output = False
     else:
-        is_unknown_class = False
+        # Determine whether to reject the output and
+        # output unknwon class.
+        # Check if all labels' sigmoid are smaller than the threshold.
+        reject_output = (sigmoids < doc_pos_weight).all().item()
 
     named_softmax = {}
     named_sigmoid = {}
@@ -36,7 +37,7 @@ def _format_output(logits, sigmoids, id2label, doc_pos_weight):
         "probability": named_softmax[id2label[predicted_idx]],
         "softmax": named_softmax,
         "sigmoid": named_sigmoid,
-        "is_unknown_class": is_unknown_class,
+        "is_unknown_class": reject_output,
     }
     return formatted_output
 

@@ -58,7 +58,8 @@ class LossFuncBase(nn.Module):
             target, num_classes=num_labels).to(torch.float32)
 
         device = sigmoids.device
-        # binary_cross_entropy_with_logits
+        # TODO: Use dynamic pos_weight
+        # (i.e. different thresholds for each class)
         pos_weight = torch.tensor(
             num_labels * [self.doc_pos_weight]).to(device)
         return F.binary_cross_entropy(
