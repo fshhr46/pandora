@@ -33,7 +33,7 @@ def build_train_report(
         meta_data_types,
         predictions,
         report_dir,
-        processor):
+        label_list):
     logger.info(" ")
     output_predic_file = os.path.join(report_dir, "test_prediction.json")
     output_submit_file = os.path.join(report_dir, "test_submit.json")
@@ -58,7 +58,6 @@ def build_train_report(
 
     pre_lines = [json.loads(line.strip())
                  for line in open(output_submit_file) if line.strip()]
-    label_list = processor.get_labels()
     report.build_report(pre_lines=pre_lines,
                         truth_lines=pre_lines,
                         label_list=label_list,
@@ -69,18 +68,22 @@ def get_data_processor(
         datasets,
         training_type: TrainingType,
         meta_data_types: List[MetadataType],
-        resource_dir: str):
+        resource_dir: str,
+        num_folds: int):
     return SentenceProcessor(
         training_type=training_type,
         meta_data_types=meta_data_types,
         resource_dir=resource_dir,
-        datasets=datasets)
+        datasets=datasets,
+        num_folds=num_folds)
 
 
 def prepare_data(args,
+                 output_dir,
                  tokenizer,
                  processor,
-                 bert_model_type: BertBaseModelType):
+                 bert_model_type: BertBaseModelType,
+                 k_th_folder_name=""):
     train_dataset = eval_dataset = test_dataset = None
     train_examples = eval_examples = test_examples = None
     train_dist = eval_dist = test_dist = None
@@ -98,16 +101,38 @@ def prepare_data(args,
                 seed=args.seed,
                 sample_size=args.sample_size)
         train_dataset, train_examples = load_and_cache_examples(
-            args, tokenizer, data_type='train',  evaluate=False, processor=processor, char2ids_dict=char2ids_dict, sampler=sampler)
+            args,
+            output_dir,
+            tokenizer,
+            data_partition='train',
+            evaluate=False,
+            processor=processor,
+            char2ids_dict=char2ids_dict,
+            k_th_folder_name=k_th_folder_name,
+            sampler=sampler)
         train_dist = dataset_utils.calculate_label_distribution(train_examples)
     if args.do_eval:
         eval_dataset, eval_examples = load_and_cache_examples(
-            args, tokenizer, data_type='dev', evaluate=True, processor=processor, char2ids_dict=char2ids_dict)
+            args,
+            output_dir,
+            tokenizer,
+            data_partition='dev',
+            evaluate=True,
+            processor=processor,
+            char2ids_dict=char2ids_dict,
+            k_th_folder_name=k_th_folder_name)
         eval_dist = dataset_utils.calculate_label_distribution(eval_examples)
 
     if args.do_predict:
         test_dataset, test_examples = load_and_cache_examples(
-            args, tokenizer, data_type="test", evaluate=True, processor=processor, char2ids_dict=char2ids_dict)
+            args,
+            output_dir,
+            tokenizer,
+            data_partition="test",
+            evaluate=True,
+            processor=processor,
+            char2ids_dict=char2ids_dict,
+            k_th_folder_name=k_th_folder_name)
         test_dist = dataset_utils.calculate_label_distribution(test_examples)
 
     return {
@@ -129,35 +154,38 @@ def prepare_data(args,
     }
 
 
-def load_examples(data_dir, processor, data_type):
+def load_examples(data_dir, processor, data_type, k_th_folder_name=""):
     if data_type == 'train':
-        examples = processor.get_train_examples(data_dir)
+        examples = processor.get_train_examples(data_dir, k_th_folder_name)
     elif data_type == 'dev':
-        examples = processor.get_dev_examples(data_dir)
+        examples = processor.get_dev_examples(data_dir, k_th_folder_name)
     elif data_type == 'test':
-        examples = processor.get_test_examples(data_dir)
+        examples = processor.get_test_examples(data_dir, k_th_folder_name)
     else:
         raise ValueError(f"invalid data_type {data_type}")
     return examples
 
 
 def load_and_cache_examples(args,
+                            output_dir,
                             tokenizer,
-                            data_type,
+                            data_partition,
                             evaluate: bool,
                             processor,
                             char2ids_dict,
+                            k_th_folder_name="",
                             sampler=None):
     if args.local_rank not in [-1, 0] and not evaluate:
         # Make sure only the first process in distributed training process the dataset, and the others will use the cache
         torch.distributed.barrier()
     # Load data features from cache or dataset file
-    feature_dim = args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length
+    feature_dim = args.train_max_seq_length if data_partition == 'train' else args.eval_max_seq_length
     base_model_name = list(
         filter(None, args.model_name_or_path.split('/'))).pop()
     cached_features_file = os.path.join(
-        args.output_dir, f'cached_softmax-{data_type}_{base_model_name}_{feature_dim}')
-    examples = load_examples(args.data_dir, processor, data_type)
+        output_dir, f'cached_softmax-{data_partition}_{base_model_name}_{feature_dim}')
+    examples = load_examples(args.data_dir, processor,
+                             data_partition, k_th_folder_name)
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s",
                     cached_features_file)
@@ -179,7 +207,7 @@ def load_and_cache_examples(args,
                 meta_data_types=processor.meta_data_types,
                 label2id=label2id,
                 log_data=ex_index < 5,
-                max_seq_length=args.train_max_seq_length if data_type == 'train' else args.eval_max_seq_length,
+                max_seq_length=args.train_max_seq_length if data_partition == 'train' else args.eval_max_seq_length,
                 tokenizer=tokenizer,
                 # pad on the left for xlnet
                 pad_token=tokenizer.convert_tokens_to_ids(
