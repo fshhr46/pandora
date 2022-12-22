@@ -16,8 +16,7 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
     num_labels = len(id2label)
 
     # Determine whether it is unknwon class.
-    y_sigmoid = sigmoids
-    if sigmoids:
+    if sigmoids is not None:
         # check if all sigmoids
         is_unknown_class = (sigmoids > doc_threshold).all()
     else:
@@ -28,8 +27,8 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
     for idx in range(num_labels):
         name = id2label[idx]
         named_softmax[name] = y_softmax[idx]
-        if y_sigmoid:
-            named_sigmoid[name] = y_sigmoid[idx]
+        if sigmoids is not None:
+            named_sigmoid[name] = sigmoids[idx]
     return {
         "class": id2label[predicted_idx],
         "target": predicted_idx,
@@ -66,13 +65,13 @@ def run_inference(inputs, mode: str, model):
     # Handling inference for sequence_classification.
     if mode == "sequence_classification":
         logits_batch, sigmoids_batch = model(**inputs)[:2]
-        if sigmoids_batch:
+        if sigmoids_batch is not None:
             sigmoids_list = []
 
         num_preds, num_classes = logits_batch.shape
         for i in range(num_preds):
             logits_list.append(logits_batch[i])
-            if sigmoids_batch:
+            if sigmoids_batch is not None:
                 sigmoids_list.append(sigmoids_batch[i])
     else:
         raise NotImplementedError

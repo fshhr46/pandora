@@ -14,9 +14,9 @@ class LossType(str, Enum):
     focal_loss = "focal_loss"
 
     @classmethod
-    def get_loss_func(cls, loss_type, device, config={}):
+    def get_loss_func(cls, loss_type, device, doc_pos_weight, config={}):
         if loss_type == cls.x_ent:
-            loss_func = CrossEntropyLoss(**config)
+            loss_func = CrossEntropyLoss(doc_pos_weight, **config)
         elif loss_type == cls.focal_loss:
             data_distributions = config.get("data_distributions", {})
             # Converting
@@ -34,42 +34,77 @@ class LossType(str, Enum):
                 alphas = torch.tensor(alphas).to(device)
             else:
                 alphas = None
-            loss_func = FocalLoss(alphas=alphas)
+            loss_func = FocalLoss(doc_pos_weight, alphas=alphas)
         else:
             raise ValueError(f"unknown loss_type {loss_type}")
         return loss_func
 
 
-class FocalLoss(nn.Module):
+class LossFuncBase(nn.Module):
+    def __init__(self, doc_pos_weight=0.5, *args, **kwargs):
+        super(LossFuncBase, self).__init__(*args, **kwargs)
+        self.doc_pos_weight = doc_pos_weight
+        self.use_doc = doc_pos_weight > 0
+
+    def calculate_doc_loss(self, logits, target, reduction='sum'):
+        """
+        N: Batch size.
+        C: Number of categories (num_labels)
+        logits: [N, C]
+        target: [N, ]
+        """
+        num_labels = logits.shape[1]
+        target_one_hot = F.one_hot(
+            target, num_classes=num_labels).to(torch.float32)
+
+        device = logits.device
+        # binary_cross_entropy_with_logits
+        pos_weight = torch.tensor(
+            num_labels * [self.doc_pos_weight]).to(device)
+        return F.binary_cross_entropy_with_logits(
+            logits,
+            target_one_hot,
+            reduction=reduction,
+            pos_weight=pos_weight)
+
+    def calculate_xent(self, logits, target, weight=None):
+        ce_loss = F.cross_entropy(
+            logits, target, weight=weight)
+        return ce_loss
+
+
+class CrossEntropyLoss(LossFuncBase):
+    def __init__(self, *args, **kwargs):
+        super(CrossEntropyLoss, self).__init__(*args, **kwargs)
+
+    def forward(self, logits, target):
+        """
+        logits: [N, C]
+        target: [N, ]
+        """
+        if self.use_doc:
+            return self.calculate_doc_loss(logits, target)
+        else:
+            return self.calculate_xent(logits, target)
+
+
+class FocalLoss(LossFuncBase):
     '''Multi-class Focal loss implementation'''
 
-    def __init__(self, gamma=2, alphas=None, reduction='mean', ignore_index=-100):
-        super(FocalLoss, self).__init__()
+    def __init__(self, gamma=2, alphas=None, *args, **kwargs):
+        super(FocalLoss, self).__init__(*args, **kwargs)
         self.gamma = gamma
         self.alphas = alphas
-        self.reduction = reduction
-        self.ignore_index = ignore_index
 
-    def forward(self, input, target):
+    def forward(self, logits, target):
         """
-        input: [N, C]
+        logits: [N, C]
         target: [N, ]
         """
-        ce_loss = F.cross_entropy(
-            input, target, reduction=self.reduction, weight=self.alphas)
-        pt = torch.exp(-ce_loss)
-        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
+        if self.use_doc:
+            base_loss = self.calculate_doc_loss(logits, target)
+        else:
+            base_loss = self.calculate_xent(logits, target)
+        pt = torch.exp(-base_loss)
+        focal_loss = ((1 - pt) ** self.gamma * base_loss).mean()
         return focal_loss
-
-    # Deprecated
-    def forward_old(self, input, target):
-        """
-        input: [N, C]
-        target: [N, ]
-        """
-        logpt = F.log_softmax(input, dim=1)
-        pt = torch.exp(logpt)
-        logpt = (1-pt)**self.gamma * logpt
-        loss = F.nll_loss(logpt, target, self.alphas,
-                          ignore_index=self.ignore_index)
-        return loss

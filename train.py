@@ -30,7 +30,7 @@ def main():
     num_data_entry_test = 10
 
     # Classifier
-    classifier_type = ClassifierType.linear
+    classifier_type = ClassifierType.doc
 
     # Training args
     training_type = TrainingType.column_data
