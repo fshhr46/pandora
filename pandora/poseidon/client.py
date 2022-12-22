@@ -227,8 +227,8 @@ def tag_table_columns(
         datasource_id=datasource_id, db_name=db_name)
     assert list_tables_resp.status_code == 200, list_tables_resp.text
     list_tables_resp_obj = json.loads(list_tables_resp.text)
-    assert len(list_tables_resp_obj["assets"]) == len(tables_data), len(
-        list_tables_resp_obj["assets"])
+    # assert len(list_tables_resp_obj["assets"]) == len(tables_data), len(
+    #     list_tables_resp_obj["assets"])
 
     for asset in list_tables_resp_obj["assets"]:
         table_asset_id = asset["id"]
@@ -330,8 +330,8 @@ def classify_and_rate_table_columns(
         datasource_id=datasource_id, db_name=db_name)
     assert list_tables_resp.status_code == 200, list_tables_resp.text
     list_tables_resp_obj = json.loads(list_tables_resp.text)
-    assert len(list_tables_resp_obj["assets"]) == len(tables_data), len(
-        list_tables_resp_obj["assets"])
+    # assert len(list_tables_resp_obj["assets"]) == len(tables_data), len(
+    #     list_tables_resp_obj["assets"])
 
     for asset in list_tables_resp_obj["assets"]:
         table_asset_id = asset["id"]
@@ -402,7 +402,8 @@ def classify_and_rate_table_columns(
             })
 
         if add_tagging:
-            add_subject2subject_resp = poseidon_client.add_subject2subject(subjects=subject2subject)
+            add_subject2subject_resp = poseidon_client.add_subject2subject(
+                subjects=subject2subject)
             assert add_subject2subject_resp.status_code == 200, add_subject2subject_resp.text
 
     tags_list = []
