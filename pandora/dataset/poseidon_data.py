@@ -161,7 +161,7 @@ def partition_poseidon_dataset(
         "output_dir": output_dir,
         "min_samples": min_samples,
         "data_ratios": data_ratios,
-        "num_folds": dataset_path,
+        "num_folds": num_folds,
         "seed": seed
     }
     os.makedirs(output_dir, exist_ok=True)
@@ -355,7 +355,7 @@ def _validate_and_partition_tag_data_column_data(tag_data, min_samples, data_rat
             all_samples=tag_samples, data_ratios=data_ratios, seed=seed)
     else:
         logger.info(
-            f"num_samples({num_samples}) must NOT be smaller than min_samples {min_samples}")
+            f"num_samples ({num_samples}) must NOT be smaller than min_samples ({min_samples})")
         data_partitions = {
             "train": [],
             "dev": [],
