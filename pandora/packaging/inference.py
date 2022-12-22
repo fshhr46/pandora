@@ -8,7 +8,7 @@ from captum.attr import LayerIntegratedGradients
 logger = logging.getLogger(__name__)
 
 
-def _format_output(logits, sigmoids, id2label, doc_pos_weight):
+def _format_output(logits, sigmoids, id2label, doc_threshold):
     # When using DOC, sigmoids is already calculated
     y_hat = logits.argmax(0).item()
     y_softmax = torch.softmax(logits, 0).tolist()
@@ -21,7 +21,7 @@ def _format_output(logits, sigmoids, id2label, doc_pos_weight):
         # Determine whether to reject the output and
         # output unknwon class.
         # Check if all labels' sigmoid are smaller than the threshold.
-        reject_output = (sigmoids < doc_pos_weight).all().item()
+        reject_output = (sigmoids < doc_threshold).all().item()
 
     named_softmax = {}
     named_sigmoid = {}
@@ -42,13 +42,13 @@ def _format_output(logits, sigmoids, id2label, doc_pos_weight):
     return formatted_output
 
 
-def format_outputs(logits_list, sigmoids_list, id2label, doc_pos_weight=0.5):
+def format_outputs(logits_list, sigmoids_list, id2label, doc_threshold):
     # When sigmoids is passed, use it to determine unknown class.
     if sigmoids_list:
-        return [_format_output(logits, sigmoids, id2label, doc_pos_weight=doc_pos_weight)
+        return [_format_output(logits, sigmoids, id2label, doc_threshold=doc_threshold)
                 for logits, sigmoids in zip(logits_list, sigmoids_list)]
     else:
-        return [_format_output(logits, None, id2label, doc_pos_weight=doc_pos_weight)
+        return [_format_output(logits, None, id2label, doc_threshold=doc_threshold)
                 for logits in logits_list]
 
 

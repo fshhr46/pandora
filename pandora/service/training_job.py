@@ -47,7 +47,8 @@ class TrainingJob(object):
                  meta_data_types: List[str],
                  loss_type: LossType,
                  classifier_type: ClassifierType,
-                 doc_pos_weight: float,
+                 use_doc: float,
+                 doc_threshold: float,
                  num_folds: int) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
@@ -66,7 +67,8 @@ class TrainingJob(object):
         )
         self.loss_type = loss_type
         self.classifier_type = classifier_type
-        self.doc_pos_weight = doc_pos_weight
+        self.use_doc = use_doc
+        self.doc_threshold = doc_threshold
 
         # Whether to perform cross validation
         self.num_folds = num_folds
@@ -95,7 +97,8 @@ class TrainingJob(object):
             # loss func type
             loss_type=self.loss_type,
             classifier_type=self.classifier_type,
-            doc_pos_weight=self.doc_pos_weight,
+            use_doc=self.use_doc,
+            doc_threshold=self.doc_threshold,
             num_folds=self.num_folds,
             # training args
             num_epochs=num_epochs,
@@ -166,7 +169,8 @@ def start_training_job(
 
     # Classifier type
     classifier_type = ClassifierType.doc
-    doc_pos_weight = 0.5
+    use_doc = True
+    doc_threshold = 0.5
     job = TrainingJob(
         job_id=job_id,
         data_dir=partition_dir,
@@ -175,7 +179,8 @@ def start_training_job(
         sample_size=sample_size,
         training_type=training_type,
         classifier_type=classifier_type,
-        doc_pos_weight=doc_pos_weight,
+        use_doc=use_doc,
+        doc_threshold=doc_threshold,
         meta_data_types=meta_data_types,
         loss_type=loss_type,
         num_folds=num_folds)

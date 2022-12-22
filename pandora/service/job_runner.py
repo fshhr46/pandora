@@ -85,7 +85,8 @@ def get_training_args(
     meta_data_types: List[str],
     loss_type: LossType,
     classifier_type: ClassifierType,
-    doc_pos_weight: float,
+    use_doc: bool,
+    doc_threshold: float,
     num_folds: int,
     # training parameters
     sample_size: int = 0,
@@ -137,7 +138,9 @@ def get_training_args(
         )
     arg_list.append(f"--training_type={training_type}")
     arg_list.append(f"--classifier_type={classifier_type}")
-    arg_list.append(f"--doc_pos_weight={doc_pos_weight}")
+    if use_doc:
+        arg_list.append(f"--use_doc")
+    arg_list.append(f"--doc_threshold={doc_threshold}")
     for meta_data_type in meta_data_types:
         arg_list.append(f"--meta_data_type={meta_data_type}")
     return arg_list
@@ -199,7 +202,8 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
     meta_data_types = args.meta_data_type
     # Loss function setup
     loss_type = args.loss_type
-    doc_pos_weight = args.doc_pos_weight
+    use_doc = args.use_doc
+    doc_threshold = args.doc_threshold
     bert_model_type = args.bert_model_type
     bert_base_model_name = args.model_name_or_path
     if meta_data_types is None:
@@ -228,7 +232,7 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
         bert_base_model_name=bert_base_model_name,
         bert_model_type=bert_model_type,
         classifier_type=classifier_type,
-        doc_pos_weight=doc_pos_weight,
+        doc_threshold=doc_threshold,
         training_type=args.training_type,
         meta_data_types=meta_data_types,
         eval_max_seq_length=args.eval_max_seq_length,
@@ -264,7 +268,8 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
                 training_type=training_type,
                 meta_data_types=meta_data_types,
                 loss_type=loss_type,
-                doc_pos_weight=doc_pos_weight,
+                use_doc=use_doc,
+                doc_threshold=doc_threshold,
                 model_classes=model_classes,
                 batch_collate_fn=batch_collate_fn,
                 data=kth_fold_data,
@@ -307,7 +312,8 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
         training_type=training_type,
         meta_data_types=meta_data_types,
         loss_type=loss_type,
-        doc_pos_weight=doc_pos_weight,
+        use_doc=use_doc,
+        doc_threshold=doc_threshold,
         model_classes=model_classes,
         batch_collate_fn=batch_collate_fn,
         data=data_train,
@@ -329,7 +335,8 @@ def train_eval_test(
     meta_data_types,
     # loss type
     loss_type,
-    doc_pos_weight,
+    use_doc,
+    doc_threshold,
     # model classes
     model_classes,
     batch_collate_fn,
@@ -362,7 +369,7 @@ def train_eval_test(
             args, output_dir, device, bert_model_type,
             data_distributions,
             loss_type,
-            doc_pos_weight,
+            use_doc,
             train_dataset, eval_dataset, model, tokenizer, batch_collate_fn)
         logger.info(" global_step = %s, average loss = %s",
                     global_step, tr_loss)
@@ -414,7 +421,7 @@ def train_eval_test(
                               device, bert_model_type,
                               data_distributions,
                               loss_type,
-                              doc_pos_weight,
+                              use_doc,
                               model, eval_dataset,
                               batch_collate_fn, prefix=prefix)
             if global_step:
@@ -457,7 +464,7 @@ def train_eval_test(
         predictions = predict(
             device=device,
             bert_model_type=bert_model_type,
-            doc_pos_weight=doc_pos_weight,
+            doc_threshold=doc_threshold,
             model=model,
             id2label=args.id2label,
             test_dataset=test_dataset,
@@ -483,7 +490,7 @@ def train(
         bert_model_type,
         data_distributions,
         loss_type,
-        doc_pos_weight,
+        use_doc,
         train_dataset,
         eval_dataset,
         model,
@@ -578,7 +585,7 @@ def train(
     loss_func = LossType.get_loss_func(
         loss_type,
         device=device,
-        doc_pos_weight=doc_pos_weight,
+        use_doc=use_doc,
         # TODO: Disable alphas in focal loss
         config={
             # "data_distributions": data_distributions,
@@ -680,7 +687,7 @@ def evaluate(
         bert_model_type,
         data_distributions,
         loss_type,
-        doc_pos_weight,
+        use_doc,
         model,
         eval_dataset,
         batch_collate_fn,
@@ -705,7 +712,7 @@ def evaluate(
     loss_func = LossType.get_loss_func(
         loss_type,
         device=device,
-        doc_pos_weight=doc_pos_weight,
+        use_doc=use_doc,
         # TODO: Disable alphas in focal loss
         config={
             # "data_distributions": data_distributions,
@@ -747,7 +754,7 @@ def evaluate(
 def predict(
         device,
         bert_model_type,
-        doc_pos_weight,
+        doc_threshold,
         model,
         id2label,
         test_dataset,
@@ -781,7 +788,7 @@ def predict(
                 model)
             preds = inference.format_outputs(
                 logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=id2label,
-                doc_pos_weight=doc_pos_weight)
+                doc_threshold=doc_threshold)
             for pred in preds:
                 tags = [pred["class"]]
                 json_d = {}
@@ -841,9 +848,9 @@ def get_args_parser():
                             LossType.x_ent,
                             LossType.focal_loss,
                         ])
-    parser.add_argument("--doc_pos_weight", default=0.5, type=float,
-                        help="When this value is set to value greater than 0, "
-                             "uses DOC algorithm to calculate the loss. See calculate_doc_loss", )
+    parser.add_argument("--use_doc", action="store_true",
+                        help="Whether to use DOD algorithm to calculate the loss."
+                             "See calculate_doc_loss", )
     parser.add_argument("--cache_dir", default="", type=str,
                         help="Where do you want to store the pre-trained models downloaded from s3", )
 

@@ -14,9 +14,9 @@ class LossType(str, Enum):
     focal_loss = "focal_loss"
 
     @classmethod
-    def get_loss_func(cls, loss_type, device, doc_pos_weight, config={}):
+    def get_loss_func(cls, loss_type, device, use_doc, config={}):
         if loss_type == cls.x_ent:
-            loss_func = CrossEntropyLoss(doc_pos_weight, **config)
+            loss_func = CrossEntropyLoss(use_doc, **config)
         elif loss_type == cls.focal_loss:
             data_distributions = config.get("data_distributions", {})
             # Converting
@@ -34,17 +34,16 @@ class LossType(str, Enum):
                 alphas = torch.tensor(alphas).to(device)
             else:
                 alphas = None
-            loss_func = FocalLoss(doc_pos_weight, alphas=alphas)
+            loss_func = FocalLoss(use_doc, alphas=alphas)
         else:
             raise ValueError(f"unknown loss_type {loss_type}")
         return loss_func
 
 
 class LossFuncBase(nn.Module):
-    def __init__(self, doc_pos_weight=0.5, *args, **kwargs):
+    def __init__(self, use_doc, *args, **kwargs):
         super(LossFuncBase, self).__init__(*args, **kwargs)
-        self.doc_pos_weight = doc_pos_weight
-        self.use_doc = doc_pos_weight > 0
+        self.use_doc = use_doc
 
     def calculate_doc_loss(self, sigmoids, target, reduction='sum'):
         """
@@ -57,16 +56,10 @@ class LossFuncBase(nn.Module):
         target_one_hot = F.one_hot(
             target, num_classes=num_labels).to(torch.float32)
 
-        device = sigmoids.device
-        # TODO: Use dynamic pos_weight
-        # (i.e. different thresholds for each class)
-        pos_weight = torch.tensor(
-            num_labels * [self.doc_pos_weight]).to(device)
         return F.binary_cross_entropy(
             sigmoids,
             target_one_hot,
-            reduction=reduction,
-            weight=pos_weight)
+            reduction=reduction)
 
     def calculate_xent(self, logits, target, weight=None):
         ce_loss = F.cross_entropy(
