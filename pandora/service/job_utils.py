@@ -146,11 +146,12 @@ def load_model_report(report_dir, include_data):
 
 
 def create_setup_config_file(
-        package_dir,
+        output_dir,
         setup_config_file_name,
         bert_base_model_name,
         bert_model_type,
         classifier_type,
+        doc_pos_weight,
         training_type,
         meta_data_types,
         eval_max_seq_length,
@@ -160,6 +161,7 @@ def create_setup_config_file(
         "bert_base_model_name": bert_base_model_name,
         "bert_model_type": bert_model_type,
         "classifier_type": classifier_type,
+        "doc_pos_weight": doc_pos_weight,
         "mode": "sequence_classification",
         "training_type": training_type,
         "meta_data_types": meta_data_types,
@@ -172,6 +174,6 @@ def create_setup_config_file(
         "FasterTransformer": False,  # TODO: make this True
         "model_parallel": False  # Beta Feature, set to False for now.
     }
-    setup_conf_path = os.path.join(package_dir, setup_config_file_name)
+    setup_conf_path = os.path.join(output_dir, setup_config_file_name)
     with open(setup_conf_path, "w") as setup_conf_f:
         json.dump(setup_conf, setup_conf_f, indent=4)

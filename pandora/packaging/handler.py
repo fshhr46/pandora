@@ -74,6 +74,9 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
         self.bert_model_type = self.setup_config["bert_model_type"]
         self.include_char_data = self.bert_model_type == BertBaseModelType.char_bert
 
+        # set doc_pos_weight
+        self.doc_pos_weight = self.setup_config["doc_pos_weight"]
+
         # TODO: Write a function that gets config/tokenizer/model
         # Loading the model and tokenizer from checkpoint and config files based on the user's choice of mode
         # further setup config can be added.
@@ -287,7 +290,8 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 self.setup_config["mode"],
                 self.model)
             formated_outputs = inference.format_outputs(
-                logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=self.id2label)
+                logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=self.id2label,
+                doc_pos_weight=self.doc_pos_weight)
             # if indexes is passed, merge results (column level inferencing)
             if indexes:
                 formated_outputs = inference.merge_outputs(

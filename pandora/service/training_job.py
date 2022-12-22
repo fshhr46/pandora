@@ -47,6 +47,7 @@ class TrainingJob(object):
                  meta_data_types: List[str],
                  loss_type: LossType,
                  classifier_type: ClassifierType,
+                 doc_pos_weight: float,
                  num_folds: int) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
@@ -65,6 +66,7 @@ class TrainingJob(object):
         )
         self.loss_type = loss_type
         self.classifier_type = classifier_type
+        self.doc_pos_weight = doc_pos_weight
 
         # Whether to perform cross validation
         self.num_folds = num_folds
@@ -87,11 +89,13 @@ class TrainingJob(object):
             # model args
             bert_model_type=self.bert_model_type,
             bert_base_model_name=self.bert_base_model_name,
-            classifier_type=self.classifier_type,
             sample_size=self.sample_size,
             training_type=self.training_type,
             meta_data_types=self.meta_data_types,
+            # loss func type
             loss_type=self.loss_type,
+            classifier_type=self.classifier_type,
+            doc_pos_weight=self.doc_pos_weight,
             num_folds=self.num_folds,
             # training args
             num_epochs=num_epochs,
@@ -161,7 +165,8 @@ def start_training_job(
         dataset_path)
 
     # Classifier type
-    classifier_type = ClassifierType.linear
+    classifier_type = ClassifierType.doc
+    doc_pos_weight = 0.5
     job = TrainingJob(
         job_id=job_id,
         data_dir=partition_dir,
@@ -170,6 +175,7 @@ def start_training_job(
         sample_size=sample_size,
         training_type=training_type,
         classifier_type=classifier_type,
+        doc_pos_weight=doc_pos_weight,
         meta_data_types=meta_data_types,
         loss_type=loss_type,
         num_folds=num_folds)

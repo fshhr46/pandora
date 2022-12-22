@@ -46,26 +46,26 @@ class LossFuncBase(nn.Module):
         self.doc_pos_weight = doc_pos_weight
         self.use_doc = doc_pos_weight > 0
 
-    def calculate_doc_loss(self, logits, target, reduction='sum'):
+    def calculate_doc_loss(self, sigmoids, target, reduction='sum'):
         """
         N: Batch size.
         C: Number of categories (num_labels)
         logits: [N, C]
         target: [N, ]
         """
-        num_labels = logits.shape[1]
+        num_labels = sigmoids.shape[1]
         target_one_hot = F.one_hot(
             target, num_classes=num_labels).to(torch.float32)
 
-        device = logits.device
+        device = sigmoids.device
         # binary_cross_entropy_with_logits
         pos_weight = torch.tensor(
             num_labels * [self.doc_pos_weight]).to(device)
-        return F.binary_cross_entropy_with_logits(
-            logits,
+        return F.binary_cross_entropy(
+            sigmoids,
             target_one_hot,
             reduction=reduction,
-            pos_weight=pos_weight)
+            weight=pos_weight)
 
     def calculate_xent(self, logits, target, weight=None):
         ce_loss = F.cross_entropy(
@@ -77,15 +77,15 @@ class CrossEntropyLoss(LossFuncBase):
     def __init__(self, *args, **kwargs):
         super(CrossEntropyLoss, self).__init__(*args, **kwargs)
 
-    def forward(self, logits, target):
+    def forward(self, input, target):
         """
-        logits: [N, C]
+        input: [N, C]
         target: [N, ]
         """
         if self.use_doc:
-            return self.calculate_doc_loss(logits, target)
+            return self.calculate_doc_loss(input, target)
         else:
-            return self.calculate_xent(logits, target)
+            return self.calculate_xent(input, target)
 
 
 class FocalLoss(LossFuncBase):
@@ -96,15 +96,15 @@ class FocalLoss(LossFuncBase):
         self.gamma = gamma
         self.alphas = alphas
 
-    def forward(self, logits, target):
+    def forward(self, input, target):
         """
-        logits: [N, C]
+        input: [N, C]
         target: [N, ]
         """
         if self.use_doc:
-            base_loss = self.calculate_doc_loss(logits, target)
+            base_loss = self.calculate_doc_loss(input, target)
         else:
-            base_loss = self.calculate_xent(logits, target)
+            base_loss = self.calculate_xent(input, target)
         pt = torch.exp(-base_loss)
         focal_loss = ((1 - pt) ** self.gamma * base_loss).mean()
         return focal_loss

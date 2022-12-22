@@ -82,9 +82,10 @@ def get_training_args(
     bert_model_type: BertBaseModelType,
     bert_base_model_name,
     training_type: TrainingType,
-    classifier_type: ClassifierType,
     meta_data_types: List[str],
     loss_type: LossType,
+    classifier_type: ClassifierType,
+    doc_pos_weight: float,
     num_folds: int,
     # training parameters
     sample_size: int = 0,
@@ -136,6 +137,7 @@ def get_training_args(
         )
     arg_list.append(f"--training_type={training_type}")
     arg_list.append(f"--classifier_type={classifier_type}")
+    arg_list.append(f"--doc_pos_weight={doc_pos_weight}")
     for meta_data_type in meta_data_types:
         arg_list.append(f"--meta_data_type={meta_data_type}")
     return arg_list
@@ -221,15 +223,16 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
 
     # create torchserve config file
     create_setup_config_file(
-        output_dir,
-        constants.SERUP_CONF_FILE_NAME,
-        bert_base_model_name,
-        bert_model_type,
-        classifier_type,
-        args.training_type,
-        meta_data_types,
-        args.eval_max_seq_length,
-        len(args.id2label))
+        output_dir=output_dir,
+        setup_config_file_name=constants.SERUP_CONF_FILE_NAME,
+        bert_base_model_name=bert_base_model_name,
+        bert_model_type=bert_model_type,
+        classifier_type=classifier_type,
+        doc_pos_weight=doc_pos_weight,
+        training_type=args.training_type,
+        meta_data_types=meta_data_types,
+        eval_max_seq_length=args.eval_max_seq_length,
+        num_labels=len(args.id2label))
 
     # perform cross-validation
     if num_folds > 0:
@@ -454,6 +457,7 @@ def train_eval_test(
         predictions = predict(
             device=device,
             bert_model_type=bert_model_type,
+            doc_pos_weight=doc_pos_weight,
             model=model,
             id2label=args.id2label,
             test_dataset=test_dataset,
@@ -598,7 +602,10 @@ def train(
             inputs = build_inputs_from_batch(
                 batch=batch, include_labels=True, include_char_data=include_char_data)
             logits, sigmoids = model(**inputs)[:2]
-            loss = loss_func(logits, inputs["labels"])
+            # TODO: if sigmoid is not None, then DOC is enabled,
+            # and we want to use sigmoids to calculate loss
+            loss_input = sigmoids if sigmoids is not None else logits
+            loss = loss_func(loss_input, inputs["labels"])
             # model outputs are always tuple in pytorch-transformers (see doc)
             if args.n_gpu > 1:
                 loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -713,7 +720,10 @@ def evaluate(
             inputs = build_inputs_from_batch(
                 batch=batch, include_labels=True, include_char_data=include_char_data)
             logits, sigmoids = model(**inputs)[:2]
-            tmp_eval_loss = loss_func(logits, inputs["labels"])
+            # TODO: if sigmoid is not None, then DOC is enabled,
+            # and we want to use sigmoids to calculate loss
+            loss_input = sigmoids if sigmoids is not None else logits
+            tmp_eval_loss = loss_func(loss_input, inputs["labels"])
             if args.n_gpu > 1:
                 # mean() to average on multi-gpu parallel evaluating
                 tmp_eval_loss = tmp_eval_loss.mean()
@@ -737,6 +747,7 @@ def evaluate(
 def predict(
         device,
         bert_model_type,
+        doc_pos_weight,
         model,
         id2label,
         test_dataset,
@@ -769,7 +780,8 @@ def predict(
                 "sequence_classification",
                 model)
             preds = inference.format_outputs(
-                logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=id2label)
+                logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=id2label,
+                doc_pos_weight=doc_pos_weight)
             for pred in preds:
                 tags = [pred["class"]]
                 json_d = {}

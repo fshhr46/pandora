@@ -448,8 +448,8 @@ class CharBertForSequenceClassification(BertPreTrainedModel):
         seq_output = torch.mean(seq_repr, dim=1)
 
         pooled_output = self.dropout(seq_output)
-        logits = self.classifier(pooled_output)
+        logits_p, sigmoid = self.classifier(pooled_output)
 
         # add hidden states and attention if they are here
-        outputs = (logits,) + outputs[4:]
+        outputs = (logits_p, sigmoid, ) + outputs[4:]
         return outputs  # (loss), logits, (hidden_states), (attentions)

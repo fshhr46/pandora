@@ -8,7 +8,7 @@ from captum.attr import LayerIntegratedGradients
 logger = logging.getLogger(__name__)
 
 
-def _format_output(logits, sigmoids, id2label, doc_threshold):
+def _format_output(logits, sigmoids, id2label, doc_pos_weight):
     # When using DOC, sigmoids is already calculated
     y_hat = logits.argmax(0).item()
     y_softmax = torch.softmax(logits, 0).tolist()
@@ -18,7 +18,7 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
     # Determine whether it is unknwon class.
     if sigmoids is not None:
         # check if all sigmoids
-        is_unknown_class = (sigmoids > doc_threshold).all()
+        is_unknown_class = (sigmoids > doc_pos_weight).all().item()
     else:
         is_unknown_class = False
 
@@ -28,8 +28,9 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
         name = id2label[idx]
         named_softmax[name] = y_softmax[idx]
         if sigmoids is not None:
-            named_sigmoid[name] = sigmoids[idx]
-    return {
+            named_sigmoid[name] = sigmoids[idx].item()
+
+    formatted_output = {
         "class": id2label[predicted_idx],
         "target": predicted_idx,
         "probability": named_softmax[id2label[predicted_idx]],
@@ -37,15 +38,16 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
         "sigmoid": named_sigmoid,
         "is_unknown_class": is_unknown_class,
     }
+    return formatted_output
 
 
-def format_outputs(logits_list, sigmoids_list, id2label, doc_threshold=0.5):
+def format_outputs(logits_list, sigmoids_list, id2label, doc_pos_weight=0.5):
     # When sigmoids is passed, use it to determine unknown class.
     if sigmoids_list:
-        return [_format_output(logits, sigmoids, id2label, doc_threshold=doc_threshold)
+        return [_format_output(logits, sigmoids, id2label, doc_pos_weight=doc_pos_weight)
                 for logits, sigmoids in zip(logits_list, sigmoids_list)]
     else:
-        return [_format_output(logits, None, id2label, doc_threshold=doc_threshold)
+        return [_format_output(logits, None, id2label, doc_pos_weight=doc_pos_weight)
                 for logits in logits_list]
 
 
@@ -268,7 +270,7 @@ def captum_sequence_forward(input_ids_batch, attention_mask_batch, token_type_id
                    "attention_mask": attention_mask_batch,
                    "token_type_ids": token_type_ids_batch,
                    }
-    logits_list, sigmoids_list = run_inference(input_batch, mode, model)
+    logits_list, _ = run_inference(input_batch, mode, model)
     return torch.stack(logits_list)
 
 
@@ -294,7 +296,7 @@ def captum_sequence_forward_char_bert(
                    "start_ids": start_ids_batch,
                    "end_ids": end_ids_batch,
                    }
-    logits_list, sigmoids_list = run_inference(input_batch, mode, model)
+    logits_list, _ = run_inference(input_batch, mode, model)
     return torch.stack(logits_list)
 
 
