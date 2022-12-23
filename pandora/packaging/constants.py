@@ -7,6 +7,7 @@ MODEL_CONFIG_FILE_NAME = "config.json"
 VOCAB_FILE_NAME = "vocab.txt"
 INDEX2NAME_FILE_NAME = "index_to_name.json"
 SERUP_CONF_FILE_NAME = "setup_config.json"
+PROCESSOR_PROFILE_FILE_NAME = "processor_profile.json"
 
 # char-bert related
 CHARBERT_CHAR_VOCAB = "char-bert_char_vocab.txt"

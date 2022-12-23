@@ -28,8 +28,8 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
-from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
-from pandora.callback.optimizater.adamw import AdamW
+from torch.optim.lr_scheduler import get_linear_schedule_with_warmup
+from torch.optim import AdamW
 from pandora.callback.progressbar import ProgressBar
 
 # model types
@@ -55,6 +55,7 @@ from pandora.service.job_utils import (
     get_training_args_file_path,
     get_all_checkpoints,
     create_setup_config_file,
+    profile_processor,
 )
 
 ALL_MODELS = tuple(BERT_PRETRAINED_CONFIG_ARCHIVE_MAP.keys())
@@ -85,8 +86,8 @@ def get_training_args(
     meta_data_types: List[str],
     loss_type: LossType,
     classifier_type: ClassifierType,
-    use_doc: bool,
     doc_threshold: float,
+    doc_hold_out: float,
     num_folds: int,
     # training parameters
     sample_size: int = 0,
@@ -138,9 +139,11 @@ def get_training_args(
         )
     arg_list.append(f"--training_type={training_type}")
     arg_list.append(f"--classifier_type={classifier_type}")
-    if use_doc:
-        arg_list.append(f"--use_doc")
+
+    assert doc_threshold >= 0 and doc_threshold <= 1
     arg_list.append(f"--doc_threshold={doc_threshold}")
+    assert doc_hold_out >= 0 and doc_hold_out <= 1
+    arg_list.append(f"--doc_hold_out={doc_hold_out}")
     for meta_data_type in meta_data_types:
         arg_list.append(f"--meta_data_type={meta_data_type}")
     return arg_list
@@ -202,33 +205,41 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
     meta_data_types = args.meta_data_type
     # Loss function setup
     loss_type = args.loss_type
-    use_doc = args.use_doc
     doc_threshold = args.doc_threshold
+    doc_hold_out = args.doc_hold_out
+    # Enable DOC feature when doc_hold_out is greater than 0
+    use_doc = doc_hold_out < 1
+
     bert_model_type = args.bert_model_type
     bert_base_model_name = args.model_name_or_path
     if meta_data_types is None:
         meta_data_types = []
 
-    batch_collate_fn = batch_collate_fn_char_bert if bert_model_type == BertBaseModelType.char_bert else batch_collate_fn_bert
+    # Set output dir
+    output_dir = args.output_dir
+    classifier_type = args.classifier_type
 
+    batch_collate_fn = batch_collate_fn_char_bert if bert_model_type == BertBaseModelType.char_bert else batch_collate_fn_bert
     num_folds = args.num_folds
+
+    # Create and profile processor
     processor = runner_utils.get_data_processor(
         training_type=training_type,
         meta_data_types=meta_data_types,
         resource_dir=resource_dir,
         datasets=datasets,
-        num_folds=num_folds)
-    label_list = processor.get_labels()
+        num_folds=num_folds,
+        doc_hold_out=doc_hold_out)
+    profile_processor(
+        output_dir=output_dir,
+        processor=processor)
 
-    output_dir = args.output_dir
-    classifier_type = args.classifier_type
     args, device, config, tokenizer, model, classifier_cls, model_classes = setup_args(
-        args=args, output_dir=output_dir, label_list=label_list)
+        args=args, output_dir=output_dir, processor=processor)
 
     # create torchserve config file
     create_setup_config_file(
         output_dir=output_dir,
-        setup_config_file_name=constants.SERUP_CONF_FILE_NAME,
         bert_base_model_name=bert_base_model_name,
         bert_model_type=bert_model_type,
         classifier_type=classifier_type,
@@ -236,7 +247,7 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
         training_type=args.training_type,
         meta_data_types=meta_data_types,
         eval_max_seq_length=args.eval_max_seq_length,
-        num_labels=len(args.id2label))
+        num_labels=len(processor.get_train_labels()))
 
     # perform cross-validation
     if num_folds > 0:
@@ -273,7 +284,7 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
                 model_classes=model_classes,
                 batch_collate_fn=batch_collate_fn,
                 data=kth_fold_data,
-                label_list=label_list)
+                processor=processor)
             kth_report_dir = job_utils.get_report_output_dir(kth_output_dir)
             if not os.path.isdir(kth_report_dir):
                 return {}
@@ -317,7 +328,7 @@ def run_e2e_modeling(arg_list, resource_dir: str, datasets: List[str]):
         model_classes=model_classes,
         batch_collate_fn=batch_collate_fn,
         data=data_train,
-        label_list=label_list)
+        processor=processor)
     return args
 
 
@@ -342,7 +353,7 @@ def train_eval_test(
     batch_collate_fn,
     # data related
     data,
-    label_list,
+    processor,
 ):
     _, model_class, tokenizer_class = model_classes
 
@@ -396,7 +407,8 @@ def train_eval_test(
 
         # save as json
         with open(os.path.join(output_dir, constants.INDEX2NAME_FILE_NAME), "w") as id2label_f:
-            json.dump(args.id2label, id2label_f, indent=4, ensure_ascii=False)
+            json.dump(processor.id2label, id2label_f,
+                      indent=4, ensure_ascii=False)
 
     # Evaluation
     results = {}
@@ -466,7 +478,7 @@ def train_eval_test(
             bert_model_type=bert_model_type,
             doc_threshold=doc_threshold,
             model=model,
-            id2label=args.id2label,
+            id2label=processor.id2label,
             test_dataset=test_dataset,
             local_rank=args.local_rank,
             batch_collate_fn=batch_collate_fn,
@@ -479,7 +491,8 @@ def train_eval_test(
             meta_data_types,
             predictions,
             report_dir,
-            label_list=label_list)
+            use_doc=use_doc,
+            label_list=processor.get_train_labels())
     return args
 
 
@@ -635,8 +648,8 @@ def train(
                 else:
                     torch.nn.utils.clip_grad_norm_(
                         model.parameters(), args.max_grad_norm)
-                scheduler.step()  # Update learning rate schedule
                 optimizer.step()
+                scheduler.step()  # Update learning rate schedule
                 model.zero_grad()
                 global_step += 1
 
@@ -844,12 +857,11 @@ def get_args_parser():
                             LossType.x_ent,
                             LossType.focal_loss,
                         ])
-    parser.add_argument("--use_doc", action="store_true",
-                        help="Whether to use DOD algorithm to calculate the loss."
-                             "See calculate_doc_loss", )
     parser.add_argument("--doc_threshold", default=0.5, type=float,
                         help="DOC threshold to determine whether to reject the"
                         " predicted class in prediction.")
+    parser.add_argument("--doc_hold_out", default=0.1, type=float,
+                        help="Percentage of classes to hold out as unseen classes for testing DOC rejection rate")
     parser.add_argument("--cache_dir", default="", type=str,
                         help="Where do you want to store the pre-trained models downloaded from s3", )
 
@@ -928,7 +940,7 @@ def get_args_parser():
     return parser
 
 
-def setup_args(args, output_dir, label_list):
+def setup_args(args, output_dir, processor):
     # check if output dir already exists and override is not set
     log_path = get_log_path(output_dir, job_type=JobType.training)
     if os.path.exists(log_path) and args.do_train and not args.overwrite_output_dir:
@@ -974,9 +986,7 @@ def setup_args(args, output_dir, label_list):
 
     # Set seed
     common_utils.seed_everything(args.seed)
-    args.id2label = {i: label for i, label in enumerate(label_list)}
-    args.label2id = {label: i for i, label in enumerate(label_list)}
-    num_labels = len(label_list)
+    num_labels = len(processor.get_train_labels())
 
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:

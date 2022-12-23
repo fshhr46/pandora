@@ -13,6 +13,8 @@ import torch.multiprocessing as mp
 from transformers import WEIGHTS_NAME
 
 from pandora.tools.common import logger
+import pandora.packaging.feature as feature
+import pandora.packaging.constants as constants
 
 DATASET_FILE_NAME = "dataset.json"
 TRAINING_JOB_PREFIX = "PANDORA_TRAINING"
@@ -145,9 +147,16 @@ def load_model_report(report_dir, include_data):
     return output
 
 
+def profile_processor(output_dir, processor: feature.SentenceProcessor):
+    profile_path = os.path.join(
+        output_dir, constants.PROCESSOR_PROFILE_FILE_NAME)
+    with open(profile_path, "w") as profile_f:
+        json.dump(processor, profile_f, indent=4, ensure_ascii=False,
+                  cls=feature.DataProcessorJSONEncoder)
+
+
 def create_setup_config_file(
         output_dir,
-        setup_config_file_name,
         bert_base_model_name,
         bert_model_type,
         classifier_type,
@@ -155,7 +164,7 @@ def create_setup_config_file(
         training_type,
         meta_data_types,
         eval_max_seq_length,
-        num_labels: str):
+        num_labels):
     # TODO: Unify this setup config with model config
     setup_conf = {
         "bert_base_model_name": bert_base_model_name,
@@ -174,6 +183,6 @@ def create_setup_config_file(
         "FasterTransformer": False,  # TODO: make this True
         "model_parallel": False  # Beta Feature, set to False for now.
     }
-    setup_conf_path = os.path.join(output_dir, setup_config_file_name)
+    setup_conf_path = os.path.join(output_dir, constants.SERUP_CONF_FILE_NAME)
     with open(setup_conf_path, "w") as setup_conf_f:
         json.dump(setup_conf, setup_conf_f, indent=4)

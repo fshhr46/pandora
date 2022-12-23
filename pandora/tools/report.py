@@ -19,10 +19,25 @@ def build_report_sklearn(pre_lines, truth_lines, label_list, report_dir=None):
     for label, id in label2id.items():
         data = summary.pop(str(id))
         all_stats[label] = data
-    print_result(all_stats=all_stats, summary=summary, report_dir=report_dir)
+    log_result(all_stats=all_stats, summary=summary, report_dir=report_dir)
 
 
-def get_f1_score_label(pre_lines, truth_lines, label="organization"):
+def _get_empty_stats():
+    return {
+        "f1":  None,
+        "precision": None,
+        "recall": None,
+        "acc": None,
+        "TP": 0,
+        "FP": 0,
+        "TN": 0,
+        "FN": 0,
+        "counts_t": 0,
+        "counts_p": 0,
+    }
+
+
+def get_f1_score_label(pre_lines, truth_lines, label):
     """
     打分函数
     """
@@ -32,11 +47,21 @@ def get_f1_score_label(pre_lines, truth_lines, label="organization"):
     FN = 0
     counts_t = 0
     counts_p = 0
-    for pre_line, gold_line in zip(pre_lines, truth_lines):
+    for pre_line, truth_line in zip(pre_lines, truth_lines):
         preds = pre_line["pred"]
         preds.sort()
-        truths = gold_line["label"]
+        truths = truth_line["label"]
         truths.sort()
+        # DOC Hack: when calculating F-1 for rejected class
+        # label here would be set to None
+        if label is None:
+            # Calculating for unseen class
+            # For DOC: determine
+            if pre_line['rejected']:
+                preds = [None]
+            if pre_line['unseen_class']:
+                truths = [None]
+
         if label in truths and label in preds:
             TP += 1
             counts_t += 1
@@ -55,8 +80,9 @@ def get_f1_score_label(pre_lines, truth_lines, label="organization"):
     f = 2 * p * r / (p + r) if (p + r) > 0 else 0
     all_preds = TP + FP + TN + FN
     acc = (TP + TN) / all_preds if all_preds > 0 else 0
-    stats = {
-        "label": label,
+
+    stats = _get_empty_stats()
+    stats.update({
         "f1":  f,
         "precision": p,
         "recall": r,
@@ -67,29 +93,38 @@ def get_f1_score_label(pre_lines, truth_lines, label="organization"):
         "FN": FN,
         "counts_t": counts_t,
         "counts_p": counts_p,
-    }
+    })
     return stats
 
 
-def build_report(pre_lines, truth_lines, label_list, report_dir=None):
+def build_stats(
+        pre_lines,
+        truth_lines,
+        label_list,
+        build_doc_report):
     num_preds = len(pre_lines)
     all_stats = {}
-    summary = {
-        "label": "all",
-        "TP": 0,
-        "FP": 0,
-        "TN": 0,
-        "FN": 0,
-        "counts_t": 0,
-        "counts_p": 0,
-    }
+    summary = _get_empty_stats()
     sum_f1 = 0
     sum_p = 0
     sum_r = 0
+
+    # TODO: Hack, calculate score for DOC using label = None
+    if build_doc_report:
+        label_list.append(None)
+
+    doc_stats = None
     for label in label_list:
         stats = get_f1_score_label(
             pre_lines, truth_lines, label=label)
-        all_stats[label] = stats
+
+        # TODO: Hack, calculate score for DOC using label = None
+        if label is None:
+            doc_stats = stats
+        else:
+            all_stats[label] = stats
+
+        # Add data to summary
         sum_f1 += stats["f1"]
         sum_p += stats["precision"]
         sum_r += stats["recall"]
@@ -104,21 +139,56 @@ def build_report(pre_lines, truth_lines, label_list, report_dir=None):
     summary["acc"] = summary["TP"] / num_preds if num_preds > 0 else 0
     summary["precision"] = sum_p / len(label_list)
     summary["recall"] = sum_r / len(label_list)
-    print_result(all_stats=all_stats, summary=summary, report_dir=report_dir)
+    # summary = sort_stats(summary)
+    return all_stats, summary, doc_stats
 
 
-def print_result(all_stats, summary, report_dir=None):
+def build_report(
+        pre_lines,
+        truth_lines,
+        label_list,
+        build_doc_report: bool = False,
+        report_dir=None):
+
+    # Build report for the main task
+    all_stats, summary, doc_stats = build_stats(
+        pre_lines, truth_lines, label_list, build_doc_report)
+
+    log_result(all_stats=all_stats, summary=summary,
+               doc_stats=doc_stats, report_dir=report_dir)
+
+
+def sort_stats(stats):
+    return dict(sorted(stats.items(), key=lambda item: item[1], reverse=True))
+
+
+def log_result(all_stats, summary, doc_stats=None, report_dir=None):
     logger.info("========== Summary ==========")
-    json_str = json.dumps(all_stats, indent=4, ensure_ascii=False)
-    logger.info(f"\n stats: \n{json_str}")
+    all_stats_json_str = json.dumps(all_stats, indent=4, ensure_ascii=False)
+    logger.info(f"\n stats: \n{all_stats_json_str}")
+
+    summary_json_str = json.dumps(summary, indent=4, ensure_ascii=False)
     logger.info(
-        f"\nsummary stats: \n{json.dumps(summary, indent=4, ensure_ascii=False)}")
+        f"\nsummary stats: \n{summary_json_str}")
+
+    doc_stats_json_str = None
+    if doc_stats:
+        doc_stats_json_str = json.dumps(
+            doc_stats, indent=4, ensure_ascii=False)
+        logger.info(
+            f"\nDOC stats: \n{doc_stats_json_str}")
 
     if report_dir:
         report_path = os.path.join(report_dir, "report.json")
-        with open(report_path, "w") as report_f:
-            json.dump(all_stats, report_f, indent=4, ensure_ascii=False)
+        with open(report_path, "w") as f:
+            f.write(all_stats_json_str)
         report_all_path = os.path.join(report_dir, "report_all.json")
-        with open(report_all_path, "w") as report_f:
-            json.dump(summary, report_f, indent=4, ensure_ascii=False)
+        with open(report_all_path, "w") as f:
+            f.write(summary_json_str)
+
+        if doc_stats_json_str:
+            report_doc_path = os.path.join(report_dir, "report_doc.json")
+            with open(report_doc_path, "w") as f:
+                f.write(doc_stats_json_str)
+
         logger.info(f"report was saved in dir: {report_dir}")

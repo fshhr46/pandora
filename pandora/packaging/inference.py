@@ -13,23 +13,27 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
     y_hat = logits.argmax(0).item()
     y_softmax = torch.softmax(logits, 0).tolist()
     predicted_idx = y_hat
-    num_labels = len(id2label)
 
     if sigmoids is None:
         reject_output = False
+        y_sigmoids = None
     else:
         # Determine whether to reject the output and
         # output unknwon class.
         # Check if all labels' sigmoid are smaller than the threshold.
         reject_output = (sigmoids < doc_threshold).all().item()
+        y_sigmoids = torch.softmax(sigmoids, 0).tolist()
 
     named_softmax = {}
     named_sigmoid = {}
-    for idx in range(num_labels):
-        name = id2label[idx]
-        named_softmax[name] = y_softmax[idx]
-        if sigmoids is not None:
-            named_sigmoid[name] = sigmoids[idx].item()
+    # TODO: Here' its a bit hacky:
+    # len(y_softmax): actual number of labels used in training (Seen labels Only).
+    # len(id2label):  All id2label mapping, including Seen and Unseen
+    for idx, softmax in enumerate(y_softmax):
+        label_name = id2label[idx]
+        named_softmax[label_name] = softmax
+        if y_sigmoids:
+            named_sigmoid[label_name] = y_sigmoids[idx]
 
     formatted_output = {
         "class": id2label[predicted_idx],

@@ -417,6 +417,11 @@ def create_example(id, line):
         meta_data=meta_data)
 
 
+class DataProcessorJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        return o.__dict__
+
+
 class DataProcessor(object):
     """Base class for data converters for sequence classification data sets."""
 
@@ -449,6 +454,43 @@ class DataProcessor(object):
     def _create_labels(self, line):
         raise NotImplementedError()
 
+    def load_examples(self, data_dir, data_type, k_th_folder_name=""):
+        if data_type == 'train':
+            examples = self.get_train_examples(data_dir, k_th_folder_name)
+        elif data_type == 'dev':
+            examples = self.get_dev_examples(data_dir, k_th_folder_name)
+        elif data_type == 'test':
+            examples = self.get_test_examples(data_dir, k_th_folder_name)
+        else:
+            raise ValueError(f"invalid data_type {data_type}")
+        return examples
+
+    def convert_example_to_feature(
+            self,
+            example,
+            log_data: bool,
+            max_seq_length,
+            tokenizer, pad_token=0,
+            pad_token_segment_id=0,
+            sequence_a_segment_id=0,
+            char2ids_dict: Dict = None,
+            mask_padding_with_zero=True):
+
+        return convert_example_to_feature(
+            example,
+            training_type=self.training_type,
+            meta_data_types=self.meta_data_types,
+            label2id=self.label2id,
+            log_data=log_data,
+            max_seq_length=max_seq_length,
+            tokenizer=tokenizer,
+            pad_token=pad_token,
+            pad_token_segment_id=pad_token_segment_id,
+            sequence_a_segment_id=sequence_a_segment_id,
+            char2ids_dict=char2ids_dict,
+            mask_padding_with_zero=mask_padding_with_zero,
+        )
+
 
 class SentenceProcessor(DataProcessor):
     """Processor for the chinese ner data set."""
@@ -459,7 +501,8 @@ class SentenceProcessor(DataProcessor):
             meta_data_types: List[MetadataType],
             resource_dir,
             datasets: List[str],
-            num_folds: int) -> None:
+            num_folds: int,
+            doc_hold_out: float) -> None:
         super().__init__()
         self.training_type = training_type
         self.meta_data_types = meta_data_types
@@ -467,30 +510,42 @@ class SentenceProcessor(DataProcessor):
         self.datasets = datasets
         self.num_folds = num_folds
 
-    def _get_examples_all_dir(self, data_dir, partition, k_th_folder_name="") -> List[InputExample]:
+        # Setup labels
+        self._load_labels(doc_hold_out)
+
+    def _get_examples_all_dir(
+            self,
+            data_dir,
+            partition,
+            k_th_folder_name="",
+            labels_to_include=[]) -> List[InputExample]:
         all_examples = []
         # trick here: when os.path.join("a", "", "b") returns "a/b"
         for dataset in self.datasets:
+            json_data = self._read_json(
+                os.path.join(
+                    data_dir,
+                    dataset,
+                    k_th_folder_name,
+                    f"{partition}.json"))
             all_examples.extend(
-                self.create_examples(
-                    self._read_json(
-                        os.path.join(
-                            data_dir,
-                            dataset,
-                            k_th_folder_name,
-                            f"{partition}.json")), partition)
+                self.create_examples(json_data, partition, labels_to_include)
             )
         return all_examples
 
     def get_train_examples(self, data_dir, k_th_folder_name="") -> List[InputExample]:
         """See base class."""
-        examples = self._get_examples_all_dir(
-            data_dir, "train", k_th_folder_name)
-        # when cross-validation is enabled:
+        # when cross-validation is enabled (num_folds > 0):
         # train partition should be train examples + eval examples
+
+        # For DOC: Train partition labels is calculated by doc_hold_out in arg parser
+        labels_to_include = self.get_train_labels()
+
+        examples = self._get_examples_all_dir(
+            data_dir, "train", k_th_folder_name, labels_to_include=labels_to_include)
         if self.num_folds > 0 and not k_th_folder_name:
             examples.extend(self._get_examples_all_dir(
-                data_dir, "dev", k_th_folder_name))
+                data_dir, "dev", k_th_folder_name), labels_to_include=labels_to_include)
         return examples
 
     def get_dev_examples(self, data_dir, k_th_folder_name="") -> List[InputExample]:
@@ -498,21 +553,41 @@ class SentenceProcessor(DataProcessor):
         # when cross-validation is enabled (num_folds > 0):
         #  - training data: eval partition should be empty as eval partition is merged into training partition.
         #  - k_fold data: eval partition should be empty as eval partition is used as test partition.
+
+        # For DOC: Dev partition labels should be consistent with train partition
+        labels_to_include = self.get_train_labels()
+
         if self.num_folds > 0:
             return []
-        return self._get_examples_all_dir(data_dir, "dev", k_th_folder_name)
+        return self._get_examples_all_dir(
+            data_dir, "dev", k_th_folder_name, labels_to_include=labels_to_include)
 
     def get_test_examples(self, data_dir, k_th_folder_name="") -> List[InputExample]:
         """See base class."""
         # when cross-validation is enabled (num_folds > 0):
         #  - training data: use test partition for testing.
         #  - k_fold data: use dev partition for testing.
-        if self.num_folds > 0 and k_th_folder_name:
-            return self._get_examples_all_dir(data_dir, "dev", k_th_folder_name)
-        else:
-            return self._get_examples_all_dir(data_dir, "test", k_th_folder_name)
 
-    def get_labels(self):
+        # For DOC: Test data must include all labels, including seen and unseen labels.
+        labels_to_include = self.get_all_labels()
+
+        if self.num_folds > 0 and k_th_folder_name:
+            return self._get_examples_all_dir(
+                data_dir, "dev", k_th_folder_name, labels_to_include=labels_to_include)
+        else:
+            return self._get_examples_all_dir(
+                data_dir, "test", k_th_folder_name, labels_to_include=labels_to_include)
+
+    def get_all_labels(self):
+        return self.all_labels
+
+    def get_train_labels(self):
+        return self.train_labels
+
+    def get_hold_out_labels(self):
+        return self.hold_out_labels
+
+    def _load_labels(self, doc_hold_out):
         """See base class."""
         all_labels = []
         for dataset in self.datasets:
@@ -526,9 +601,26 @@ class SentenceProcessor(DataProcessor):
             label_file = open(os.path.join(
                 data_dir, dataset, "labels.json"))
             all_labels.extend(json.load(label_file))
-        return all_labels
 
-    def create_examples(self, lines, dataset_type: str) -> List[InputExample]:
+        # Set all_labels
+        self.all_labels = all_labels
+
+        # Set label2id and id2label
+        self.id2label = {i: label for i, label in enumerate(all_labels)}
+        self.label2id = {label: i for i, label in enumerate(all_labels)}
+
+        # Set doc hold out
+        assert doc_hold_out >= 0 and doc_hold_out <= 1
+        self.doc_hold_out = doc_hold_out
+
+        # Set train_labels, hold_out_labels
+        num_classes = len(self.all_labels)
+        num_hold_out_classes = int(doc_hold_out * num_classes)
+        num_train_classes = num_classes - num_hold_out_classes
+        self.train_labels, self.hold_out_labels = \
+            self.all_labels[:num_train_classes], self.all_labels[num_train_classes:]
+
+    def create_examples(self, lines, dataset_type: str, labels_to_include=[]) -> List[InputExample]:
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
@@ -537,6 +629,10 @@ class SentenceProcessor(DataProcessor):
                 id=guid,
                 line=line
             )
+            if labels_to_include:
+                labels = [example.get_label()]
+                if all([label not in labels_to_include for label in labels]):
+                    continue
             examples.append(example)
         return examples
 
@@ -721,7 +817,7 @@ def extract_feature_from_request(
         id="",
         line=line
     )
-    feat = convert_example_to_feature(
+    return convert_example_to_feature(
         example,
         training_type,
         meta_data_types,
@@ -730,7 +826,6 @@ def extract_feature_from_request(
         max_seq_length=int(max_seq_length),
         tokenizer=tokenizer,
         char2ids_dict=char2ids_dict)
-    return feat
 
 
 def load_char_vocab(vocab_file_name):

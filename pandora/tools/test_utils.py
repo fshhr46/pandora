@@ -167,7 +167,7 @@ def load_dataset(local_rank, tokenizer, processor, lines, batch_size):
     examples = processor.create_examples(
         feature.read_json_lines(lines), partition)
 
-    label_list = processor.get_labels()
+    label_list = processor.get_all_labels()
     id2label = {}
     label2id = {}
     for i, label in enumerate(label_list):
@@ -177,11 +177,8 @@ def load_dataset(local_rank, tokenizer, processor, lines, batch_size):
     for (ex_index, example) in enumerate(examples):
         if ex_index % 10000 == 0:
             logger.info("Writing example %d of %d", ex_index, len(examples))
-        feat = feature.convert_example_to_feature(
+        feat = processor.convert_example_to_feature(
             example,
-            processor.training_type,
-            processor.meta_data_types,
-            label2id,
             ex_index < 5,
             MAX_SEQ_LENGTH,
             tokenizer,

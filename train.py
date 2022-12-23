@@ -34,8 +34,8 @@ def main():
 
     # Training args
     training_type = TrainingType.column_data
-    training_type = TrainingType.mixed_data
     training_type = TrainingType.meta_data
+    training_type = TrainingType.mixed_data
 
     meta_data_types = [
         # MetadataType.column_name,
@@ -44,7 +44,7 @@ def main():
     ]
 
     # Setting num_epochs means choosing the default number based on training_type
-    num_epochs = 0
+    num_epochs = 1
 
     # if num_epochs is not passed, set num_epochs by training type
     if num_epochs == 0:
@@ -97,8 +97,9 @@ def main():
 
     # Set dataset and model args
     num_folds = 0
-    use_doc = True
+    # TODO: Tune this doc_threshold parameter. See DOC Paper
     doc_threshold = 0.5
+    doc_hold_out = 0.5
     arg_list = job_runner.get_training_args(
         # model args
         bert_model_type=bert_model_type,
@@ -107,8 +108,8 @@ def main():
         meta_data_types=meta_data_types,
         loss_type=LossType.focal_loss,
         classifier_type=classifier_type,
-        use_doc=use_doc,
         doc_threshold=doc_threshold,
+        doc_hold_out=doc_hold_out,
         num_folds=num_folds,
         # training args
         num_epochs=num_epochs,
