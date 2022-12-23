@@ -28,8 +28,8 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
-from torch.optim.lr_scheduler import get_linear_schedule_with_warmup
-from torch.optim import AdamW
+from pandora.callback.lr_scheduler import get_linear_schedule_with_warmup
+from pandora.callback.optimizater.adamw import AdamW
 from pandora.callback.progressbar import ProgressBar
 
 # model types
