@@ -789,11 +789,7 @@ def predict(
             preds = inference.format_outputs(
                 logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=id2label,
                 doc_threshold=doc_threshold)
-            for pred in preds:
-                tags = [pred["class"]]
-                json_d = {}
-                json_d['tags'] = tags
-                predictions.append(json_d)
+            predictions.extend(preds)
             pbar(step)
     return predictions
 

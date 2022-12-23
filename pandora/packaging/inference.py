@@ -37,7 +37,7 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
         "probability": named_softmax[id2label[predicted_idx]],
         "softmax": named_softmax,
         "sigmoid": named_sigmoid,
-        "is_unknown_class": reject_output,
+        "rejected": reject_output,
     }
     return formatted_output
 

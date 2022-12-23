@@ -289,14 +289,18 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 inputs,
                 self.setup_config["mode"],
                 self.model)
-            formated_outputs = inference.format_outputs(
+            formatted_outputs = inference.format_outputs(
                 logits_list=logits_list, sigmoids_list=sigmoids_list, id2label=self.id2label,
                 doc_threshold=self.doc_threshold)
+            for formatted_output in formatted_outputs:
+                logger.info(f"output class is {formatted_output['class']}. \
+                    rejected: {formatted_output['rejected']}")
+
             # if indexes is passed, merge results (column level inferencing)
             if indexes:
-                formated_outputs = inference.merge_outputs(
-                    formated_outputs=formated_outputs, indexes=indexes)
-            return formated_outputs
+                formatted_outputs = inference.merge_outputs(
+                    formated_outputs=formatted_outputs, indexes=indexes)
+            return formatted_outputs
 
     def postprocess(self, inference_output):
         """Post Process Function converts the predicted response into Torchserve readable format.

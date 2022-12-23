@@ -52,7 +52,8 @@ def build_train_report(
         json_d['guid'] = example.id
         json_d['text'] = text
         json_d['label'] = example.labels
-        json_d['pred'] = pred['tags']
+        json_d['pred'] = [pred['class']]
+        json_d['rejected'] = pred['rejected']
         test_submit.append(json_d)
     json_to_text(output_submit_file, test_submit)
 
