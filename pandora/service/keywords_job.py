@@ -260,6 +260,9 @@ def extract_keywords(
                     label = data_entry.label[0]
                     label2id = {label: int(i)
                                 for i, label in enumerate(pred_result["softmax"].keys())}
+
+                    if label not in label2id:
+                        continue
                     request_data["target"] = label2id[label]
                     insight = explanations_online(
                         host=host,

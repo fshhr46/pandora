@@ -8,6 +8,7 @@ import pathlib
 import traceback
 
 from pandora.packaging.losses import LossType
+from pandora.packaging.classifier import ClassifierType
 from pandora.service.job_utils import DATASET_FILE_NAME, JobType
 
 from pandora.tools.common import logger
@@ -182,9 +183,22 @@ def start_training():
     sample_size = request.args.get("sample_size", default=0, type=int)
     logging.info(f"sample_size is {sample_size}")
 
+    # Loss function related parameters
     loss_type = request.args.get(
         "loss_type", default=LossType.focal_loss, type=str)
     logging.info(f"loss_type is {loss_type}")
+
+    classifier_type = request.args.get(
+        "classifier_type", default=ClassifierType.doc, type=str)
+    logging.info(f"classifier_type is {classifier_type}")
+
+    doc_threshold = request.args.get(
+        "doc_threshold", default=0.5, type=float)
+    logging.info(f"doc_threshold is {doc_threshold}")
+
+    doc_hold_out = request.args.get(
+        "doc_hold_out", default=0.5, type=float)
+    logging.info(f"doc_hold_out is {doc_hold_out}")
 
     active_training_jobs = training_job.list_training_jobs()
     has_resource, msg = server.has_enough_resource(len(active_training_jobs))
@@ -198,7 +212,10 @@ def start_training():
         server_dir=server.output_dir,
         cache_dir=server.cache_dir,
         sample_size=sample_size,
-        loss_type=loss_type)
+        loss_type=loss_type,
+        classifier_type=classifier_type,
+        doc_threshold=doc_threshold,
+        doc_hold_out=doc_hold_out)
     output = {
         "success": success,
         "message": message

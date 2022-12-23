@@ -45,10 +45,11 @@ class TrainingJob(object):
                  sample_size: int,
                  training_type: TrainingType,
                  meta_data_types: List[str],
+                 # Loss function related parameters
                  loss_type: LossType,
                  classifier_type: ClassifierType,
-                 use_doc: float,
                  doc_threshold: float,
+                 doc_hold_out: float,
                  num_folds: int) -> None:
         self.job_id = job_id
         self.data_dir = data_dir
@@ -67,8 +68,8 @@ class TrainingJob(object):
         )
         self.loss_type = loss_type
         self.classifier_type = classifier_type
-        self.use_doc = use_doc
         self.doc_threshold = doc_threshold
+        self.doc_hold_out = doc_hold_out
 
         # Whether to perform cross validation
         self.num_folds = num_folds
@@ -97,8 +98,8 @@ class TrainingJob(object):
             # loss func type
             loss_type=self.loss_type,
             classifier_type=self.classifier_type,
-            use_doc=self.use_doc,
             doc_threshold=self.doc_threshold,
+            doc_hold_out=self.doc_hold_out,
             num_folds=self.num_folds,
             # training args
             num_epochs=num_epochs,
@@ -133,11 +134,16 @@ class TrainingJob(object):
 
 
 def start_training_job(
-        job_id: str,
-        server_dir,
-        cache_dir,
-        sample_size: int,
-        loss_type) -> Tuple[bool, str]:
+    job_id: str,
+    server_dir,
+    cache_dir,
+    sample_size: int,
+    # Loss function related
+    loss_type,
+    classifier_type,
+    doc_threshold,
+    doc_hold_out,
+) -> Tuple[bool, str]:
     # partitioned data locates in job/datasets/{train|dev|test}.json
     output_dir = job_utils.get_job_output_dir(
         server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)
@@ -169,8 +175,6 @@ def start_training_job(
 
     # Classifier type
     classifier_type = ClassifierType.doc
-    use_doc = True
-    doc_threshold = 0.5
     job = TrainingJob(
         job_id=job_id,
         data_dir=partition_dir,
@@ -179,8 +183,8 @@ def start_training_job(
         sample_size=sample_size,
         training_type=training_type,
         classifier_type=classifier_type,
-        use_doc=use_doc,
         doc_threshold=doc_threshold,
+        doc_hold_out=doc_hold_out,
         meta_data_types=meta_data_types,
         loss_type=loss_type,
         num_folds=num_folds)
