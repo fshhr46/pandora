@@ -15,17 +15,21 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
     predicted_idx = y_hat
 
     if sigmoids is None:
-        reject_output = False
+        max_sigmoid = None
         y_sigmoids = None
-        doc_threshold = None
     else:
         # Determine whether to reject the output and
         # output unknwon class.
         # Check if all labels' sigmoid are smaller than the threshold.
-        reject_output = (sigmoids < doc_threshold).all().item()
+        max_sigmoid = sigmoids.max().item()
 
         # binary x_ent outputs
         y_sigmoids = sigmoids.tolist()
+
+    # Determine whether to reject the output and
+    # output unknwon class.
+    # Check if all labels' sigmoid are smaller than the threshold.
+    reject_output = max_sigmoid != None and max_sigmoid <= doc_threshold
 
     named_softmax = {}
     named_sigmoid = {}
@@ -45,6 +49,7 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
         "softmax": named_softmax,
         "sigmoid": named_sigmoid,
         "rejected": reject_output,
+        "max_sigmoid": max_sigmoid,
         "doc_threshold": doc_threshold,
     }
     return formatted_output
