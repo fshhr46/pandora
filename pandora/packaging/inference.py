@@ -17,12 +17,15 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
     if sigmoids is None:
         reject_output = False
         y_sigmoids = None
+        doc_threshold = None
     else:
         # Determine whether to reject the output and
         # output unknwon class.
         # Check if all labels' sigmoid are smaller than the threshold.
         reject_output = (sigmoids < doc_threshold).all().item()
-        y_sigmoids = torch.softmax(sigmoids, 0).tolist()
+
+        # binary x_ent outputs
+        y_sigmoids = sigmoids.tolist()
 
     named_softmax = {}
     named_sigmoid = {}
@@ -42,6 +45,7 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
         "softmax": named_softmax,
         "sigmoid": named_sigmoid,
         "rejected": reject_output,
+        "doc_threshold": doc_threshold,
     }
     return formatted_output
 
