@@ -225,10 +225,11 @@ def partition_poseidon_dataset(
                     TagValidationResultType.valid,
                     distribution)
                 valid_tags.append(result)
-
                 # add label
                 final_labels.append(
                     create_unique_label_name(tag_name=tag_name, tag_id=valid_tag_id))
+
+            else:
                 result = PartitionResult(
                     valid_tag_id,
                     tag_name,
