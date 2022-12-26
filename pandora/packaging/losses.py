@@ -45,7 +45,7 @@ class LossFuncBase(nn.Module):
         super(LossFuncBase, self).__init__(*args, **kwargs)
         self.use_doc = use_doc
 
-    def calculate_doc_loss(self, sigmoids, target, reduction='sum'):
+    def calculate_doc_loss(self, sigmoids, target, reduction='mean'):
         """
         N: Batch size.
         C: Number of categories (num_labels)
