@@ -32,7 +32,7 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
     reject_output = max_sigmoid != None and max_sigmoid <= doc_threshold
 
     named_softmax = {}
-    named_sigmoid = {}
+    named_sigmoids = {}
     # TODO: Here' its a bit hacky:
     # len(y_softmax): actual number of labels used in training (Seen labels Only).
     # len(id2label):  All id2label mapping, including Seen and Unseen
@@ -40,17 +40,19 @@ def _format_output(logits, sigmoids, id2label, doc_threshold):
         label_name = id2label[idx]
         named_softmax[label_name] = softmax
         if y_sigmoids:
-            named_sigmoid[label_name] = y_sigmoids[idx]
+            named_sigmoids[label_name] = y_sigmoids[idx]
 
     formatted_output = {
+        # Classification related
         "class": id2label[predicted_idx],
         "target": predicted_idx,
         "probability": named_softmax[id2label[predicted_idx]],
         "softmax": named_softmax,
-        "sigmoid": named_sigmoid,
+        # DOC realted
         "rejected": reject_output,
-        "max_sigmoid": max_sigmoid,
         "doc_threshold": doc_threshold,
+        "max_sigmoid": max_sigmoid,
+        "sigmoids": named_sigmoids,
     }
     return formatted_output
 
