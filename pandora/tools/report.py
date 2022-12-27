@@ -100,21 +100,13 @@ def get_f1_score_label(pre_lines, truth_lines, label):
 def build_stats(
         pre_lines,
         truth_lines,
-        label_list,
-        build_doc_report):
+        label_list):
     num_preds = len(pre_lines)
     all_stats = {}
     summary = _get_empty_stats()
     sum_f1 = 0
     sum_p = 0
     sum_r = 0
-
-    # TODO: Hack, calculate score for DOC using label = None
-    if build_doc_report:
-        doc_stats = get_f1_score_label(
-            pre_lines, truth_lines, label=None)
-    else:
-        doc_stats = None
 
     for label in label_list:
         stats = get_f1_score_label(
@@ -137,7 +129,7 @@ def build_stats(
     summary["precision"] = sum_p / len(label_list)
     summary["recall"] = sum_r / len(label_list)
     # summary = sort_stats(summary)
-    return all_stats, summary, doc_stats
+    return all_stats, summary
 
 
 def build_report(
@@ -147,9 +139,16 @@ def build_report(
         build_doc_report: bool = False,
         report_dir=None):
 
+    # TODO: Hack, calculate score for DOC using label = None
+    if build_doc_report:
+        doc_stats = get_f1_score_label(
+            pre_lines, truth_lines, label=None)
+    else:
+        doc_stats = None
+
     # Build report for the main task
-    all_stats, summary, doc_stats = build_stats(
-        pre_lines, truth_lines, label_list, build_doc_report)
+    all_stats, summary = build_stats(
+        pre_lines, truth_lines, label_list)
 
     log_result(all_stats=all_stats, summary=summary,
                doc_stats=doc_stats, report_dir=report_dir)
