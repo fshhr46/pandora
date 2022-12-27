@@ -66,6 +66,19 @@ class LossFuncBase(nn.Module):
             logits, target, weight=weight)
         return ce_loss
 
+    def _calculatte_loss(self, input, target):
+
+        # Calculate classification loss
+        base_loss = self.calculate_xent(input, target)
+
+        # DOC: multi-task training. Add DOC Loss
+        # If doc is enabled, calculate DOC loss as well.
+        # TODO: Support weighted loss calculation.
+        if self.use_doc:
+            base_loss += self.calculate_doc_loss(input, target)
+
+        return base_loss
+
 
 class CrossEntropyLoss(LossFuncBase):
     def __init__(self, use_doc, *args, **kwargs):
@@ -76,10 +89,7 @@ class CrossEntropyLoss(LossFuncBase):
         input: [N, C]
         target: [N, ]
         """
-        if self.use_doc:
-            return self.calculate_doc_loss(input, target)
-        else:
-            return self.calculate_xent(input, target)
+        return self._calculatte_loss(input, target)
 
 
 class FocalLoss(LossFuncBase):
@@ -90,15 +100,15 @@ class FocalLoss(LossFuncBase):
         self.gamma = gamma
         self.alphas = alphas
 
+    def calculate_focal_loss(self, loss):
+        pt = torch.exp(-loss)
+        focal_loss = ((1 - pt) ** self.gamma * loss).mean()
+        return focal_loss
+
     def forward(self, input, target):
         """
         input: [N, C]
         target: [N, ]
         """
-        if self.use_doc:
-            base_loss = self.calculate_doc_loss(input, target)
-        else:
-            base_loss = self.calculate_xent(input, target)
-        pt = torch.exp(-base_loss)
-        focal_loss = ((1 - pt) ** self.gamma * base_loss).mean()
-        return focal_loss
+        base_loss = self._calculatte_loss(input, target)
+        return self.calculate_focal_loss(base_loss)
