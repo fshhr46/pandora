@@ -111,18 +111,15 @@ def build_stats(
 
     # TODO: Hack, calculate score for DOC using label = None
     if build_doc_report:
-        label_list.append(None)
+        doc_stats = get_f1_score_label(
+            pre_lines, truth_lines, label=None)
+    else:
+        doc_stats = None
 
-    doc_stats = None
     for label in label_list:
         stats = get_f1_score_label(
             pre_lines, truth_lines, label=label)
-
-        # TODO: Hack, calculate score for DOC using label = None
-        if label is None:
-            doc_stats = stats
-        else:
-            all_stats[label] = stats
+        all_stats[label] = stats
 
         # Add data to summary
         sum_f1 += stats["f1"]
