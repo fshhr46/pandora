@@ -545,7 +545,7 @@ class SentenceProcessor(DataProcessor):
             data_dir, "train", k_th_folder_name, labels_to_include=labels_to_include)
         if self.num_folds > 0 and not k_th_folder_name:
             examples.extend(self._get_examples_all_dir(
-                data_dir, "dev", k_th_folder_name), labels_to_include=labels_to_include)
+                data_dir, "dev", k_th_folder_name, labels_to_include=labels_to_include))
         return examples
 
     def get_dev_examples(self, data_dir, k_th_folder_name="") -> List[InputExample]:

@@ -216,7 +216,7 @@ def partition_dataset(
         job_id: str,
         min_samples: int,
         data_ratios: List,
-        num_folds: int,
+        num_folds: int = None,
         seed: int = 42) -> Tuple[bool, Dict, str]:
     dataset_path = job_utils.get_dataset_file_path(
         server_dir, prefix=job_utils.TRAINING_JOB_PREFIX, job_id=job_id)

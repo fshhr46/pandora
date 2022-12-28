@@ -208,10 +208,11 @@ def extract_keywords(
         return False, f"dataset file {dataset_path} not exists"
     try:
         # load dataset file
-        _, _, tags_by_id, data_by_tag_ids, dataset = poseidon_data.load_poseidon_dataset(
+        _, _, tags_by_id, data_by_tag_ids, dataset, _ = poseidon_data.load_poseidon_dataset(
             dataset_path)
 
         # get training type
+        # TODO: Fix this: load_poseidon_dataset_file is already called by load_poseidon_dataset
         _, _, training_type, _, meta_data_types = poseidon_data.load_poseidon_dataset_file(
             dataset_path)
 

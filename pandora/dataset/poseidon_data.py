@@ -140,7 +140,18 @@ def load_poseidon_dataset(
                 column_data=column_data,
             )
             col_text.extend(data_entries)
-    return valid_tag_ids, invalid_tag_ids, tags_by_id, data_by_tag_ids, dataset
+    return valid_tag_ids, invalid_tag_ids, tags_by_id, data_by_tag_ids, dataset, training_type
+
+
+def _get_num_folds_for_training_type(training_type):
+    # Auto determine num_folds
+    # TODO: Use dynamic num_folds for meta_data training.
+    # TODO: Support num_folds for non-meta_data training.
+    if training_type == TrainingType.meta_data:
+        num_folds = 3
+    else:
+        num_folds = 0
+    return num_folds
 
 
 def partition_poseidon_dataset(
@@ -148,12 +159,17 @@ def partition_poseidon_dataset(
         output_dir: str,
         min_samples: int,
         data_ratios: Dict,
-        num_folds: int,
-        seed: int):
+        num_folds: int = None,
+        seed: int = 42):
 
     # load dataset file
-    valid_tag_ids, invalid_tag_ids, tags_by_id, data_by_tag_ids, dataset = load_poseidon_dataset(
-        dataset_path)
+    valid_tag_ids, invalid_tag_ids, tags_by_id, data_by_tag_ids, \
+        _, training_type = load_poseidon_dataset(
+            dataset_path)
+
+    if num_folds == None:
+        num_folds = _get_num_folds_for_training_type(
+            training_type=training_type)
 
     # save data partition args
     data_partition_args = {
@@ -177,9 +193,6 @@ def partition_poseidon_dataset(
         for k in range(num_folds):
             k_partitions_train[k], k_partitions_dev[k], k_partitions_test[k] = \
                 [], [], []
-        # TODO: Fix hacky hard coded index 0
-        # partitions_train, partitions_dev, partitions_test = \
-        #     k_partitions_train[0], k_partitions_dev[0], k_partitions_test[0]
     data_partitions_all = {
         "train": partitions_train,
         "dev": partitions_dev,
@@ -260,7 +273,6 @@ def partition_poseidon_dataset(
                             tag_name,
                             TagValidationResultType.valid,
                             distribution)
-                        valid_tags.append(result)
 
                     else:
                         result = PartitionResult(
@@ -268,7 +280,6 @@ def partition_poseidon_dataset(
                             tag_name,
                             TagValidationResultType.not_enough_data,
                             distribution)
-                        invalid_tags.append(result)
 
                 # write merged partitions
                 for k in range(num_folds):

@@ -118,9 +118,6 @@ def get_training_args(
 
                 "--learning_rate=3e-5",
 
-                # k-fold validation
-                f"--num_folds={num_folds}",
-
                 # changed from 4 -> 2
                 f"--num_train_epochs={num_epochs}",
 
@@ -132,6 +129,10 @@ def get_training_args(
                 "--overwrite_cache",
                 # "--overwrite_output_dir",
                 ]
+
+    if num_folds is not None:
+        # k-fold validation
+        arg_list.append(f"--num_folds={num_folds}")
 
     if sample_size:
         arg_list.append(
@@ -823,7 +824,7 @@ def get_args_parser():
     # data related parameters
     parser.add_argument("--sample_size", type=int, default=0,
                         help="number of samples for each class")
-    parser.add_argument("--num_folds", type=int, default=1,
+    parser.add_argument("--num_folds", type=int, default=0,
                         help="number of folds for performing k-fold cross validations. \
                             This is disabled by default (when setting to 0). \
                             When enabled, --do_eval flag will be ignored and evaluation step \

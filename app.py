@@ -234,8 +234,8 @@ def partition_dataset():
     # TODO: Fix Hard coded min_samples to be 1.
     min_samples = json_data.get("min_samples", 1)
 
-    # TODO: enable this in production
-    num_folds = json_data.get("num_folds", 0)
+    # Use num folds passed as override value
+    num_folds = json_data.get("num_folds", None)
     data_ratios = json_data.get(
         "data_ratios", {"train": 0.6, "dev": 0.2, "test": 0.2})
     logging.info(f"min_samples is {min_samples}")
