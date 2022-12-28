@@ -237,10 +237,11 @@ def partition_dataset(
             num_folds=num_folds,
             seed=seed)
 
-        if not result["valid_tags"]:
-            message = "No valid tags in dataset"
+        if len(result["valid_tags"]) < 2:
+            message = "You must provide at least 2 valid tags for training."
             logger.warn(message)
             raise ValueError(message)
+
     except ValueError as e:
         return False, {}, f"failed to validate and partition dataset. Error: {e}"
     return True, result, ""
