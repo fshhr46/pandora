@@ -763,8 +763,10 @@ class RandomDataSampler(object):
     def sample(self, examples: List[InputExample]) -> List[InputExample]:
         examples_by_label = self.group_data_by_labels(examples)
         output_examples = []
-        for _, data in examples_by_label.items():
-            output_examples.extend(random.sample(data, self.sample_size))
+        for _, samples in examples_by_label.items():
+            if len(samples) > self.sample_size:
+                samples = random.sample(samples, self.sample_size)
+            output_examples.extend(samples)
         return output_examples
 
 
