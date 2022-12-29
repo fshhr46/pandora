@@ -89,14 +89,14 @@ class TransformersSeqClassifierHandler(BaseHandler, ABC):
                 # Note that charbert has 2 times the hidden size
                 # Load model
                 self.model = CharBertForSequenceClassification.from_pretrained(
-                    model_dir, classifier_cls)
+                    model_dir, classifier_cls=classifier_cls)
                 # Load tokenizer
                 self.tokenizer = BertTokenizer.from_pretrained(
                     model_dir, do_lower_case=self.setup_config["do_lower_case"])
             else:
                 # Load model
                 self.model = BertForSentence.from_pretrained(
-                    model_dir, classifier_cls)
+                    model_dir, classifier_cls=classifier_cls)
                 # Load tokenizer
                 self.tokenizer = SentenceTokenizer.from_pretrained(
                     model_dir, do_lower_case=self.setup_config["do_lower_case"])
