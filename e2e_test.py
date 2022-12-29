@@ -199,7 +199,7 @@ def test_training_success(training_type: str, test_file_name, test_keyword: bool
     # Check job status changed from running to completed.
     checks = 0
     interval = 5
-    max_checks = 12 * 10
+    max_checks = 12 * 100
     while make_request(
             f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.running:
         time.sleep(interval)
@@ -244,7 +244,7 @@ def test_training_success(training_type: str, test_file_name, test_keyword: bool
         # Check job status changed from running to completed.
         checks = 0
         interval = 5
-        max_checks = 12 * 10
+        max_checks = 12 * 100
         num_workers = 0
         while num_workers == 0:
             model_response = make_request(
@@ -295,7 +295,7 @@ def test_keywords(training_type: str, test_file_name, model_name: str):
     # Check job status changed from running to completed.
     checks = 0
     interval = 5
-    max_checks = 12 * 10
+    max_checks = 12 * 100
     while make_request(
             f"{get_url()}/status?id={job_id}&job_type={job_type}", post=False)["status"] == JobStatus.running:
         time.sleep(interval)
