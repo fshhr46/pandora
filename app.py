@@ -194,6 +194,8 @@ def start_training():
 
     doc_threshold = request.args.get(
         "doc_threshold", default=0.5, type=float)
+    # TODO: Remove this hard coded parameter
+    doc_threshold = 0.95
     logging.info(f"doc_threshold is {doc_threshold}")
 
     doc_hold_out = request.args.get(
